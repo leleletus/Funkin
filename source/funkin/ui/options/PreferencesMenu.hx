@@ -118,6 +118,9 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     },
       Preferences.downscroll, #if mobile ControlsHandler.hasExternalInputDevice
       || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows #end);
+    createPrefItemCheckbox('Ghost Tapping', 'When enabled, tapping empty note lanes will not incur a miss penalty or lose combo.', function(value:Bool):Void {
+      Preferences.ghostTapping = value;
+    }, Preferences.ghostTapping);
     createPrefItemPercentage('Strumline Background', 'Show a semi-transparent background behind the strumline.', function(value:Int):Void {
       Preferences.strumlineBackgroundOpacity = value;
     }, Preferences.strumlineBackgroundOpacity);

@@ -3027,11 +3027,9 @@ class PlayState extends MusicBeatSubState
 
       var notesInDirection:Array<NoteSprite> = notesByDirection[input.noteDirection];
 
-      #if FEATURE_GHOST_TAPPING
-      if ((!playerStrumline.mayGhostTap()) && notesInDirection.length == 0 && !isAlreadyHeld)
-      #else
-      if (notesInDirection.length == 0 && !isAlreadyHeld)
-      #end
+      var allowGhostTap:Bool = Preferences.ghostTapping #if FEATURE_GHOST_TAPPING || playerStrumline.mayGhostTap() #end;
+
+      if (!allowGhostTap && notesInDirection.length == 0 && !isAlreadyHeld)
       {
         // Pressed a wrong key with no notes nearby.
         // Perform a ghost miss (anti-spam).

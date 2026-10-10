@@ -145,6 +145,7 @@ class Save implements ConsoleClass
           switchAntialiasing: false,
           switchNoteSplashes: true,
           switchShowPerfHud: true,
+          ghostTapping: true,
         },
       #if mobile
       mobileOptions:
@@ -1262,6 +1263,12 @@ typedef SaveDataOptions =
    * @default `true`
    */
   var ?switchShowPerfHud:Bool;
+
+  /**
+   * Whether ghost tapping is enabled (tapping empty lanes has no miss penalty).
+   * @default `true`
+   */
+  var ?ghostTapping:Bool;
 
   var controls:
     {

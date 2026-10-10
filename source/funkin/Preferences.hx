@@ -727,4 +727,27 @@ class Preferences
     #end
     return value;
   }
+
+  /**
+   * Whether ghost tapping is allowed without miss penalties.
+   * @default `true`
+   */
+  public static var ghostTapping(get, set):Bool;
+
+  static function get_ghostTapping():Bool
+  {
+    return Save?.instance?.options?.ghostTapping ?? true;
+  }
+
+  static function set_ghostTapping(value:Bool):Bool
+  {
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.ghostTapping = value;
+      if (Save.system != null) Save.system.flush();
+    }
+    return value;
+  }
 }
+
