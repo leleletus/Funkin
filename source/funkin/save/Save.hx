@@ -772,7 +772,7 @@ class Save implements ConsoleClass
     trace('[SAVE] Loading save from slot $slot...');
 
     #if switch
-    flixel.util.FlxSave._SWITCH_SAVE_PATH = '${nx.NXMain.getAppDir()}/saves';
+    flixel.util.FlxSave._SWITCH_SAVE_PATH = nx.NXMain.getSafeAppSubPath('saves');
     #end
 
     // Sys.println('[SAVE] Binding save data for slot ' + slot + '...');

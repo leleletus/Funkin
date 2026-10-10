@@ -2955,8 +2955,7 @@ class PlayState extends MusicBeatSubState
             // Play the miss sound.
             if (event.playSound)
             {
-              if (vocals != null) vocals.playerVolume = 0;
-              FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.5, 0.6));
+              playMissSound(0.5, 0.6);
             }
           }
           else
@@ -3171,8 +3170,7 @@ class PlayState extends MusicBeatSubState
 
     if (playSound)
     {
-      if (vocals != null) vocals.playerVolume = 0;
-      FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.5, 0.6));
+      playMissSound(0.5, 0.6);
     }
   }
 
@@ -3217,8 +3215,22 @@ class PlayState extends MusicBeatSubState
 
     if (event.playSound)
     {
-      if (vocals != null) vocals.playerVolume = 0;
-      FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(0.1, 0.2));
+      playMissSound(0.1, 0.2);
+    }
+  }
+
+  var lastMissSoundTime:Float = -1.0;
+  static final MISS_SOUND_COOLDOWN:Float = 0.12; // 120ms cooldown to avoid OpenAL buffer exhaustion
+
+  function playMissSound(volumeMin:Float = 0.5, volumeMax:Float = 0.6):Void
+  {
+    if (vocals != null) vocals.playerVolume = 0;
+
+    var curTime:Float = Sys.time();
+    if (lastMissSoundTime < 0 || (curTime - lastMissSoundTime) >= MISS_SOUND_COOLDOWN)
+    {
+      lastMissSoundTime = curTime;
+      FunkinSound.playOnce(Paths.soundRandom('missnote', 1, 3), FlxG.random.float(volumeMin, volumeMax));
     }
   }
 

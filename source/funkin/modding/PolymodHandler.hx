@@ -60,7 +60,7 @@ class PolymodHandler
     #elseif REDIRECT_ASSETS_FOLDER
     return '../../../../example_mods';
     #elseif switch
-    return '${nx.NXMain.getAppDir()}/mods';
+    return nx.NXMain.getSafeAppSubPath('mods');
     #else
     return 'mods';
     #end

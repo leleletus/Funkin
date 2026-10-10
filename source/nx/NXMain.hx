@@ -57,7 +57,7 @@ class NXMain
       if (progPath != null && progPath.length > 0)
       {
         var dir:String = haxe.io.Path.directory(progPath);
-        dir = StringTools.replace(dir, "\\", "/");
+        dir = sanitizePath(dir);
         if (dir != "sdmc:/switch" && dir != "sdmc:/" && dir != "sdmc:" && dir.length > 0)
         {
           return dir;
@@ -70,8 +70,44 @@ class NXMain
     }
     return "sdmc:/switch/Friday-Night-Funkin";
     #else
-    return Sys.getCwd();
+    return sanitizePath(Sys.getCwd());
     #end
+  }
+
+  /**
+   * Sanitizes a path string against directory traversal attacks (e.g. "../", redundant slashes, null bytes).
+   */
+  public static function sanitizePath(path:String):String
+  {
+    if (path == null) return "";
+    var clean:String = StringTools.replace(path, "\\", "/");
+    clean = StringTools.replace(clean, "\x00", "");
+    while (clean.indexOf("../") != -1) clean = StringTools.replace(clean, "../", "");
+    while (clean.indexOf("/..") != -1) clean = StringTools.replace(clean, "/..", "");
+    var parts:Array<String> = clean.split("://");
+    if (parts.length > 1)
+    {
+      var scheme:String = parts[0];
+      var rest:String = parts.slice(1).join("://");
+      while (rest.indexOf("//") != -1) rest = StringTools.replace(rest, "//", "/");
+      clean = scheme + ":/" + (StringTools.startsWith(rest, "/") ? rest.substr(1) : rest);
+    }
+    else
+    {
+      while (clean.indexOf("//") != -1) clean = StringTools.replace(clean, "//", "/");
+    }
+    return clean;
+  }
+
+  /**
+   * Confines and resolves a relative subpath strictly inside the application root directory.
+   */
+  public static function getSafeAppSubPath(subPath:String):String
+  {
+    var appDir:String = getAppDir();
+    var cleanSub:String = sanitizePath(subPath);
+    while (StringTools.startsWith(cleanSub, "/")) cleanSub = cleanSub.substr(1);
+    return sanitizePath('$appDir/$cleanSub');
   }
 
   /**

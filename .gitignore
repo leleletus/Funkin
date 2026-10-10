@@ -17,13 +17,23 @@ NewgroundsCredentials.hx
 .idea/
 *.iml
 
-# Mobile signing stuff
+# Mobile signing and secrets
 .apple/
 .env
+.env.*
 *.keystore
+*.key
+*.pem
+*.p12
+*.cert
+
+# Logs and telemetry dumps
+*.log
+logs/
 
 # Exclude JS stuff
 node_modules/
 package.json
 package-lock.json
 .aider*
+

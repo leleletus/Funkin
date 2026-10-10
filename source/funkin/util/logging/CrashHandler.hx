@@ -16,7 +16,7 @@ class CrashHandler
   static function get_LOG_FOLDER():String
   {
     #if switch
-    return '${nx.NXMain.getAppDir()}/logs';
+    return nx.NXMain.getSafeAppSubPath('logs');
     #else
     return 'logs';
     #end
