@@ -366,9 +366,10 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     }
     else
     {
-      var music = FunkinSound.load(pathToUse, params?.startingVolume ?? 1.0, params.loop ?? true, false, true, params.persist ?? false, params.onComplete);
+      var music = FunkinSound.load(pathToUse, params?.startingVolume ?? 1.0, params.loop ?? true, false, true, params.persist ?? false, params.onComplete, null, true);
       if (music != null)
       {
+        music.important = true;
         setMusic(music);
 
         if (FlxG.sound.music != null && params.onLoad != null) params.onLoad();

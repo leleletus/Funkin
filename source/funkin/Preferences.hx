@@ -749,5 +749,28 @@ class Preferences
     }
     return value;
   }
+
+  /**
+   * Whether verbose audio telemetry logging is enabled on Switch.
+   * @default `false`
+   */
+  public static var switchVerboseAudioLog(get, set):Bool;
+
+  static function get_switchVerboseAudioLog():Bool
+  {
+    return Save?.instance?.options?.switchVerboseAudioLog ?? false;
+  }
+
+  static function set_switchVerboseAudioLog(value:Bool):Bool
+  {
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchVerboseAudioLog = value;
+      if (Save.system != null) Save.system.flush();
+    }
+    return value;
+  }
 }
+
 

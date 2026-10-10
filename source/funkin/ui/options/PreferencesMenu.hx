@@ -202,6 +202,10 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     createPrefItemCheckbox('Performance Monitor', 'Show FPS and memory counter in the top-left corner.', function(value:Bool):Void {
       Preferences.switchShowPerfHud = value;
     }, Preferences.switchShowPerfHud);
+
+    createPrefItemCheckbox('Audio Telemetry Log', 'Log detailed OpenAL metrics and timing drift to SDMC logs for diagnostics.', function(value:Bool):Void {
+      Preferences.switchVerboseAudioLog = value;
+    }, Preferences.switchVerboseAudioLog);
     #end
 
     #if web

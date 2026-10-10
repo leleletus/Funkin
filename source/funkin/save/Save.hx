@@ -145,6 +145,7 @@ class Save implements ConsoleClass
           switchAntialiasing: false,
           switchNoteSplashes: true,
           switchShowPerfHud: true,
+          switchVerboseAudioLog: false,
           ghostTapping: true,
         },
       #if mobile
@@ -1263,6 +1264,12 @@ typedef SaveDataOptions =
    * @default `true`
    */
   var ?switchShowPerfHud:Bool;
+
+  /**
+   * Whether verbose audio telemetry logging is enabled on Switch.
+   * @default `false`
+   */
+  var ?switchVerboseAudioLog:Bool;
 
   /**
    * Whether ghost tapping is enabled (tapping empty lanes has no miss penalty).

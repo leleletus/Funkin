@@ -1160,6 +1160,9 @@ class PlayState extends MusicBeatSubState
       {
         Conductor.instance.formatOffset = 0.0;
       }
+      #if switch
+      nx.NXAudioDiagnostics.update(elapsed);
+      #end
 
       // Lime has some precision loss when getting the sound current position
       // Since the notes scrolling is dependant on the sound time that caused it to appear "stuttery" for some people
@@ -1207,6 +1210,10 @@ class PlayState extends MusicBeatSubState
         // FALLBACK: If music stopped unexpectedly during gameplay (not paused, not in countdown, not ending song, and not during cutscene)
         if (!isGamePaused && !isSongEnd && !isInCountdown && !isInCutscene && !startingSong)
         {
+          #if switch
+          nx.NXAudioDiagnostics.checkWatchdog(Conductor.instance.songPosition, isGamePaused, isInCutscene, vocals);
+          #end
+
           if (FlxG.sound.music != null && !FlxG.sound.music.playing)
           {
             try
@@ -2675,6 +2682,10 @@ class PlayState extends MusicBeatSubState
     }
 
     FlxG.sound.music.play();
+
+    #if switch
+    nx.NXAudioDiagnostics.onSongStart(FlxG.sound.music.time);
+    #end
 
     #if FEATURE_DISCORD_RPC
     // Updating Discord Rich Presence (with Time Left)
