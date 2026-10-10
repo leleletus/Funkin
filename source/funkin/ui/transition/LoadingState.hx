@@ -62,6 +62,65 @@ class LoadingState extends MusicBeatSubState
 
     add(loadBar);
 
+    #if switch
+    // Force immediate draw to the front framebuffer before blocking with heavy C++ asset loading
+    try
+    {
+      @:privateAccess
+      if (FlxG.game != null)
+      {
+        FlxG.game.draw();
+      }
+      @:privateAccess
+      if (FlxG.stage != null)
+      {
+        FlxG.stage.__renderAfterEvent();
+      }
+    }
+    catch (e:Dynamic) {}
+
+    new FlxTimer().start(0.05, function(_) {
+      var shouldPreloadLevelAssets:Bool = !(playParams?.minimalMode ?? false);
+      if (shouldPreloadLevelAssets && playParams != null)
+      {
+        preloadLevelAssets();
+        if (playParams.targetSong != null)
+        {
+          playParams.targetSong.cacheCharts(true);
+          var songDifficulty = playParams.targetSong.getDifficulty(playParams.targetDifficulty, playParams.targetVariation);
+          if (songDifficulty != null)
+          {
+            var noteStyle = NoteStyleRegistry.instance.fetchEntry(songDifficulty.noteStyle ?? '');
+            if (noteStyle == null) noteStyle = NoteStyleRegistry.instance.fetchDefault();
+            FunkinMemory.cacheNoteStyle(noteStyle);
+          }
+
+          if (playParams.targetSong.songName == "2hot")
+          {
+            var spritesToCache = [
+              "wked1_cutscene_1_can",
+              "spraypaintExplosionEZ",
+              "SpraypaintExplosion",
+              "CanImpactParticle",
+              "spraycanAtlas/spritemap1"
+            ];
+            for (sprite in spritesToCache)
+            {
+              var path = Paths.image(sprite, "weekend1");
+              funkin.FunkinMemory.cacheTexture(path);
+              if (path.endsWith('spritemap1.png') #if FEATURE_COMPRESSED_TEXTURES || path.endsWith('spritemap1.astc') #end)
+              {
+                openfl.Assets.getBitmapData(path, true);
+              }
+            }
+          }
+        }
+      }
+      onLoad();
+    });
+    return;
+    #end
+
     initSongsManifest().onComplete(function(lib) {
       callbacks = new MultiCallback(onLoad);
       var introComplete = callbacks.add('introComplete');
@@ -202,6 +261,12 @@ class LoadingState extends MusicBeatSubState
     }
     else
     {
+      #if switch
+      FlxG.signals.preStateSwitch.addOnce(function() {
+        funkin.FunkinMemory.clearFreeplay();
+        funkin.FunkinMemory.purgeCache(true);
+      });
+      #end
       FlxG.switchState(target);
     }
   }
@@ -244,8 +309,8 @@ class LoadingState extends MusicBeatSubState
       };
     }
 
-    #if NO_PRELOAD_ALL
-    // Switch to loading state while we load assets (default on HTML5 target).
+    #if (NO_PRELOAD_ALL || switch)
+    // Switch to loading state while we load assets (default on HTML5 target, and on Switch).
     var loadStateCtor = function() {
       var result = new LoadingState(playStateCtor, shouldStopMusic, params);
       @:privateAccess
@@ -364,7 +429,7 @@ class LoadingState extends MusicBeatSubState
     #end
   }
 
-  #if NO_PRELOAD_ALL
+  #if (NO_PRELOAD_ALL && !switch)
   static function isSoundLoaded(path:String):Bool
   {
     return OpenFLAssets.cache.hasSound(path);
