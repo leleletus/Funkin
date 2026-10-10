@@ -51,16 +51,20 @@ class PolymodHandler
   /**
    * Where relative to the executable that mods are located.
    */
-  static final MOD_FOLDER:String =
+  static var MOD_FOLDER(get, never):String;
+
+  static function get_MOD_FOLDER():String
+  {
     #if (REDIRECT_ASSETS_FOLDER && macos)
-    '../../../../../../../example_mods'
+    return '../../../../../../../example_mods';
     #elseif REDIRECT_ASSETS_FOLDER
-    '../../../../example_mods'
+    return '../../../../example_mods';
     #elseif switch
-    'sdmc:/switch/Friday-Night-Funkin/mods'
+    return '${nx.NXMain.getAppDir()}/mods';
     #else
-    'mods'
-    #end;
+    return 'mods';
+    #end
+  }
 
   static final CORE_FOLDER:Null<String> =
     #if (REDIRECT_ASSETS_FOLDER && macos)

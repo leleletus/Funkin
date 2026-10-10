@@ -44,6 +44,37 @@ class NXMain
   public static var nxController:NXController = null;
 
   /**
+   * Dynamically determines the app directory on Nintendo Switch.
+   * If the .nro is inside a folder like sdmc:/switch/Friday-Night-Funkin/, it returns that folder.
+   * If the .nro is loose in sdmc:/switch/, it returns the default sdmc:/switch/Friday-Night-Funkin.
+   */
+  public static function getAppDir():String
+  {
+    #if switch
+    try
+    {
+      var progPath:String = Sys.programPath();
+      if (progPath != null && progPath.length > 0)
+      {
+        var dir:String = haxe.io.Path.directory(progPath);
+        dir = StringTools.replace(dir, "\\", "/");
+        if (dir != "sdmc:/switch" && dir != "sdmc:/" && dir != "sdmc:" && dir.length > 0)
+        {
+          return dir;
+        }
+      }
+    }
+    catch (e:Dynamic)
+    {
+      trace('Error determining Switch app dir: ' + e);
+    }
+    return "sdmc:/switch/Friday-Night-Funkin";
+    #else
+    return Sys.getCwd();
+    #end
+  }
+
+  /**
    * Initialize Nintendo Switch systems
    */
   public static function init()

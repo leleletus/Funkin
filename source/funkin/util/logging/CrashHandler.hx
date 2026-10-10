@@ -11,7 +11,16 @@ import flixel.FlxG.FlxRenderMethod;
 @:nullSafety
 class CrashHandler
 {
-  public static final LOG_FOLDER = #if !switch 'logs' #else 'sdmc:/switch/Friday-Night-Funkin/logs' #end;
+  public static var LOG_FOLDER(get, never):String;
+
+  static function get_LOG_FOLDER():String
+  {
+    #if switch
+    return '${nx.NXMain.getAppDir()}/logs';
+    #else
+    return 'logs';
+    #end
+  }
 
   /**
    * Called before exiting the game when a standard error occurs, like a thrown exception.
