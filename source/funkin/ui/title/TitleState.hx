@@ -81,6 +81,9 @@ class TitleState extends MusicBeatState
   var gfDance:FlxSpriteOverlay;
   var danceLeft:Bool = false;
   var titleText:FlxSprite;
+  #if switch
+  var switchPromptText:Null<AtlasText> = null;
+  #end
   var maskShader = new LeftMaskShader();
 
   var attractTimer:FlxTimer;
@@ -137,6 +140,14 @@ class TitleState extends MusicBeatState
     titleText.shader = swagShader.shader;
     // titleText.screenCenter(X);
     add(titleText);
+
+    #if switch
+    switchPromptText = new AtlasText(0, FlxG.height * 0.82, "PRESS A TO BEGIN", AtlasFont.BOLD);
+    switchPromptText.screenCenter(X);
+    switchPromptText.visible = false;
+    titleText.visible = false;
+    add(switchPromptText);
+    #end
 
     if (!initialized) // Fix an issue where returning to the credits would play a black screen.
     {
@@ -322,6 +333,12 @@ class TitleState extends MusicBeatState
     {
       if (FlxG.sound.music != null) FlxG.sound.music.onComplete = null;
       titleText.animation.play('press');
+      #if switch
+      if (switchPromptText != null)
+      {
+        FlxTween.tween(switchPromptText.scale, {x: 1.25, y: 1.25}, 0.15, {ease: FlxEase.bounceOut});
+      }
+      #end
       FlxG.camera.flash(FlxColor.WHITE, 1);
       FunkinSound.playOnce(Paths.sound('confirmMenu'), 0.7);
       transitioning = true;
@@ -541,6 +558,9 @@ class TitleState extends MusicBeatState
       FlxG.camera.flash(FlxColor.WHITE, initialized ? 1 : 4);
 
       if (credGroup != null) remove(credGroup);
+      #if switch
+      if (switchPromptText != null) switchPromptText.visible = true;
+      #end
       skippedIntro = true;
     }
   }

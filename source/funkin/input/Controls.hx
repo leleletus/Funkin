@@ -433,6 +433,36 @@ class Controls extends FlxActionSet
   public function getDialogueName(action:FlxActionDigital, ?ignoreSurrounding:Bool = false):String
   {
     if (action.inputs.length == 0) return 'N/A';
+
+    #if switch
+    // On Switch, prioritize GAMEPAD inputs over KEYBOARD!
+    var gamepadInput:Null<flixel.input.actions.FlxActionInput> = null;
+    for (inp in action.inputs)
+    {
+      if (inp.device == GAMEPAD)
+      {
+        gamepadInput = inp;
+        break;
+      }
+    }
+    if (gamepadInput != null)
+    {
+      var btnName:String = switch ((gamepadInput.inputID : FlxGamepadInputID))
+      {
+        case A: "B"; // SwitchProMapping maps physical B to FlxGamepadInputID.A
+        case B: "A"; // SwitchProMapping maps physical A to FlxGamepadInputID.B
+        case X: "Y"; // SwitchProMapping maps physical Y to FlxGamepadInputID.X
+        case Y: "X"; // SwitchProMapping maps physical X to FlxGamepadInputID.Y
+        case RIGHT_STICK_CLICK: "R3";
+        case LEFT_STICK_CLICK: "L3";
+        case BACK: "-";
+        case START: "+";
+        case id: '${id}';
+      };
+      return ignoreSurrounding ? btnName : '[$btnName]';
+    }
+    #end
+
     var input = action.inputs[0];
     if (ignoreSurrounding == false)
     {
@@ -1053,13 +1083,21 @@ class Controls extends FlxActionSet
       case Control.CUTSCENE_ADVANCE:
         [A];
       case Control.FREEPLAY_FAVORITE:
+        #if switch
+        []; // Disable on Switch to avoid triggering unsupported search/keyboard action
+        #else
         [Y]; // Back (i.e. Select)
+        #end
       case Control.FREEPLAY_LEFT:
         [LEFT_SHOULDER];
       case Control.FREEPLAY_RIGHT:
         [RIGHT_SHOULDER];
       case Control.FREEPLAY_CHAR_SELECT:
+        #if switch
+        [RIGHT_STICK_CLICK];
+        #else
         [X];
+        #end
       case Control.FREEPLAY_JUMP_TO_TOP:
         [RIGHT_STICK_DIGITAL_UP];
       case Control.FREEPLAY_JUMP_TO_BOTTOM:
@@ -1083,7 +1121,11 @@ class Controls extends FlxActionSet
         [];
       #end
       case Control.DEBUG_DISPLAY:
+        #if switch
+        [FlxGamepadInputID.BACK]; // Minus on Nintendo Switch
+        #else
         [];
+        #end
       default:
         [];
     }
