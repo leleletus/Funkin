@@ -73,19 +73,57 @@ class VideoCutscene
     VideoCutscene.cutsceneType = cutsceneType;
 
     #if switch
-    var onFinish:Void->Void = function() {
-      onVideoEnded.dispatch();
-      onCutsceneFinish(cutsceneType);
-    };
-
-    if (nx.video.NXVideoPlayer.playConverted(filePath, onFinish))
+    try
     {
+      var onFinish:Void->Void = function() {
+        try
+        {
+          if (PlayState.instance != null)
+          {
+            PlayState.instance.isInCutscene = false;
+            if (PlayState.instance.camHUD != null) PlayState.instance.camHUD.visible = true;
+          }
+          onVideoEnded.dispatch();
+          onCutsceneFinish(cutsceneType);
+        }
+        catch (e:Dynamic)
+        {
+          trace('Switch: Error completing cutscene: ' + e);
+          if (PlayState.instance != null)
+          {
+            PlayState.instance.isInCutscene = false;
+            if (PlayState.instance.camHUD != null) PlayState.instance.camHUD.visible = true;
+            PlayState.instance.startCountdown();
+          }
+        }
+      };
+
+      if (nx.video.NXVideoPlayer.playConverted(filePath, onFinish))
+      {
+        return;
+      }
+
+      trace('Switch: Skipping unconverted video cutscene ($filePath), safely transitioning.');
+      onVideoStarted.dispatch();
+      onFinish();
       return;
     }
-
-    trace('Switch: Skipping unconverted video cutscene ($filePath), safely transitioning.');
-    onFinish();
-    return;
+    catch (e:Dynamic)
+    {
+      trace('Switch: Fatal error in VideoCutscene.play(): ' + e);
+      try
+      {
+        if (PlayState.instance != null)
+        {
+          PlayState.instance.isInCutscene = false;
+          if (PlayState.instance.camHUD != null) PlayState.instance.camHUD.visible = true;
+          PlayState.instance.startCountdown();
+        }
+        onVideoEnded.dispatch();
+      }
+      catch (err:Dynamic) {}
+      return;
+    }
     #else
     if (!openfl.Assets.exists(filePath))
     {
@@ -129,7 +167,9 @@ class VideoCutscene
 
   public static function isPlaying():Bool
   {
-    #if (html5 || hxvlc)
+    #if switch
+    return nx.video.NXVideoPlayer.isCutscenePlaying();
+    #elseif (html5 || hxvlc)
     return vid != null;
     #else
     return false;
@@ -248,6 +288,10 @@ class VideoCutscene
 
   public static function pauseVideo():Void
   {
+    #if switch
+    nx.video.NXVideoPlayer.pause();
+    #end
+
     #if html5
     if (vid != null)
     {
@@ -271,7 +315,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
 
@@ -279,7 +323,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
   }
@@ -290,7 +334,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
 
@@ -298,13 +342,17 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
   }
 
   public static function resumeVideo():Void
   {
+    #if switch
+    nx.video.NXVideoPlayer.resume();
+    #end
+
     #if html5
     if (vid != null)
     {
@@ -333,8 +381,12 @@ class VideoCutscene
 
     var cutsceneType:CutsceneType = VideoCutscene.cutsceneType;
 
+    #if switch
+    nx.video.NXVideoPlayer.stop();
+    #end
+
     #if html5
-    if (vid != null)
+    if (vid != null && PlayState.instance != null)
     {
       PlayState.instance.remove(vid);
     }
@@ -344,33 +396,54 @@ class VideoCutscene
     if (vid != null)
     {
       vid.stop();
-      PlayState.instance.remove(vid);
+      if (PlayState.instance != null) PlayState.instance.remove(vid);
     }
     #end
 
     #if (html5 || hxvlc)
-    vid.destroy();
-    vid = null;
+    if (vid != null)
+    {
+      vid.destroy();
+      vid = null;
+    }
     #end
 
-    PlayState.instance.camHUD.visible = true;
+    if (PlayState.instance != null && PlayState.instance.camHUD != null)
+    {
+      PlayState.instance.camHUD.visible = true;
+    }
 
-    FlxTween.tween(blackScreen, {alpha: 0}, transitionTime,
-      {
-        ease: FlxEase.quadInOut,
-        onComplete: function(twn:FlxTween) {
-          PlayState.instance.remove(blackScreen);
-          blackScreen = null;
-        }
-      });
-    FlxTween.tween(FlxG.camera, {zoom: PlayState.instance.stageZoom}, transitionTime,
-      {
-        ease: FlxEase.quadInOut,
-        onComplete: function(twn:FlxTween) {
-          onVideoEnded.dispatch();
-          onCutsceneFinish(cutsceneType);
-        }
-      });
+    if (blackScreen != null)
+    {
+      FlxTween.tween(blackScreen, {alpha: 0}, transitionTime,
+        {
+          ease: FlxEase.quadInOut,
+          onComplete: function(twn:FlxTween) {
+            if (blackScreen != null && PlayState.instance != null)
+            {
+              PlayState.instance.remove(blackScreen);
+              blackScreen = null;
+            }
+          }
+        });
+    }
+
+    if (PlayState.instance != null && FlxG.camera != null)
+    {
+      FlxTween.tween(FlxG.camera, {zoom: PlayState.instance.stageZoom}, transitionTime,
+        {
+          ease: FlxEase.quadInOut,
+          onComplete: function(twn:FlxTween) {
+            onVideoEnded.dispatch();
+            onCutsceneFinish(cutsceneType);
+          }
+        });
+    }
+    else
+    {
+      onVideoEnded.dispatch();
+      onCutsceneFinish(cutsceneType);
+    }
   }
 
   /**
@@ -382,12 +455,11 @@ class VideoCutscene
     switch (cutsceneType)
     {
       case CutsceneType.STARTING:
-        PlayState.instance.startCountdown();
+        if (PlayState.instance != null) PlayState.instance.startCountdown();
       case CutsceneType.ENDING:
-        PlayState.instance.endSong(true); // true = right goddamn now
+        if (PlayState.instance != null) PlayState.instance.endSong(true); // true = right goddamn now
       case CutsceneType.MIDSONG:
         // Do nothing.
-        // throw "Not implemented!";
     }
   }
 
@@ -396,15 +468,19 @@ class VideoCutscene
    */
   public static function destroyVideo()
   {
+    #if switch
+    nx.video.NXVideoPlayer.stop();
+    #end
+
     #if html5
-    if (vid != null) PlayState.instance.remove(vid);
+    if (vid != null && PlayState.instance != null) PlayState.instance.remove(vid);
     #end
 
     #if hxvlc
     if (vid != null)
     {
       vid.stop();
-      PlayState.instance.remove(vid);
+      if (PlayState.instance != null) PlayState.instance.remove(vid);
     }
     #end
 
@@ -418,7 +494,7 @@ class VideoCutscene
 
     if (blackScreen != null)
     {
-      PlayState.instance.remove(blackScreen);
+      if (PlayState.instance != null) PlayState.instance.remove(blackScreen);
       blackScreen = null;
     }
   }
