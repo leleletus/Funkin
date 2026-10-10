@@ -606,4 +606,105 @@ class Preferences
   }
   #end
   #end
+
+  /**
+   * Resolution mode on Nintendo Switch.
+   * @default `"720p"`
+   */
+  public static var switchResolutionMode(get, set):String;
+
+  static function get_switchResolutionMode():String
+  {
+    return Save?.instance?.options?.switchResolutionMode ?? "720p";
+  }
+
+  static function set_switchResolutionMode(value:String):String
+  {
+    var save:Save = Save.instance;
+    save.options.switchResolutionMode = value;
+    Save.system.flush();
+    #if switch
+    nx.NXPerformance.applyResolutionMode(value);
+    #end
+    return value;
+  }
+
+  /**
+   * Whether camera post-processing shaders are enabled on Switch.
+   * @default `false`
+   */
+  public static var switchEnableShaders(get, set):Bool;
+
+  static function get_switchEnableShaders():Bool
+  {
+    return Save?.instance?.options?.switchEnableShaders ?? #if switch false #else true #end;
+  }
+
+  static function set_switchEnableShaders(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.switchEnableShaders = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Whether antialiasing is enabled on Switch.
+   * @default `false`
+   */
+  public static var switchAntialiasing(get, set):Bool;
+
+  static function get_switchAntialiasing():Bool
+  {
+    return Save?.instance?.options?.switchAntialiasing ?? #if switch false #else true #end;
+  }
+
+  static function set_switchAntialiasing(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.switchAntialiasing = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Whether Sick note splashes are spawned on Switch.
+   * @default `true`
+   */
+  public static var switchNoteSplashes(get, set):Bool;
+
+  static function get_switchNoteSplashes():Bool
+  {
+    return Save?.instance?.options?.switchNoteSplashes ?? true;
+  }
+
+  static function set_switchNoteSplashes(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.switchNoteSplashes = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Whether performance HUD (FPS / RAM) is shown on Switch.
+   * @default `true`
+   */
+  public static var switchShowPerfHud(get, set):Bool;
+
+  static function get_switchShowPerfHud():Bool
+  {
+    return Save?.instance?.options?.switchShowPerfHud ?? true;
+  }
+
+  static function set_switchShowPerfHud(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.switchShowPerfHud = value;
+    Save.system.flush();
+    #if switch
+    nx.NXPerformance.updatePerfHud();
+    #end
+    return value;
+  }
 }

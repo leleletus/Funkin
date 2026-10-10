@@ -119,7 +119,31 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   public function new()
   {
+    #if switch
+    if (!funkin.Preferences.switchEnableShaders)
+    {
+      super('
+        #pragma header
+        uniform float uTime;
+        uniform float uScale;
+        uniform float uIntensity;
+        uniform float uPuddleY;
+        uniform float uPuddleScaleY;
+        uniform bool uSpriteMode;
+        uniform vec3 uRainColor;
+        uniform int numLights;
+        void main() {
+          gl_FragColor = flixel_texture2D(bitmap, openfl_TextureCoordv);
+        }
+      ');
+    }
+    else
+    {
+      super(Assets.getText(Paths.frag('rain')));
+    }
+    #else
     super(Assets.getText(Paths.frag('rain')));
+    #end
     this.rainColor = 0xFF6680cc;
   }
 

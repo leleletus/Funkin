@@ -140,6 +140,11 @@ class Save implements ConsoleClass
                   gamepad: {},
                 },
             },
+          switchResolutionMode: '720p',
+          switchEnableShaders: false,
+          switchAntialiasing: false,
+          switchNoteSplashes: true,
+          switchShowPerfHud: true,
         },
       #if mobile
       mobileOptions:
@@ -1227,6 +1232,36 @@ typedef SaveDataOptions =
       var fancyPreview:Bool;
       var previewOnSave:Bool;
     };
+
+  /**
+   * Switch resolution mode ("720p", "Docked", "540p").
+   * @default `"720p"`
+   */
+  var ?switchResolutionMode:String;
+
+  /**
+   * Whether shaders are enabled on Switch.
+   * @default `false`
+   */
+  var ?switchEnableShaders:Bool;
+
+  /**
+   * Whether antialiasing is enabled on Switch.
+   * @default `false`
+   */
+  var ?switchAntialiasing:Bool;
+
+  /**
+   * Whether note splashes are spawned on Switch.
+   * @default `true`
+   */
+  var ?switchNoteSplashes:Bool;
+
+  /**
+   * Whether FPS/RAM HUD is shown on Switch.
+   * @default `true`
+   */
+  var ?switchShowPerfHud:Bool;
 
   var controls:
     {

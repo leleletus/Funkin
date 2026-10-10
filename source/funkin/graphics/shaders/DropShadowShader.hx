@@ -465,7 +465,7 @@ class DropShadowShader extends FlxShader
     baseBrightness = 0;
     baseContrast = 0;
 
-    antialiasAmt = 2;
+    antialiasAmt = #if switch (funkin.Preferences.switchAntialiasing ? 2 : 0) #else 2 #end;
 
     useAltMask = false;
 

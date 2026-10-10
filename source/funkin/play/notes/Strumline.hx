@@ -1073,6 +1073,9 @@ class Strumline extends FlxSpriteGroup
   public function playNoteSplash(direction:NoteDirection):Void
   {
     if (!showNotesplash) return;
+    #if switch
+    if (!funkin.Preferences.switchNoteSplashes) return;
+    #end
     if (!noteStyle.isNoteSplashEnabled()) return;
 
     var splash:NoteSplash = this.constructNoteSplash();

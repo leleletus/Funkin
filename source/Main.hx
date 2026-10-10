@@ -233,7 +233,21 @@ class Main extends Sprite
 
   function handleDebugDisplayKeys():Void
   {
-    if (PlayerSettings.player1.controls == null || !PlayerSettings.player1.controls.check(DEBUG_DISPLAY)) return;
+    var triggered:Bool = false;
+
+    if (PlayerSettings.player1.controls != null && PlayerSettings.player1.controls.check(DEBUG_DISPLAY))
+    {
+      triggered = true;
+    }
+
+    #if switch
+    if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.MINUS))
+    {
+      triggered = true;
+    }
+    #end
+
+    if (!triggered) return;
 
     var nextMode:DebugDisplayMode;
 

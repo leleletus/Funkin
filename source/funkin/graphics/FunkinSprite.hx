@@ -767,6 +767,17 @@ class FunkinSprite extends FlxAnimate
     matrix.ty = Math.round(matrix.ty / this.scale.y) * this.scale.y;
   }
 
+  override function set_antialiasing(value:Bool):Bool
+  {
+    #if switch
+    if (!funkin.Preferences.switchAntialiasing)
+    {
+      return super.set_antialiasing(false);
+    }
+    #end
+    return super.set_antialiasing(value);
+  }
+
   public override function destroy():Void
   {
     @:nullSafety(Off) // TODO: Remove when flixel.FlxSprite is null safed.

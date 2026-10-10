@@ -50,6 +50,7 @@ class NXMain
   {
     #if switch
     nxController = new NXController();
+    nx.NXPerformance.init();
     #end
   }
 
@@ -63,6 +64,8 @@ class NXMain
     {
       nxController.update();
     }
+
+    nx.NXPerformance.update();
 
     if (PreciseInputManager.instance != null)
     {

@@ -127,7 +127,12 @@ class FunkinCamera extends FlxCamera
     // grab the bitmap
     renderSkipping(isolate ? bgItemCount : 0);
     bitmap.fillRect(bitmap.rect, 0);
-    matrix.setTo(1, 0, 0, 1, flashSprite.x, flashSprite.y);
+    #if switch
+    if (!funkin.Preferences.switchEnableShaders)
+    {
+      applyFilters = false;
+    }
+    #end
     if (applyFilters)
     {
       bitmap.draw(flashSprite, matrix);
