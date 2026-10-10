@@ -1204,8 +1204,8 @@ class PlayState extends MusicBeatSubState
       }
       else
       {
-        // FALLBACK: If music stopped unexpectedly during gameplay (not paused, not in countdown, not ending song)
-        if (!isGamePaused && !isSongEnd && !isInCountdown)
+        // FALLBACK: If music stopped unexpectedly during gameplay (not paused, not in countdown, not ending song, and not during cutscene)
+        if (!isGamePaused && !isSongEnd && !isInCountdown && !isInCutscene && !startingSong)
         {
           if (FlxG.sound.music != null && !FlxG.sound.music.playing)
           {
@@ -2654,7 +2654,7 @@ class PlayState extends MusicBeatSubState
     }
 
     // Prevent the volume from being wrong.
-    FlxG.sound.music.volume = instrumentalVolume;
+    FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
     if (FlxG.sound.music.fadeTween != null) FlxG.sound.music.fadeTween.cancel();
 
     if (vocals != null)
@@ -2662,10 +2662,10 @@ class PlayState extends MusicBeatSubState
       trace('Playing vocals...');
       add(vocals);
 
-      vocals.time = startTimestamp - Conductor.instance.instrumentalOffset;
+      vocals.time = FlxG.sound.music.time;
       vocals.pitch = playbackRate;
-      vocals.playerVolume = playerVocalsVolume;
-      vocals.opponentVolume = opponentVocalsVolume;
+      vocals.playerVolume = (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0;
+      vocals.opponentVolume = (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0;
 
       // trace('STARTING SONG AT:');
       // trace('${FlxG.sound.music.time}');

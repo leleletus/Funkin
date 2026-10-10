@@ -70,14 +70,22 @@ class VideoCutscene
   {
     if (PlayState.instance == null) return;
 
+    VideoCutscene.cutsceneType = cutsceneType;
+
+    #if switch
+    trace('Switch: Skipping video cutscene ($filePath), safely transitioning.');
+    onVideoEnded.dispatch();
+    onCutsceneFinish(cutsceneType);
+    return;
+    #else
     if (!openfl.Assets.exists(filePath))
     {
-      // Display a popup.
-      funkin.util.WindowUtil.showError('Error playing video', 'Video file does not exist: ${filePath}');
-      trace('Video file does not exist: ${filePath}');
-
+      trace('Video file does not exist: ${filePath}, safely continuing.');
+      onVideoEnded.dispatch();
+      onCutsceneFinish(cutsceneType);
       return;
     }
+    #end
 
     var rawFilePath = Paths.stripLibrary(filePath);
 

@@ -127,16 +127,30 @@ class Paths implements ConsoleClass
     return getPath('music/$key.${Constants.EXT_SOUND}', MUSIC, library);
   }
 
+  public static inline function video(key:String, ?library:String):String
+  {
+    return videos(key, library);
+  }
+
   public static function videos(key:String, ?library:String):String
   {
     final path:Path = new Path(key);
+    var cleanFile:String = path.file;
+    var ext:String = path.ext ?? Constants.EXT_VIDEO;
+    var targetLib:String = library ?? 'videos';
 
-    if (path.ext != null)
+    var normalSubPath:String = '$cleanFile.$ext';
+    var nestedSubPath:String = 'videos/$cleanFile.$ext';
+
+    if (targetLib == 'videos')
     {
-      return getPath('videos/${path.file}.${path.ext}', BINARY, library ?? 'videos');
+      if (openfl.utils.Assets.exists('videos:assets/videos/$normalSubPath', BINARY))
+      {
+        return getPath(normalSubPath, BINARY, targetLib);
+      }
     }
 
-    return getPath('videos/$key.${Constants.EXT_VIDEO}', BINARY, library ?? 'videos');
+    return getPath(nestedSubPath, BINARY, targetLib);
   }
 
   public static function voices(song:String, ?suffix:String = ''):String
