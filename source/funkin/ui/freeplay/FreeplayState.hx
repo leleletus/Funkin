@@ -1585,6 +1585,11 @@ class FreeplayState extends MusicBeatSubState
       }
     }
 
+    // Safety fallback: ensure fromCharSelect flag is always cleared even if tweens finish early or fail
+    new flixel.util.FlxTimer().start(0.4, _ -> {
+      fromCharSelect = false;
+    });
+
     // TODO: i have no fucking idea why the dj position is shitty when entering from char select
     // the easiest way is to just snap them back into place
     if (dj != null) dj.setPosition((CUTOUT_WIDTH * DJ_POS_MULTI) + 640, 366);
@@ -1649,6 +1654,18 @@ class FreeplayState extends MusicBeatSubState
     }
     #end // ^<-- FEATURE_DEBUG_FUNCTIONS
 
+    #if switch
+    // Universal R3 button check for character select on Switch (independent of active character or song list)
+    if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
+    {
+      if (!FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.state == Idle))
+      {
+        fromCharSelect = false;
+        tryOpenCharSelect();
+      }
+    }
+    #end
+
     if (uiStateMachine.canInteract())
     {
       #if switch
@@ -1667,10 +1684,11 @@ class FreeplayState extends MusicBeatSubState
       }
       #end
 
-      if ((charSelectRequested && !fromCharSelect #if FEATURE_TOUCH_CONTROLS
+      if ((charSelectRequested #if FEATURE_TOUCH_CONTROLS
         || (TouchUtil.pressAction(djHitbox, funnyCam, false) && !SwipeUtil.swipeAny) #end)
         && !FlxG.debugger.visible)
       {
+        fromCharSelect = false;
         tryOpenCharSelect();
       }
 
