@@ -1448,6 +1448,8 @@ class FreeplayState extends MusicBeatSubState
 
   function tryOpenCharSelect():Void
   {
+    if (uiStateMachine.currentState == Exiting) return;
+
     // Check if we have ACCESS to character select!
     trace('Is Pico unlocked? ${PlayerRegistry.instance.fetchEntry('pico')?.isUnlocked()}');
     trace('Number of characters: ${PlayerRegistry.instance.countUnlockedCharacters()}');
@@ -1654,17 +1656,20 @@ class FreeplayState extends MusicBeatSubState
     }
     #end // ^<-- FEATURE_DEBUG_FUNCTIONS
 
+    // Universal and reliable R3 check for character select (both FlxGamepad and NXController)
+    var r3Pressed:Bool = FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK);
     #if switch
-    // Universal R3 button check for character select on Switch (independent of active character or song list)
-    if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
+    if (!r3Pressed && nx.NXMain.nxController != null)
     {
-      if (!FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle))
-      {
-        fromCharSelect = false;
-        tryOpenCharSelect();
-      }
+      r3Pressed = nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R);
     }
     #end
+
+    if (r3Pressed && !FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle))
+    {
+      fromCharSelect = false;
+      tryOpenCharSelect();
+    }
 
     if (uiStateMachine.canInteract())
     {
@@ -1676,13 +1681,7 @@ class FreeplayState extends MusicBeatSubState
       }
       #end
 
-      var charSelectRequested:Bool = controls.FREEPLAY_CHAR_SELECT;
-      #if switch
-      if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
-      {
-        charSelectRequested = true;
-      }
-      #end
+      var charSelectRequested:Bool = controls.FREEPLAY_CHAR_SELECT || r3Pressed;
 
       if ((charSelectRequested #if FEATURE_TOUCH_CONTROLS
         || (TouchUtil.pressAction(djHitbox, funnyCam, false) && !SwipeUtil.swipeAny) #end)
