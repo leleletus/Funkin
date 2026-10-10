@@ -1660,6 +1660,12 @@ class FreeplayState extends MusicBeatSubState
       #end
 
       var charSelectRequested:Bool = controls.FREEPLAY_CHAR_SELECT;
+      #if switch
+      if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
+      {
+        charSelectRequested = true;
+      }
+      #end
 
       if ((charSelectRequested && !fromCharSelect #if FEATURE_TOUCH_CONTROLS
         || (TouchUtil.pressAction(djHitbox, funnyCam, false) && !SwipeUtil.swipeAny) #end)
