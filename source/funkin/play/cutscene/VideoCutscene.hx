@@ -73,9 +73,18 @@ class VideoCutscene
     VideoCutscene.cutsceneType = cutsceneType;
 
     #if switch
-    trace('Switch: Skipping video cutscene ($filePath), safely transitioning.');
-    onVideoEnded.dispatch();
-    onCutsceneFinish(cutsceneType);
+    var onFinish:Void->Void = function() {
+      onVideoEnded.dispatch();
+      onCutsceneFinish(cutsceneType);
+    };
+
+    if (nx.video.NXVideoPlayer.playConverted(filePath, onFinish))
+    {
+      return;
+    }
+
+    trace('Switch: Skipping unconverted video cutscene ($filePath), safely transitioning.');
+    onFinish();
     return;
     #else
     if (!openfl.Assets.exists(filePath))
