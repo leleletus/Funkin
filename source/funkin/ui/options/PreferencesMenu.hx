@@ -206,6 +206,10 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     createPrefItemCheckbox('Audio Telemetry Log', 'Log detailed OpenAL metrics and timing drift to SDMC logs for diagnostics.', function(value:Bool):Void {
       Preferences.switchVerboseAudioLog = value;
     }, Preferences.switchVerboseAudioLog);
+
+    createPrefItemCheckbox('Botplay / Autoplay', 'Automatically hits notes perfectly for testing transitions and performance.', function(value:Bool):Void {
+      Preferences.botplay = value;
+    }, Preferences.botplay);
     #end
 
     #if web

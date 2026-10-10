@@ -771,6 +771,28 @@ class Preferences
     }
     return value;
   }
+
+  /**
+   * Whether Botplay / Autoplay is enabled.
+   * @default `false`
+   */
+  public static var botplay(get, set):Bool;
+
+  static function get_botplay():Bool
+  {
+    return Save?.instance?.options?.botplay ?? false;
+  }
+
+  static function set_botplay(value:Bool):Bool
+  {
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.botplay = value;
+      if (Save.system != null) Save.system.flush();
+    }
+    return value;
+  }
 }
 
 

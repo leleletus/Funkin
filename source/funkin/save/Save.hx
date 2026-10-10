@@ -146,6 +146,7 @@ class Save implements ConsoleClass
           switchNoteSplashes: true,
           switchShowPerfHud: true,
           switchVerboseAudioLog: false,
+          botplay: false,
           ghostTapping: true,
         },
       #if mobile
@@ -1270,6 +1271,12 @@ typedef SaveDataOptions =
    * @default `false`
    */
   var ?switchVerboseAudioLog:Bool;
+
+  /**
+   * Whether botplay / autoplay is enabled.
+   * @default `false`
+   */
+  var ?botplay:Bool;
 
   /**
    * Whether ghost tapping is enabled (tapping empty lanes has no miss penalty).

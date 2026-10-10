@@ -385,6 +385,11 @@ class PlayState extends MusicBeatSubState
    */
   public var isBotPlayMode:Bool = false;
 
+  var botplayHoldTimer:Float = 0.0;
+  var botplayComboTriggered:Bool = false;
+  static final BOTPLAY_HOLD_DURATION:Float = 1.5;
+  var botplayNotificationText:Null<FlxText> = null;
+
   /**
    * Whether the results screen should show up before returning to the chart editor.
    */
@@ -753,7 +758,7 @@ class PlayState extends MusicBeatSubState
     if (params.targetVariation != null) currentVariation = params.targetVariation;
     if (params.targetInstrumental != null) currentInstrumental = params.targetInstrumental;
     isPracticeMode = params.practiceMode ?? false;
-    isBotPlayMode = params.botPlayMode ?? false;
+    isBotPlayMode = (params.botPlayMode ?? false) || Preferences.botplay;
     isPlaytestResults = params.playtestResults ?? false;
     isMinimalMode = params.minimalMode ?? false;
     startTimestamp = params.startTimestamp ?? 0.0;
@@ -1246,6 +1251,42 @@ class PlayState extends MusicBeatSubState
 
     // Attempt to pause the game.
     if ((controls.PAUSE_P || androidPause || pauseButtonCheck)) pause();
+
+    // Dynamic shortcut to toggle Botplay in-game: Hold L + R for 1.5s
+    if (!isGamePaused && !isInCutscene && !isSongEnd)
+    {
+      var lPressed:Bool = FlxG.gamepads.anyPressed(LEFT_SHOULDER);
+      var rPressed:Bool = FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+      #if switch
+      if (nx.NXMain.nxController != null)
+      {
+        if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.L)) lPressed = true;
+        if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) rPressed = true;
+      }
+      #end
+      #if !switch
+      if (FlxG.keys.pressed.L && FlxG.keys.pressed.R)
+      {
+        lPressed = true;
+        rPressed = true;
+      }
+      #end
+
+      if (lPressed && rPressed)
+      {
+        botplayHoldTimer += elapsed;
+        if (botplayHoldTimer >= BOTPLAY_HOLD_DURATION && !botplayComboTriggered)
+        {
+          botplayComboTriggered = true;
+          toggleBotplay();
+        }
+      }
+      else
+      {
+        botplayHoldTimer = 0.0;
+        botplayComboTriggered = false;
+      }
+    }
 
     #if mobile
     if (justUnpaused)
@@ -2856,28 +2897,21 @@ class PlayState extends MusicBeatSubState
     for (note in playerStrumline.notes.members)
     {
       if (note == null || !note.alive) continue;
+
+      if (isBotPlayMode || Preferences.botplay)
+      {
+        if (note.noteData.time <= Conductor.instance.songPosition && !note.hasBeenHit && !note.hasMissed)
+        {
+          goodNoteHit(note);
+          continue;
+        }
+      }
+
       var r = GRhythmUtil.processWindow(note, !isBotPlayMode);
       if (r.botplayHit)
       {
-        // We call onHitNote to play the proper animations,
-        // but not goodNoteHit! This means zero score and zero notes hit for the results screen!
-
-        // Call an event to allow canceling the note hit.
-        // NOTE: This is what handles the character animations!
-        var event:NoteScriptEvent = new HitNoteScriptEvent(note, 0.0, 0, 'perfect', false, 0);
-        dispatchEvent(event);
-
-        // Calling event.cancelEvent() skips all the other logic! Neat!
-        if (event.eventCanceled) continue;
-
-        // Command the bot to hit the note on time.
-        // NOTE: This is what handles the strumline and cleaning up the note itself!
-        playerStrumline.hitNote(note);
-
-        if (note.holdNoteSprite != null)
-        {
-          playerStrumline.playNoteHoldCover(note.holdNoteSprite);
-        }
+        goodNoteHit(note);
+        continue;
       }
       if (!r.cont) continue;
 
@@ -3090,24 +3124,26 @@ class PlayState extends MusicBeatSubState
     playerStrumline.noteVibrations.tryNoteVibration();
   }
 
-  function goodNoteHit(note:NoteSprite, input:PreciseInputEvent):Void
+  function goodNoteHit(note:NoteSprite, ?input:PreciseInputEvent = null):Void
   {
-    // Calculate the input latency (do this as late as possible).
-    // trace('Compare: ${PreciseInputManager.getCurrentTimestamp()} - ${input.timestamp}');
-    var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
-    var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
-    // trace('Input: ${daNote.noteData.getDirectionName()} pressed ${inputLatencyMs}ms ago!');
+    var noteDiff:Int = 0;
+    if (input != null)
+    {
+      // Calculate the input latency (do this as late as possible).
+      var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
+      var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
 
-    // Get the offset and compensate for input latency.
-    // Round inward (trim remainder) for consistency.
-    var diff:Float = Conductor.instance.songPosition - note.noteData.time;
+      // Get the offset and compensate for input latency.
+      // Round inward (trim remainder) for consistency.
+      var diff:Float = Conductor.instance.songPosition - note.noteData.time;
 
-    var totalDiff:Float = diff;
-    if (diff < 0) totalDiff = diff + inputLatencyMs;
-    else
-      totalDiff = diff - inputLatencyMs;
+      var totalDiff:Float = diff;
+      if (diff < 0) totalDiff = diff + inputLatencyMs;
+      else
+        totalDiff = diff - inputLatencyMs;
 
-    var noteDiff:Int = Std.int(totalDiff);
+      noteDiff = Std.int(totalDiff);
+    }
 
     var score = Scoring.scoreNote(noteDiff, PBOT1);
     var daRating = Scoring.judgeNote(noteDiff, PBOT1);
@@ -3150,6 +3186,51 @@ class PlayState extends MusicBeatSubState
       applyScore(event.score, event.judgement, event.healthChange, event.isComboBreak);
       popUpScore(event.judgement);
     }
+  }
+
+  function toggleBotplay():Void
+  {
+    Preferences.botplay = !Preferences.botplay;
+    isBotPlayMode = Preferences.botplay;
+
+    updateScoreText();
+
+    try
+    {
+      FunkinSound.playOnce(Paths.sound('confirmMenu'), 0.7);
+    }
+    catch (e:Dynamic) {}
+
+    showBotplayNotification(isBotPlayMode ? "BOTPLAY ACTIVADO" : "BOTPLAY DESACTIVADO");
+  }
+
+  function showBotplayNotification(msg:String):Void
+  {
+    if (botplayNotificationText == null)
+    {
+      botplayNotificationText = new FlxText(0, FlxG.height * 0.15, FlxG.width, msg, 28);
+      botplayNotificationText.setFormat(Paths.font('vcr.ttf'), 28, FlxColor.WHITE, FlxTextAlign.CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+      botplayNotificationText.borderSize = 3;
+      botplayNotificationText.cameras = [camHUD];
+      botplayNotificationText.zIndex = 2000;
+      add(botplayNotificationText);
+      refresh();
+    }
+    else
+    {
+      botplayNotificationText.text = msg;
+      botplayNotificationText.alpha = 1.0;
+      botplayNotificationText.visible = true;
+    }
+
+    FlxTween.cancelTweensOf(botplayNotificationText);
+    FlxTween.tween(botplayNotificationText, {alpha: 0}, 1.2, {
+      ease: FlxEase.quintIn,
+      startDelay: 0.8,
+      onComplete: function(_) {
+        if (botplayNotificationText != null) botplayNotificationText.visible = false;
+      }
+    });
   }
 
   /**
