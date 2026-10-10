@@ -841,6 +841,26 @@ class FunkinPreloader extends FlxBasePreloader
 
   function updateGraphics(percent:Float, elapsed:Float):Void
   {
+    // Continuous float calculation: progressive bar across TOTAL_STEPS
+    var currentStep:Int = currentState.getStepIndex();
+    var stagePercent:Float = Math.max(0.0, Math.min(1.0, percent));
+    var overallPercent:Float = 0.0;
+
+    if (currentState == FunkinPreloaderState.Complete #if FEATURE_TOUCH_HERE_TO_PLAY || currentState == FunkinPreloaderState.TouchHereToPlay #end || completeTime > 0.0)
+    {
+      overallPercent = 1.0;
+    }
+    else if (currentStep > 0)
+    {
+      // Continuous float calculation: (currentStep / totalSteps) * macro progress
+      overallPercent = (currentStep / (TOTAL_STEPS : Float));
+      if (currentStep < TOTAL_STEPS)
+      {
+        overallPercent += (stagePercent / (TOTAL_STEPS : Float));
+      }
+    }
+    overallPercent = Math.max(0.0, Math.min(1.0, overallPercent));
+
     // Render display (including transition out)
     if (completeTime > 0.0)
     {
@@ -858,11 +878,28 @@ class FunkinPreloader extends FlxBasePreloader
     }
     else
     {
-      // Render progress bar
-      var piecesToRender:Int = Std.int(percent * progressBarPieces.length);
+      // Render progress bar pieces proportionally
+      var piecesCount:Int = progressBarPieces.length;
+      var floatPieces:Float = overallPercent * piecesCount;
+      var fullPieces:Int = Math.floor(floatPieces);
+      var partial:Float = floatPieces - fullPieces;
 
-      for (i => piece in progressBarPieces)
-        piece.alpha = i <= piecesToRender ? 0.9 : 0.1;
+      for (i in 0...piecesCount)
+      {
+        var piece:Sprite = progressBarPieces[i];
+        if (i < fullPieces)
+        {
+          piece.alpha = 0.9;
+        }
+        else if (i == fullPieces && overallPercent < 1.0)
+        {
+          piece.alpha = 0.1 + (0.8 * partial);
+        }
+        else
+        {
+          piece.alpha = 0.1;
+        }
+      }
     }
 
     // Cycle ellipsis count to show loading
@@ -875,7 +912,7 @@ class FunkinPreloader extends FlxBasePreloader
     updateProgressLeftText(currentState.getProgressLeftText(TOTAL_STEPS, ellipsis));
 
     // Render percent text
-    var percentage:Int = Math.floor(percent * 100);
+    var percentage:Int = Math.floor(overallPercent * 100);
     progressRightText.text = '$percentage%';
 
     if (currentState.getProgressLeftText() != null)
@@ -1088,5 +1125,31 @@ enum abstract FunkinPreloaderState(String) to String
       default:
         return null;
     }
+  }
+
+  /**
+   * Returns the numeric step index for this preloader state.
+   */
+  public function getStepIndex():Int
+  {
+    return switch (this)
+    {
+      case NotStarted: 0;
+      case DownloadingAssets: 1;
+      case PreloadingPlayAssets: 2;
+      case InitializingScripts: 3;
+      case CachingGraphics: 4;
+      case CachingAudio: 5;
+      case CachingData: 6;
+      case ParsingSpritesheets: 7;
+      case ParsingStages: 8;
+      case ParsingCharacters: 9;
+      case ParsingSongs: 10;
+      case Complete: 11;
+      #if FEATURE_TOUCH_HERE_TO_PLAY
+      case TouchHereToPlay: 11;
+      #end
+      default: 0;
+    };
   }
 }
