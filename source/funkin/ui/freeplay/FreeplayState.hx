@@ -1651,7 +1651,17 @@ class FreeplayState extends MusicBeatSubState
 
     if (uiStateMachine.canInteract())
     {
-      if ((controls.FREEPLAY_CHAR_SELECT && !fromCharSelect #if FEATURE_TOUCH_CONTROLS
+      #if switch
+      // On Switch, ignore physical Y button to prevent triggering unsupported actions / black screen
+      if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.Y))
+      {
+        // Ignore Y button
+      }
+      #end
+
+      var charSelectRequested:Bool = controls.FREEPLAY_CHAR_SELECT;
+
+      if ((charSelectRequested && !fromCharSelect #if FEATURE_TOUCH_CONTROLS
         || (TouchUtil.pressAction(djHitbox, funnyCam, false) && !SwipeUtil.swipeAny) #end)
         && !FlxG.debugger.visible)
       {
