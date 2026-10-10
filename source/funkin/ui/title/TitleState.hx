@@ -544,6 +544,14 @@ class TitleState extends MusicBeatState
         else
           gfDance.animation.play('danceLeft');
       }
+
+      #if switch
+      if (switchPromptText != null && !transitioning)
+      {
+        switchPromptText.scale.set(1.05, 1.05);
+        FlxTween.tween(switchPromptText.scale, {x: 1.0, y: 1.0}, 0.2, {ease: FlxEase.circOut});
+      }
+      #end
     }
 
     return true;

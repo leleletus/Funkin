@@ -1658,7 +1658,7 @@ class FreeplayState extends MusicBeatSubState
     // Universal R3 button check for character select on Switch (independent of active character or song list)
     if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
     {
-      if (!FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.state == Idle))
+      if (!FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle))
       {
         fromCharSelect = false;
         tryOpenCharSelect();
