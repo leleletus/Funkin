@@ -645,7 +645,7 @@ class Preferences
 
   static function get_switchEnableShaders():Bool
   {
-    return Save?.instance?.options?.switchEnableShaders ?? #if switch false #else true #end;
+    return Save?.instance?.options?.switchEnableShaders ?? true;
   }
 
   static function set_switchEnableShaders(value:Bool):Bool

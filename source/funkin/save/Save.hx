@@ -141,7 +141,7 @@ class Save implements ConsoleClass
                 },
             },
           switchResolutionMode: '720p',
-          switchEnableShaders: false,
+          switchEnableShaders: true,
           switchAntialiasing: false,
           switchNoteSplashes: true,
           switchShowPerfHud: true,

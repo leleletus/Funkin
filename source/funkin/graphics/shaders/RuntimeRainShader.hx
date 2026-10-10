@@ -81,7 +81,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_blurredScreen(value:BitmapData):BitmapData
   {
-    this.setBitmapData('uBlurredScreen', value);
+    if (value != null) this.setBitmapData('uBlurredScreen', value);
     return blurredScreen = value;
   }
 
@@ -89,7 +89,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_mask(value:BitmapData):BitmapData
   {
-    this.setBitmapData('uMask', value);
+    if (value != null) this.setBitmapData('uMask', value);
     return mask = value;
   }
 
@@ -105,7 +105,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_lightMap(value:BitmapData):BitmapData
   {
-    this.setBitmapData('uLightMap', value);
+    if (value != null) this.setBitmapData('uLightMap', value);
     return lightMap = value;
   }
 
@@ -119,8 +119,28 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   public function new()
   {
-    #if switch
-    if (!funkin.Preferences.switchEnableShaders)
+    var fragSource:Null<String> = null;
+    try
+    {
+      #if switch
+      if (funkin.Preferences.switchEnableShaders)
+      {
+        fragSource = Assets.getText(Paths.frag('rain'));
+      }
+      #else
+      fragSource = Assets.getText(Paths.frag('rain'));
+      #end
+    }
+    catch (e:Dynamic)
+    {
+      fragSource = null;
+    }
+
+    if (fragSource != null && fragSource.length > 0)
+    {
+      super(fragSource);
+    }
+    else
     {
       super('
         #pragma header
@@ -137,13 +157,6 @@ class RuntimeRainShader extends RuntimePostEffectShader
         }
       ');
     }
-    else
-    {
-      super(Assets.getText(Paths.frag('rain')));
-    }
-    #else
-    super(Assets.getText(Paths.frag('rain')));
-    #end
     this.rainColor = 0xFF6680cc;
   }
 

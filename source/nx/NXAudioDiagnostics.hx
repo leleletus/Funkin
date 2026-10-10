@@ -165,19 +165,53 @@ class NXAudioDiagnostics
     if (musicStopped && targetSongPosition > 500)
     {
       var now:Float = Sys.time();
-      if (lastStallTime < 0 || (now - lastStallTime) > 0.5)
+      if (lastStallTime < 0 || (now - lastStallTime) > 1.0)
       {
         lastStallTime = now;
+        if (recoveryAttempts >= 3)
+        {
+          // Audio hardware unrecoverable or song finished; avoid spamming OpenAL to prevent channel exhaustion
+          return;
+        }
         recoveryAttempts++;
         generateStallDump(targetSongPosition, state);
 
-        trace('[AUDIO-WATCHDOG] Anomaly detected: Music stalled at ${targetSongPosition}ms (State: $state). Auto-recovering!');
-        FlxG.sound.music.play();
-        FlxG.sound.music.time = targetSongPosition;
-        if (vocals != null)
+        trace('[AUDIO-WATCHDOG] Anomaly detected: Music stalled at ${targetSongPosition}ms (State: $state). Auto-recovering (attempt $recoveryAttempts/3)...');
+        try
         {
-          vocals.play();
-          vocals.time = targetSongPosition;
+          #if (cpp && !macro)
+          // Drain any sticky OpenAL error codes so context can accept new commands
+          while (AL.getError() != AL.NO_ERROR) {}
+          #end
+
+          // Prune dead channels to prevent SoundMixer channel exhaustion
+          @:privateAccess
+          if (openfl.media.SoundMixer.__soundChannels != null)
+          {
+            var channels = openfl.media.SoundMixer.__soundChannels;
+            var i = channels.length - 1;
+            while (i >= 0)
+            {
+              var ch = channels[i];
+              if (ch == null || !ch.__isValid #if lime || ch.__audioSource == null #end || ch.__sound == null)
+              {
+                channels.splice(i, 1);
+              }
+              i--;
+            }
+          }
+
+          FlxG.sound.music.play();
+          FlxG.sound.music.time = targetSongPosition;
+          if (vocals != null)
+          {
+            vocals.play();
+            vocals.time = targetSongPosition;
+          }
+        }
+        catch (e:Dynamic)
+        {
+          trace('[AUDIO-WATCHDOG] Recovery attempt failed: $e');
         }
       }
     }

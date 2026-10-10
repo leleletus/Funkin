@@ -1219,19 +1219,6 @@ class PlayState extends MusicBeatSubState
           nx.NXAudioDiagnostics.checkWatchdog(Conductor.instance.songPosition, isGamePaused, isInCutscene, vocals);
           #end
 
-          if (FlxG.sound.music != null && !FlxG.sound.music.playing)
-          {
-            try
-            {
-              FlxG.sound.music.play();
-              if (vocals != null && !vocals.playing) vocals.play();
-            }
-            catch (e:Dynamic)
-            {
-              trace('Failed to resume music: $e');
-            }
-          }
-
           // Advance conductor via delta time so the game never freezes / softlocks
           Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
         }
