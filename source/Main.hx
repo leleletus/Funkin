@@ -240,13 +240,6 @@ class Main extends Sprite
       triggered = true;
     }
 
-    #if switch
-    if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.MINUS))
-    {
-      triggered = true;
-    }
-    #end
-
     if (!triggered) return;
 
     var nextMode:DebugDisplayMode;
