@@ -48,30 +48,29 @@ class NXPerformance
     }
 
     // Safe button combo: hold PLUS and R for 3.0 seconds to toggle Performance HUD (FPS/RAM)
-    if (NXMain.nxController != null)
+    var plusPressed:Bool = (NXMain.nxController != null && NXMain.nxController.isPressed(nx.controls.NXControlButton.PLUS)) || FlxG.gamepads.anyPressed(START);
+    var rPressed:Bool = (NXMain.nxController != null && NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) || FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+
+    if (plusPressed && rPressed)
     {
-      if (NXMain.nxController.isPressed(nx.controls.NXControlButton.PLUS) &&
-          NXMain.nxController.isPressed(nx.controls.NXControlButton.R))
+      comboHoldTimer += FlxG.elapsed;
+      if (comboHoldTimer >= COMBO_HOLD_DURATION && !comboTriggered)
       {
-        comboHoldTimer += FlxG.elapsed;
-        if (comboHoldTimer >= COMBO_HOLD_DURATION && !comboTriggered)
+        comboTriggered = true;
+        Preferences.switchShowPerfHud = !Preferences.switchShowPerfHud;
+        updatePerfHud();
+        try
         {
-          comboTriggered = true;
-          Preferences.switchShowPerfHud = !Preferences.switchShowPerfHud;
-          updatePerfHud();
-          try
-          {
-            funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
-          }
-          catch (e:Dynamic) {}
-          trace('Switch: Toggled Performance HUD via PLUS+R combo: ' + Preferences.switchShowPerfHud);
+          funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
         }
+        catch (e:Dynamic) {}
+        trace('Switch: Toggled Performance HUD via PLUS+R combo: ' + Preferences.switchShowPerfHud);
       }
-      else
-      {
-        comboHoldTimer = 0.0;
-        comboTriggered = false;
-      }
+    }
+    else
+    {
+      comboHoldTimer = 0.0;
+      comboTriggered = false;
     }
     #end
   }

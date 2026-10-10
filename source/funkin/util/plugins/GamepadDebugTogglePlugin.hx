@@ -16,13 +16,16 @@ class GamepadDebugTogglePlugin extends FlxBasic
 
   public static function initialize():Void
   {
+    #if !switch
     FlxG.plugins.addPlugin(new GamepadDebugTogglePlugin());
+    #end
   }
 
   public override function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
+    #if !switch
     for (gamepad in FlxG.gamepads.getActiveGamepads())
     {
       if (gamepad != null && gamepad.justPressed.BACK)
@@ -31,6 +34,7 @@ class GamepadDebugTogglePlugin extends FlxBasic
         break;
       }
     }
+    #end
   }
 
   public override function destroy():Void
