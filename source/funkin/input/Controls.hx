@@ -1081,7 +1081,11 @@ class Controls extends FlxActionSet
         [];
       #end
       case Control.CUTSCENE_ADVANCE:
+        #if switch
+        [B, A]; // Button [A] (East) on Nintendo Switch first, South as fallback
+        #else
         [A];
+        #end
       case Control.FREEPLAY_FAVORITE:
         #if switch
         []; // Disable on Switch to avoid triggering unsupported search/keyboard action

@@ -1,6 +1,7 @@
 package funkin.play.cutscene.dialogue;
 
 import flixel.FlxSprite;
+import flixel.text.FlxText;
 import funkin.data.IRegistryEntry;
 import flixel.group.FlxSpriteGroup;
 import flixel.graphics.frames.FlxFramesCollection;
@@ -71,6 +72,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   var boxSprite:FlxSprite;
   var textDisplay:FunkinTypeText;
+  var advancePrompt:Null<FlxText> = null;
 
   var text(default, set):String;
 
@@ -158,6 +160,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   public function setText(newText:String):Void
   {
+    if (advancePrompt != null) advancePrompt.visible = false;
     textDisplay.prefix = '';
     textDisplay.resetText(newText);
     textDisplay.start();
@@ -165,6 +168,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   public function appendText(newText:String):Void
   {
+    if (advancePrompt != null) advancePrompt.visible = false;
     textDisplay.prefix = this.textDisplay.text;
     textDisplay.resetText(newText);
     textDisplay.start();
@@ -173,6 +177,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
   public function skip():Void
   {
     textDisplay.skip();
+    if (advancePrompt != null) advancePrompt.visible = true;
   }
 
   /**
@@ -180,7 +185,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
    */
   function onTypingComplete():Void
   {
-    // No save navigation? :(
+    if (advancePrompt != null) advancePrompt.visible = true;
     if (typingCompleteCallback != null) typingCompleteCallback();
   }
 
@@ -216,6 +221,11 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
       this.textDisplay.kill();
       this.textDisplay = null;
     }
+    if (this.advancePrompt != null)
+    {
+      this.advancePrompt.kill();
+      this.advancePrompt = null;
+    }
     this.clear();
   }
 
@@ -228,6 +238,10 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     this.globalOffsets = [0, 0];
     this.visible = true;
     this.alpha = 1.0;
+    if (this.advancePrompt != null)
+    {
+      this.advancePrompt.visible = false;
+    }
   }
 
   function loadAnimations():Void
@@ -295,6 +309,14 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     textDisplay.y += _data.text.offsets[1];
 
     add(textDisplay);
+
+    var promptLabel:String = #if switch "[A] to advance" #else "[Z/ENTER] to advance" #end;
+    advancePrompt = new FlxText(textDisplay.x, textDisplay.y + 115, _data.text.width, promptLabel, 16);
+    advancePrompt.setFormat(_data.text.fontFamily, 16, FlxColor.WHITE, RIGHT, SHADOW, FlxColor.BLACK);
+    advancePrompt.borderSize = 2;
+    advancePrompt.visible = false;
+    advancePrompt.zIndex = 400;
+    add(advancePrompt);
   }
 
   /**
