@@ -2788,7 +2788,7 @@ class PlayState extends MusicBeatSubState
     // TODO: Add functionality for modules to update the score text.
     if (isBotPlayMode)
     {
-      scoreText.text = 'Bot Play Enabled';
+      scoreText.text = 'BOTPLAY ACTIVE';
     }
     else
     {
@@ -2945,6 +2945,44 @@ class PlayState extends MusicBeatSubState
     for (holdNote in playerStrumline.holdNotes.members)
     {
       if (holdNote == null || !holdNote.alive) continue;
+
+      if (isBotPlayMode)
+      {
+        var holdEndTime:Float = holdNote.strumTime + holdNote.fullSustainLength;
+        if (Conductor.instance.songPosition >= holdNote.strumTime && Conductor.instance.songPosition < holdEndTime)
+        {
+          holdNote.hitNote = true;
+          holdNote.missedNote = false;
+          playerStrumline.playConfirm(holdNote.noteDirection);
+          if (holdNote.cover != null && !holdNote.cover.visible)
+          {
+            playerStrumline.playNoteHoldCover(holdNote);
+          }
+          if (currentStage != null && currentStage.getBoyfriend() != null)
+          {
+            currentStage.getBoyfriend().holdTimer = 0;
+          }
+        }
+        else if (Conductor.instance.songPosition >= holdEndTime && holdNote.hitNote)
+        {
+          var stillHolding:Bool = false;
+          for (other in playerStrumline.holdNotes.members)
+          {
+            if (other != null && other.alive && other != holdNote && other.noteDirection == holdNote.noteDirection)
+            {
+              if (Conductor.instance.songPosition >= other.strumTime && Conductor.instance.songPosition < (other.strumTime + other.fullSustainLength))
+              {
+                stillHolding = true;
+                break;
+              }
+            }
+          }
+          if (!stillHolding)
+          {
+            playerStrumline.playStatic(holdNote.noteDirection);
+          }
+        }
+      }
 
       // While the hold note is being hit, and there is length on the hold note...
       if (holdNote.hitNote && !holdNote.missedNote && holdNote.sustainLength > 0)
@@ -3201,7 +3239,7 @@ class PlayState extends MusicBeatSubState
     }
     catch (e:Dynamic) {}
 
-    showBotplayNotification(isBotPlayMode ? "BOTPLAY ACTIVADO" : "BOTPLAY DESACTIVADO");
+    showBotplayNotification(isBotPlayMode ? "BOTPLAY ACTIVE" : "BOTPLAY INACTIVE");
   }
 
   function showBotplayNotification(msg:String):Void

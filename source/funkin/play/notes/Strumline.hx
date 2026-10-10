@@ -630,7 +630,8 @@ class Strumline extends FlxSpriteGroup
 
       if (conductorInUse.songPosition > holdNote.strumTime && holdNote.hitNote && !holdNote.missedNote)
       {
-        if (isPlayer && !isKeyHeld(holdNote.noteDirection))
+        var isBot:Bool = PlayState.instance != null && PlayState.instance.isBotPlayMode;
+        if (isPlayer && !isBot && !isKeyHeld(holdNote.noteDirection))
         {
           // Stopped pressing the hold note.
           playStatic(holdNote.noteDirection);
