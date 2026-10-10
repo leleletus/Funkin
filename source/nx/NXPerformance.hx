@@ -99,6 +99,8 @@ class NXPerformance
    */
   public static function updatePerfHud():Void
   {
+    if (FlxG.game == null || FlxG.game.parent == null) return;
+
     if (Preferences.switchShowPerfHud)
     {
       if (Preferences.debugDisplay == DebugDisplayMode.Off)

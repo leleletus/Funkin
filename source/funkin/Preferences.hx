@@ -153,11 +153,14 @@ class Preferences
 
   static function set_debugDisplay(value:DebugDisplayMode):DebugDisplayMode
   {
-    if (value != Save.instance.options.debugDisplay) setDebugDisplayMode(value);
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      if (value != Save.instance.options.debugDisplay) setDebugDisplayMode(value);
 
-    var save = Save.instance;
-    save.options.debugDisplay = value;
-    Save.system.flush();
+      var save = Save.instance;
+      save.options.debugDisplay = value;
+      if (Save.system != null) Save.system.flush();
+    }
     return value;
   }
 
@@ -504,6 +507,8 @@ class Preferences
 
   public static function setDebugDisplayMode(mode:DebugDisplayMode):Void
   {
+    if (FlxG.game == null || FlxG.game.parent == null || Main.debugDisplay == null) return;
+
     if (FlxG.game.parent.contains(Main.debugDisplay)) FlxG.game.parent.removeChild(Main.debugDisplay);
 
     if (mode == DebugDisplayMode.Off) return;
@@ -620,9 +625,12 @@ class Preferences
 
   static function set_switchResolutionMode(value:String):String
   {
-    var save:Save = Save.instance;
-    save.options.switchResolutionMode = value;
-    Save.system.flush();
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchResolutionMode = value;
+      if (Save.system != null) Save.system.flush();
+    }
     #if switch
     nx.NXPerformance.applyResolutionMode(value);
     #end
@@ -642,9 +650,12 @@ class Preferences
 
   static function set_switchEnableShaders(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.switchEnableShaders = value;
-    Save.system.flush();
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchEnableShaders = value;
+      if (Save.system != null) Save.system.flush();
+    }
     return value;
   }
 
@@ -661,9 +672,12 @@ class Preferences
 
   static function set_switchAntialiasing(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.switchAntialiasing = value;
-    Save.system.flush();
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchAntialiasing = value;
+      if (Save.system != null) Save.system.flush();
+    }
     return value;
   }
 
@@ -680,9 +694,12 @@ class Preferences
 
   static function set_switchNoteSplashes(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.switchNoteSplashes = value;
-    Save.system.flush();
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchNoteSplashes = value;
+      if (Save.system != null) Save.system.flush();
+    }
     return value;
   }
 
@@ -699,9 +716,12 @@ class Preferences
 
   static function set_switchShowPerfHud(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.switchShowPerfHud = value;
-    Save.system.flush();
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchShowPerfHud = value;
+      if (Save.system != null) Save.system.flush();
+    }
     #if switch
     nx.NXPerformance.updatePerfHud();
     #end

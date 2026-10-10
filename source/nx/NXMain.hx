@@ -50,7 +50,6 @@ class NXMain
   {
     #if switch
     nxController = new NXController();
-    nx.NXPerformance.init();
     #end
   }
 

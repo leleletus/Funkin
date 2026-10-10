@@ -78,6 +78,10 @@ class InitState extends FlxState
     // Load controls from save data.
     PlayerSettings.init();
 
+    #if switch
+    nx.NXPerformance.init();
+    #end
+
     startGame();
   }
 
