@@ -105,7 +105,8 @@ class VideoCutscene
     #elseif hxvlc
     playVideoNative(filePath);
     #else
-    throw "No video support for this platform!";
+    trace("WARNING: No video support on this platform, skipping video cutscene.");
+    finishVideo(0.0);
     #end
   }
 

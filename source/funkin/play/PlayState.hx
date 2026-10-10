@@ -406,6 +406,9 @@ class PlayState extends MusicBeatSubState
    */
   public var isInCutscene:Bool = false;
 
+  var _lastMusicTime:Float = -1;
+  var _stuckMusicFrames:Int = 0;
+
   /**
    * Whether the inputs should be disabled for whatever reason...
    * Used after the song ends, and in the Stage Editor.
@@ -1164,21 +1167,61 @@ class PlayState extends MusicBeatSubState
       // The previous method where it "guessed" the song position based on the elapsed time had some flaws
       // Somtimes the songPosition would exceed the music length causing issues in other places
       // And it was frame dependant which we don't like!!
-      if (FlxG.sound.music.playing)
+      if (FlxG.sound.music != null && FlxG.sound.music.playing)
       {
-        final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
-        if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
+        if (FlxG.sound.music.time == _lastMusicTime)
         {
-          // Only do neat & smooth lerps as long as the lerp doesn't fuck up and go WAY behind the music time triggering false resyncs
-          final easeRatio:Float = 1.0 - Math.exp(-(MUSIC_EASE_RATIO * playbackRate) * elapsed);
-          Conductor.instance.update(FlxMath.lerp(Conductor.instance.songPosition, FlxG.sound.music.time + Conductor.instance.combinedOffset, easeRatio), false);
+          _stuckMusicFrames++;
         }
         else
         {
-          // Fallback to properly update the conductor incase the lerp messed up
-          // Shouldn't be fallen back to unless you're lagging alot
-          trace(' WARNING '.bg_yellow().bold() + ' Normal Conductor Update!! are you lagging?');
-          Conductor.instance.update();
+          _stuckMusicFrames = 0;
+          _lastMusicTime = FlxG.sound.music.time;
+        }
+
+        if (_stuckMusicFrames > 4)
+        {
+          // Audio thread stalled or lost buffer, force time to advance by delta time
+          Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
+        }
+        else
+        {
+          final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
+          if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
+          {
+            // Only do neat & smooth lerps as long as the lerp doesn't fuck up and go WAY behind the music time triggering false resyncs
+            final easeRatio:Float = 1.0 - Math.exp(-(MUSIC_EASE_RATIO * playbackRate) * elapsed);
+            Conductor.instance.update(FlxMath.lerp(Conductor.instance.songPosition, FlxG.sound.music.time + Conductor.instance.combinedOffset, easeRatio), false);
+          }
+          else
+          {
+            // Fallback to properly update the conductor incase the lerp messed up
+            // Shouldn't be fallen back to unless you're lagging alot
+            trace(' WARNING '.bg_yellow().bold() + ' Normal Conductor Update!! are you lagging?');
+            Conductor.instance.update();
+          }
+        }
+      }
+      else
+      {
+        // FALLBACK: If music stopped unexpectedly during gameplay (not paused, not in countdown, not ending song)
+        if (!isGamePaused && !isSongEnd && !isInCountdown)
+        {
+          if (FlxG.sound.music != null && !FlxG.sound.music.playing)
+          {
+            try
+            {
+              FlxG.sound.music.play();
+              if (vocals != null && !vocals.playing) vocals.play();
+            }
+            catch (e:Dynamic)
+            {
+              trace('Failed to resume music: $e');
+            }
+          }
+
+          // Advance conductor via delta time so the game never freezes / softlocks
+          Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
         }
       }
     }
@@ -2505,6 +2548,22 @@ class PlayState extends MusicBeatSubState
     // If Countdown.performCountdown returns false, then the countdown was canceled by a script.
     var result:Bool = Countdown.performCountdown();
     if (!result) return;
+
+    // Stop any leftover cutscene sounds before starting countdown/song to release OpenAL channels
+    if (FlxG.sound.list != null)
+    {
+      for (snd in FlxG.sound.list.members)
+      {
+        if (snd != null && snd != FlxG.sound.music)
+        {
+          if (vocals != null && vocals.members != null && vocals.members.indexOf(cast snd) != -1)
+          {
+            continue;
+          }
+          if (snd.playing) snd.stop();
+        }
+      }
+    }
 
     isInCutscene = false;
 
