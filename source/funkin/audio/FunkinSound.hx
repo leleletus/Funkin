@@ -584,6 +584,32 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       if (!musicToo && sound == FlxG.sound.music) continue;
       sound.destroy();
     }
+
+    if (FlxG.sound != null && FlxG.sound.list != null)
+    {
+      for (sound in FlxG.sound.list)
+      {
+        if (sound == null) continue;
+        if (!persistToo && sound.persist) continue;
+        if (!musicToo && sound == FlxG.sound.music) continue;
+        sound.destroy();
+      }
+    }
+
+    if (musicToo && FlxG.sound != null && FlxG.sound.music != null)
+    {
+      FlxG.sound.music.destroy();
+      @:nullSafety(Off)
+      FlxG.sound.music = null;
+    }
+
+    #if switch
+    try
+    {
+      openfl.media.SoundMixer.stopAll();
+    }
+    catch (e:Dynamic) {}
+    #end
   }
 
   static function construct():FunkinSound

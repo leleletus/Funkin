@@ -851,7 +851,9 @@ class PlayState extends MusicBeatSubState
     @:privateAccess
     justUnpaused = isChartingMode && !FlxG.game._lostFocus;
 
-    // Stop any pre-existing music.
+    // Stop any pre-existing music and clean orphan audio channels.
+    FunkinSound.stopAllAudio(true, true);
+
     if (!overrideMusic)
     {
       if (FlxG.sound.music != null) FlxG.sound.music.stop();
@@ -1177,50 +1179,19 @@ class PlayState extends MusicBeatSubState
       // And it was frame dependant which we don't like!!
       if (FlxG.sound.music != null && FlxG.sound.music.playing)
       {
-        if (FlxG.sound.music.time == _lastMusicTime)
+        final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
+        if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
         {
-          _stuckMusicFrames++;
+          // Only do neat & smooth lerps as long as the lerp doesn't fuck up and go WAY behind the music time triggering false resyncs
+          final easeRatio:Float = 1.0 - Math.exp(-(MUSIC_EASE_RATIO * playbackRate) * elapsed);
+          Conductor.instance.update(FlxMath.lerp(Conductor.instance.songPosition, FlxG.sound.music.time + Conductor.instance.combinedOffset, easeRatio), false);
         }
         else
         {
-          _stuckMusicFrames = 0;
-          _lastMusicTime = FlxG.sound.music.time;
-        }
-
-        if (_stuckMusicFrames > 4)
-        {
-          // Audio thread stalled or lost buffer, force time to advance by delta time
-          Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
-        }
-        else
-        {
-          final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
-          if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
-          {
-            // Only do neat & smooth lerps as long as the lerp doesn't fuck up and go WAY behind the music time triggering false resyncs
-            final easeRatio:Float = 1.0 - Math.exp(-(MUSIC_EASE_RATIO * playbackRate) * elapsed);
-            Conductor.instance.update(FlxMath.lerp(Conductor.instance.songPosition, FlxG.sound.music.time + Conductor.instance.combinedOffset, easeRatio), false);
-          }
-          else
-          {
-            // Fallback to properly update the conductor incase the lerp messed up
-            // Shouldn't be fallen back to unless you're lagging alot
-            trace(' WARNING '.bg_yellow().bold() + ' Normal Conductor Update!! are you lagging?');
-            Conductor.instance.update();
-          }
-        }
-      }
-      else
-      {
-        // FALLBACK: If music stopped unexpectedly during gameplay (not paused, not in countdown, not ending song, and not during cutscene)
-        if (!isGamePaused && !isSongEnd && !isInCountdown && !isInCutscene && !startingSong)
-        {
-          #if switch
-          nx.NXAudioDiagnostics.checkWatchdog(Conductor.instance.songPosition, isGamePaused, isInCutscene, vocals);
-          #end
-
-          // Advance conductor via delta time so the game never freezes / softlocks
-          Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
+          // Fallback to properly update the conductor incase the lerp messed up
+          // Shouldn't be fallen back to unless you're lagging alot
+          trace(' WARNING '.bg_yellow().bold() + ' Normal Conductor Update!! are you lagging?');
+          Conductor.instance.update();
         }
       }
     }
@@ -3861,6 +3832,8 @@ class PlayState extends MusicBeatSubState
      */
   function performCleanup():Void
   {
+    FunkinSound.stopAllAudio(true, true);
+
     // If the camera is being tweened, stop it.
     cancelAllCameraTweens();
 
