@@ -104,6 +104,17 @@ class FunkinCamera extends FlxCamera
     BitmapDataUtil.applyFilter(bgBitmap, filter);
   }
 
+  public function setFilters(filters:Array<BitmapFilter>):Void
+  {
+    this.filters = filters;
+    this.filtersEnabled = (filters != null && filters.length > 0);
+    @:nullSafety(Off)
+    if (this.flashSprite != null)
+    {
+      this.flashSprite.filters = this.filtersEnabled ? filters : null;
+    }
+  }
+
   function squashTo(bitmap:BitmapData, applyFilters:Bool, isolate:Bool, clearScreen:Bool = false):Void
   {
     if (applyFilters && isolate)
@@ -136,9 +147,12 @@ class FunkinCamera extends FlxCamera
     if (applyFilters)
     {
       bitmap.draw(flashSprite, matrix);
-      @:nullSafety(Off) // TODO: Remove this once openfl.display.Sprite has been null safed.
-      flashSprite.filters = null;
       filtersApplied = true;
+      if (filters != null && filtersEnabled)
+      {
+        @:nullSafety(Off)
+        flashSprite.filters = filters;
+      }
     }
     else
     {

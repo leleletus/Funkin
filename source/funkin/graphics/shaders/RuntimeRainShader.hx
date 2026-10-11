@@ -125,10 +125,20 @@ class RuntimeRainShader extends RuntimePostEffectShader
       #if switch
       if (funkin.Preferences.switchEnableShaders)
       {
-        fragSource = Assets.getText(Paths.frag('rain'));
+        if (openfl.utils.Assets.exists(Paths.frag('rain')))
+          fragSource = openfl.utils.Assets.getText(Paths.frag('rain'));
+        else if (openfl.utils.Assets.exists('assets/shaders/rain.frag'))
+          fragSource = openfl.utils.Assets.getText('assets/shaders/rain.frag');
+        else if (openfl.utils.Assets.exists('assets/preload/shaders/rain.frag'))
+          fragSource = openfl.utils.Assets.getText('assets/preload/shaders/rain.frag');
       }
       #else
-      fragSource = Assets.getText(Paths.frag('rain'));
+      if (openfl.utils.Assets.exists(Paths.frag('rain')))
+        fragSource = openfl.utils.Assets.getText(Paths.frag('rain'));
+      else if (openfl.utils.Assets.exists('assets/shaders/rain.frag'))
+        fragSource = openfl.utils.Assets.getText('assets/shaders/rain.frag');
+      else if (openfl.utils.Assets.exists('assets/preload/shaders/rain.frag'))
+        fragSource = openfl.utils.Assets.getText('assets/preload/shaders/rain.frag');
       #end
     }
     catch (e:Dynamic)
