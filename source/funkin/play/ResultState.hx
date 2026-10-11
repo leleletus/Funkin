@@ -1037,6 +1037,10 @@ class ResultState extends MusicBeatSubState
                 if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
                 else
                   funkin.FunkinMemory.purgeCache();
+                #elseif switch
+                funkin.FunkinMemory.purgeCache(true);
+                openfl.Assets.cache.clear();
+                cpp.vm.Gc.run(true);
                 #else
                 funkin.FunkinMemory.purgeCache(true);
                 #end
@@ -1067,6 +1071,10 @@ class ResultState extends MusicBeatSubState
           if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
           else
             funkin.FunkinMemory.purgeCache();
+          #elseif switch
+          funkin.FunkinMemory.purgeCache(true);
+          openfl.Assets.cache.clear();
+          cpp.vm.Gc.run(true);
           #else
           funkin.FunkinMemory.purgeCache(true);
           #end

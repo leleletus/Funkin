@@ -1959,6 +1959,12 @@ class PlayState extends MusicBeatSubState
   {
     performCleanup();
 
+    #if switch
+    funkin.FunkinMemory.purgeCache(true);
+    openfl.Assets.cache.clear();
+    cpp.vm.Gc.run(true);
+    #end
+
     #if mobile
     // Syncing allowScreenTimeout with Preferences option.
     lime.system.System.allowScreenTimeout = Preferences.screenTimeout;
@@ -3758,7 +3764,12 @@ class PlayState extends MusicBeatSubState
               targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
             }
             if (currentStage != null) this.remove(currentStage);
-            FlxG.switchState(new PlayState(
+            #if switch
+            funkin.FunkinMemory.purgeCache(true);
+            openfl.Assets.cache.clear();
+            cpp.vm.Gc.run(true);
+            #end
+            FlxG.switchState(() -> new PlayState(
               {
                 targetSong: targetSong,
                 targetDifficulty: PlayStatePlaylist.campaignDifficulty,
@@ -3776,7 +3787,12 @@ class PlayState extends MusicBeatSubState
             targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
           }
           if (currentStage != null) this.remove(currentStage);
-          FlxG.switchState(new PlayState(
+          #if switch
+          funkin.FunkinMemory.purgeCache(true);
+          openfl.Assets.cache.clear();
+          cpp.vm.Gc.run(true);
+          #end
+          FlxG.switchState(() -> new PlayState(
             {
               targetSong: targetSong,
               targetDifficulty: PlayStatePlaylist.campaignDifficulty,
@@ -3893,6 +3909,12 @@ class PlayState extends MusicBeatSubState
     GameOverSubState.reset();
     PauseSubState.reset();
     Countdown.reset();
+
+    #if switch
+    funkin.FunkinMemory.purgeCache(true);
+    openfl.Assets.cache.clear();
+    cpp.vm.Gc.run(true);
+    #end
 
     // Clear the static reference to this state.
     instance = null;

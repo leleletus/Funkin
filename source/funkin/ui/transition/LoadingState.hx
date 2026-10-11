@@ -80,6 +80,11 @@ class LoadingState extends MusicBeatSubState
     catch (e:Dynamic) {}
 
     new FlxTimer().start(0.05, function(_) {
+      #if switch
+      funkin.FunkinMemory.purgeCache(true);
+      openfl.Assets.cache.clear();
+      cpp.vm.Gc.run(true);
+      #end
       var shouldPreloadLevelAssets:Bool = !(playParams?.minimalMode ?? false);
       if (shouldPreloadLevelAssets && playParams != null)
       {
@@ -265,6 +270,8 @@ class LoadingState extends MusicBeatSubState
       FlxG.signals.preStateSwitch.addOnce(function() {
         funkin.FunkinMemory.clearFreeplay();
         funkin.FunkinMemory.purgeCache(true);
+        openfl.Assets.cache.clear();
+        cpp.vm.Gc.run(true);
       });
       #end
       FlxG.switchState(target);
