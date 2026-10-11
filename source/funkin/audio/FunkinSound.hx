@@ -131,7 +131,30 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   public override function update(elapsedSec:Float)
   {
-    if (!playing && !_shouldPlay) return;
+    if (!playing && !_shouldPlay)
+    {
+      if (!looped && !persist && !_paused && this != FlxG.sound.music)
+      {
+        if (autoDestroy)
+        {
+          destroy();
+        }
+        else if (exists)
+        {
+          this.kill();
+          if (FlxG.sound != null && FlxG.sound.list != null)
+            FlxG.sound.list.remove(this, true);
+        }
+      }
+      return;
+    }
+
+    // If sound has reached or exceeded its duration, gracefully finish it
+    if (playing && !looped && length > 0 && _time >= length && this != FlxG.sound.music)
+    {
+      stopped();
+      return;
+    }
 
     if (_time < 0)
     {
@@ -510,10 +533,52 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     return promise;
   }
 
+  override function stopped(?_):Void
+  {
+    super.stopped(_);
+    if (!looped && !persist && this != FlxG.sound.music)
+    {
+      if (autoDestroy)
+      {
+        destroy();
+      }
+      else
+      {
+        this.kill();
+        if (FlxG.sound != null && FlxG.sound.list != null)
+          FlxG.sound.list.remove(this, true);
+      }
+    }
+  }
+
+  @:nullSafety(Off)
+  public override function kill():Void
+  {
+    super.kill();
+    if (_channel != null)
+    {
+      try
+      {
+        _channel.stop();
+      }
+      catch (e:Dynamic) {}
+      _channel = null;
+    }
+  }
+
   @:nullSafety(Off)
   public override function destroy():Void
   {
     // trace('[FunkinSound] Destroying sound "${this._label}"');
+    if (_channel != null)
+    {
+      try
+      {
+        _channel.stop();
+      }
+      catch (e:Dynamic) {}
+      _channel = null;
+    }
     super.destroy();
     if (fadeTween != null)
     {

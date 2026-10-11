@@ -25,6 +25,10 @@ class NXAudioDiagnostics
   public static var lastStallTime:Float = -1.0;
   public static var recoveryAttempts:Int = 0;
 
+  public static var isPaused:Bool = false;
+  public static var pauseStartHardwareTime:Float = -1.0;
+  public static var totalPausedHardwareDuration:Float = 0.0;
+
   /**
    * Resets diagnostics when a new song starts.
    */
@@ -34,7 +38,38 @@ class NXAudioDiagnostics
     songStartAudioTime = initialAudioTime;
     frameDropsCount = 0;
     recoveryAttempts = 0;
+    isPaused = false;
+    pauseStartHardwareTime = -1.0;
+    totalPausedHardwareDuration = 0.0;
     lastTelemetryTime = Sys.time();
+  }
+
+  /**
+   * Notifies diagnostics that the game has paused.
+   */
+  public static function onPause():Void
+  {
+    if (!isPaused)
+    {
+      isPaused = true;
+      pauseStartHardwareTime = Sys.time();
+    }
+  }
+
+  /**
+   * Notifies diagnostics that the game has resumed.
+   */
+  public static function onResume():Void
+  {
+    if (isPaused)
+    {
+      if (pauseStartHardwareTime > 0)
+      {
+        totalPausedHardwareDuration += (Sys.time() - pauseStartHardwareTime);
+      }
+      isPaused = false;
+      pauseStartHardwareTime = -1.0;
+    }
   }
 
   /**
@@ -87,11 +122,21 @@ class NXAudioDiagnostics
 
   /**
    * Measures clock drift between hardware monotonic time and OpenAL music playback time (in ms).
+   * Compensates for any paused durations to accurately measure audio synchronization.
    */
   public static function getSyncDriftMs():Float
   {
-    if (songStartHardwareTime < 0 || FlxG.sound.music == null) return 0.0;
-    var expectedElapsedMs:Float = (Sys.time() - songStartHardwareTime) * 1000.0;
+    if (songStartHardwareTime < 0 || FlxG.sound.music == null || !FlxG.sound.music.playing) return 0.0;
+
+    var currentPauseOffset:Float = totalPausedHardwareDuration;
+    if (isPaused && pauseStartHardwareTime > 0)
+    {
+      currentPauseOffset += (Sys.time() - pauseStartHardwareTime);
+    }
+
+    var activeHardwareElapsedSec:Float = (Sys.time() - songStartHardwareTime) - currentPauseOffset;
+    if (activeHardwareElapsedSec < 0) activeHardwareElapsedSec = 0;
+    var expectedElapsedMs:Float = activeHardwareElapsedSec * 1000.0;
     var actualElapsedMs:Float = FlxG.sound.music.time - songStartAudioTime;
     return actualElapsedMs - expectedElapsedMs;
   }
@@ -158,6 +203,9 @@ class NXAudioDiagnostics
   public static function checkWatchdog(targetSongPosition:Float, isGamePaused:Bool, isInCutscene:Bool, vocals:Null<funkin.audio.VoicesGroup> = null):Void
   {
     if (isGamePaused || isInCutscene || FlxG.sound.music == null) return;
+
+    var musicLen:Float = (FlxG.sound.music != null) ? FlxG.sound.music.length : 0.0;
+    if (musicLen > 0 && targetSongPosition >= (musicLen - 250)) return;
 
     var state:String = getOpenALSourceState(FlxG.sound.music);
     var musicStopped:Bool = !FlxG.sound.music.playing || state == "Stopped";

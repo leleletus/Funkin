@@ -1169,6 +1169,7 @@ class PlayState extends MusicBeatSubState
       }
       #if switch
       nx.NXAudioDiagnostics.update(elapsed);
+      nx.NXAudioDiagnostics.checkWatchdog(Conductor.instance.songPosition, isGamePaused, isInCutscene, vocals);
       #end
 
       // Lime has some precision loss when getting the sound current position
@@ -1194,6 +1195,22 @@ class PlayState extends MusicBeatSubState
           Conductor.instance.update();
         }
       }
+
+      // Safety fallback: On Switch OpenAL, onComplete event can occasionally fail to dispatch when reaching the end of the buffer stream.
+      // If the music has reached the final frames or finished playing and all notes have completed, ensure the song transitions cleanly.
+      if (!isSongEnd && !startingSong && !isGamePaused && FlxG.sound.music != null)
+      {
+        var musicLen:Float = FlxG.sound.music.length;
+        var musicTime:Float = FlxG.sound.music.time;
+        if (musicLen > 0 && (musicTime >= (musicLen - 25) || (!FlxG.sound.music.playing && Conductor.instance.songPosition > 5000 && (musicTime >= (musicLen - 250) || (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0)))))
+        {
+          if (mayPauseGame)
+          {
+            trace('PlayState: Song reached completion fallback (time: ${musicTime}ms / ${musicLen}ms). Ending song...');
+            endSong(skipEndingTransition);
+          }
+        }
+      }
     }
 
     var pauseButtonCheck:Bool = false;
@@ -1210,39 +1227,54 @@ class PlayState extends MusicBeatSubState
     // Attempt to pause the game.
     if ((controls.PAUSE_P || androidPause || pauseButtonCheck)) pause();
 
-    // Dynamic shortcut to toggle Botplay in-game: Hold L + R for 1.5s
+    // Dynamic shortcut to toggle Botplay in-game: Press R3 (Right Stick click) or Hold L + R for 1.5s
     if (!isGamePaused && !isInCutscene && !isSongEnd)
     {
-      var lPressed:Bool = FlxG.gamepads.anyPressed(LEFT_SHOULDER);
-      var rPressed:Bool = FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+      var r3Pressed:Bool = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK));
       #if switch
-      if (nx.NXMain.nxController != null)
+      if (!r3Pressed && nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
       {
-        if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.L)) lPressed = true;
-        if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) rPressed = true;
-      }
-      #end
-      #if !switch
-      if (FlxG.keys.pressed.L && FlxG.keys.pressed.R)
-      {
-        lPressed = true;
-        rPressed = true;
+        r3Pressed = true;
       }
       #end
 
-      if (lPressed && rPressed)
+      if (r3Pressed)
       {
-        botplayHoldTimer += elapsed;
-        if (botplayHoldTimer >= BOTPLAY_HOLD_DURATION && !botplayComboTriggered)
-        {
-          botplayComboTriggered = true;
-          toggleBotplay();
-        }
+        toggleBotplay();
       }
       else
       {
-        botplayHoldTimer = 0.0;
-        botplayComboTriggered = false;
+        var lPressed:Bool = FlxG.gamepads.anyPressed(LEFT_SHOULDER);
+        var rPressed:Bool = FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+        #if switch
+        if (nx.NXMain.nxController != null)
+        {
+          if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.L)) lPressed = true;
+          if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) rPressed = true;
+        }
+        #end
+        #if !switch
+        if (FlxG.keys.pressed.L && FlxG.keys.pressed.R)
+        {
+          lPressed = true;
+          rPressed = true;
+        }
+        #end
+
+        if (lPressed && rPressed)
+        {
+          botplayHoldTimer += elapsed;
+          if (botplayHoldTimer >= BOTPLAY_HOLD_DURATION && !botplayComboTriggered)
+          {
+            botplayComboTriggered = true;
+            toggleBotplay();
+          }
+        }
+        else
+        {
+          botplayHoldTimer = 0.0;
+          botplayComboTriggered = false;
+        }
       }
     }
 
@@ -1465,6 +1497,9 @@ class PlayState extends MusicBeatSubState
 
   function openPauseSubState(mode:PauseMode, cam:FlxCamera, lostFocus:Bool = false, ?onPause:Void->Void):Void
   {
+    #if switch
+    nx.NXAudioDiagnostics.onPause();
+    #end
     final pauseSubState = new PauseSubState({mode: mode, lostFocus: lostFocus}, onPause);
     FlxTransitionableState.skipNextTransIn = true;
     FlxTransitionableState.skipNextTransOut = true;
@@ -1752,6 +1787,9 @@ class PlayState extends MusicBeatSubState
       #end
 
       justUnpaused = true;
+      #if switch
+      nx.NXAudioDiagnostics.onResume();
+      #end
     }
     isGameOverState = false;
 
