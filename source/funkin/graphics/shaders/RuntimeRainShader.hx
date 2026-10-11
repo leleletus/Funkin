@@ -81,7 +81,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_blurredScreen(value:BitmapData):BitmapData
   {
-    if (value != null) this.setBitmapData('uBlurredScreen', value);
+    this.setBitmapData('uBlurredScreen', value);
     return blurredScreen = value;
   }
 
@@ -89,7 +89,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_mask(value:BitmapData):BitmapData
   {
-    if (value != null) this.setBitmapData('uMask', value);
+    this.setBitmapData('uMask', value);
     return mask = value;
   }
 
@@ -105,7 +105,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   function set_lightMap(value:BitmapData):BitmapData
   {
-    if (value != null) this.setBitmapData('uLightMap', value);
+    this.setBitmapData('uLightMap', value);
     return lightMap = value;
   }
 
@@ -119,54 +119,7 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   public function new()
   {
-    var fragSource:Null<String> = null;
-    try
-    {
-      #if switch
-      if (funkin.Preferences.switchEnableShaders)
-      {
-        if (openfl.utils.Assets.exists(Paths.frag('rain')))
-          fragSource = openfl.utils.Assets.getText(Paths.frag('rain'));
-        else if (openfl.utils.Assets.exists('assets/shaders/rain.frag'))
-          fragSource = openfl.utils.Assets.getText('assets/shaders/rain.frag');
-        else if (openfl.utils.Assets.exists('assets/preload/shaders/rain.frag'))
-          fragSource = openfl.utils.Assets.getText('assets/preload/shaders/rain.frag');
-      }
-      #else
-      if (openfl.utils.Assets.exists(Paths.frag('rain')))
-        fragSource = openfl.utils.Assets.getText(Paths.frag('rain'));
-      else if (openfl.utils.Assets.exists('assets/shaders/rain.frag'))
-        fragSource = openfl.utils.Assets.getText('assets/shaders/rain.frag');
-      else if (openfl.utils.Assets.exists('assets/preload/shaders/rain.frag'))
-        fragSource = openfl.utils.Assets.getText('assets/preload/shaders/rain.frag');
-      #end
-    }
-    catch (e:Dynamic)
-    {
-      fragSource = null;
-    }
-
-    if (fragSource != null && fragSource.length > 0)
-    {
-      super(fragSource);
-    }
-    else
-    {
-      super('
-        #pragma header
-        uniform float uTime;
-        uniform float uScale;
-        uniform float uIntensity;
-        uniform float uPuddleY;
-        uniform float uPuddleScaleY;
-        uniform bool uSpriteMode;
-        uniform vec3 uRainColor;
-        uniform int numLights;
-        void main() {
-          gl_FragColor = flixel_texture2D(bitmap, openfl_TextureCoordv);
-        }
-      ');
-    }
+    super(Assets.getText(Paths.frag('rain')));
     this.rainColor = 0xFF6680cc;
   }
 

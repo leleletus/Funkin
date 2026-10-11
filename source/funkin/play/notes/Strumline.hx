@@ -630,14 +630,13 @@ class Strumline extends FlxSpriteGroup
 
       if (conductorInUse.songPosition > holdNote.strumTime && holdNote.hitNote && !holdNote.missedNote)
       {
-        var isBot:Bool = PlayState.instance != null && PlayState.instance.isBotPlayMode;
-        if (isPlayer && !isBot && !isKeyHeld(holdNote.noteDirection))
+        if (isPlayer && !isKeyHeld(holdNote.noteDirection))
         {
           // Stopped pressing the hold note.
           playStatic(holdNote.noteDirection);
           holdNote.missedNote = true;
           holdNote.visible = true;
-          holdNote.alpha = 0.4;
+          holdNote.alpha = 0.0; // Completely hide the dropped hold note.
         }
       }
 
@@ -730,8 +729,6 @@ class Strumline extends FlxSpriteGroup
         {
           holdNote.visible = false;
         }
-
-        holdNote.updateClipping(conductorInUse.songPosition);
 
         if (!customPositionData)
         {
@@ -969,11 +966,8 @@ class Strumline extends FlxSpriteGroup
     {
       note.holdNoteSprite.hitNote = true;
       note.holdNoteSprite.missedNote = false;
-      note.holdNoteSprite.visible = true;
-      note.holdNoteSprite.alpha = 1.0;
 
       note.holdNoteSprite.sustainLength = (note.holdNoteSprite.strumTime + note.holdNoteSprite.fullSustainLength) - conductorInUse.songPosition;
-      note.holdNoteSprite.updateClipping(conductorInUse.songPosition);
     }
 
     #if FEATURE_GHOST_TAPPING
@@ -991,7 +985,7 @@ class Strumline extends FlxSpriteGroup
     note.visible = false;
     note.kill();
 
-    if (note.holdNoteSprite != null && !note.hasBeenHit)
+    if (note.holdNoteSprite != null)
     {
       note.holdNoteSprite.missedNote = true;
       note.holdNoteSprite.visible = false;
@@ -1079,9 +1073,6 @@ class Strumline extends FlxSpriteGroup
   public function playNoteSplash(direction:NoteDirection):Void
   {
     if (!showNotesplash) return;
-    #if switch
-    if (!funkin.Preferences.switchNoteSplashes) return;
-    #end
     if (!noteStyle.isNoteSplashEnabled()) return;
 
     var splash:NoteSplash = this.constructNoteSplash();

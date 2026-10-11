@@ -283,11 +283,6 @@ class SustainTrail extends FlxSprite
     origin.set(width * 0.5, height * 0.5);
   }
 
-  public inline function updateSustainClip(songTime:Float = 0):Void
-  {
-    updateClipping(songTime);
-  }
-
   /**
    * Sets up new vertex and UV data to clip the trail.
    * If flipY is true, top and bottom bounds swap places.
@@ -300,8 +295,7 @@ class SustainTrail extends FlxSprite
       return;
     }
 
-    var remainingLength:Float = (songTime > 0) ? ((strumTime + fullSustainLength) - songTime) : sustainLength;
-    var clipHeight:Float = sustainHeight(remainingLength, parentStrumline?.scrollSpeed ?? 1.0).clamp(0, graphicHeight);
+    var clipHeight:Float = sustainHeight(sustainLength - (songTime - strumTime), parentStrumline?.scrollSpeed ?? 1.0).clamp(0, graphicHeight);
     if (clipHeight <= 0.1)
     {
       visible = false;
