@@ -272,6 +272,14 @@ class NoteSprite extends FunkinSprite
     super.kill();
   }
 
+  public function updateSustainClip(songTime:Float = 0):Void
+  {
+    if (holdNoteSprite != null && holdNoteSprite.alive)
+    {
+      holdNoteSprite.updateClipping(songTime);
+    }
+  }
+
   public override function destroy():Void
   {
     // This function should ONLY get called as you leave PlayState entirely.

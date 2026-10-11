@@ -637,7 +637,7 @@ class Strumline extends FlxSpriteGroup
           playStatic(holdNote.noteDirection);
           holdNote.missedNote = true;
           holdNote.visible = true;
-          holdNote.alpha = 0.0; // Completely hide the dropped hold note.
+          holdNote.alpha = 0.4;
         }
       }
 
@@ -730,6 +730,8 @@ class Strumline extends FlxSpriteGroup
         {
           holdNote.visible = false;
         }
+
+        holdNote.updateClipping(conductorInUse.songPosition);
 
         if (!customPositionData)
         {
@@ -967,8 +969,11 @@ class Strumline extends FlxSpriteGroup
     {
       note.holdNoteSprite.hitNote = true;
       note.holdNoteSprite.missedNote = false;
+      note.holdNoteSprite.visible = true;
+      note.holdNoteSprite.alpha = 1.0;
 
       note.holdNoteSprite.sustainLength = (note.holdNoteSprite.strumTime + note.holdNoteSprite.fullSustainLength) - conductorInUse.songPosition;
+      note.holdNoteSprite.updateClipping(conductorInUse.songPosition);
     }
 
     #if FEATURE_GHOST_TAPPING
@@ -986,7 +991,7 @@ class Strumline extends FlxSpriteGroup
     note.visible = false;
     note.kill();
 
-    if (note.holdNoteSprite != null)
+    if (note.holdNoteSprite != null && !note.hasBeenHit)
     {
       note.holdNoteSprite.missedNote = true;
       note.holdNoteSprite.visible = false;

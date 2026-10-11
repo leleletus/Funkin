@@ -2911,7 +2911,7 @@ class PlayState extends MusicBeatSubState
         {
           holdNote.hitNote = true;
           holdNote.missedNote = false;
-          playerStrumline.playConfirm(holdNote.noteDirection);
+          playerStrumline.holdConfirm(holdNote.noteDirection);
           if (holdNote.cover != null && !holdNote.cover.visible)
           {
             playerStrumline.playNoteHoldCover(holdNote);
