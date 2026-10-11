@@ -67,6 +67,9 @@ class CrashHandler
       {
         #if sys
         logError(error);
+        #if switch
+        nx.NXDeepTrace.logError('UNCAUGHT ERROR: ' + generateErrorMessage(error));
+        #end
         #end
       }
       catch (e:Dynamic)
@@ -99,6 +102,9 @@ class CrashHandler
 
       #if sys
       logErrorMessage(message, true);
+      #if switch
+      nx.NXDeepTrace.logError('CRITICAL ERROR: ' + message);
+      #end
       #end
 
       displayErrorMessage(message);

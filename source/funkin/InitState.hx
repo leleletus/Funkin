@@ -79,6 +79,7 @@ class InitState extends FlxState
     PlayerSettings.init();
 
     #if switch
+    nx.NXDeepTrace.initSignals();
     nx.NXPerformance.init();
     #end
 

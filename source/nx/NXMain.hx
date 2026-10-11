@@ -116,6 +116,7 @@ class NXMain
   public static function init()
   {
     #if switch
+    nx.NXDeepTrace.init();
     nxController = new NXController();
     #end
   }
