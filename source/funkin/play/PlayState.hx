@@ -3758,13 +3758,13 @@ class PlayState extends MusicBeatSubState
               targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
             }
             if (currentStage != null) this.remove(currentStage);
-            LoadingState.loadPlayState(
+            FlxG.switchState(new PlayState(
               {
                 targetSong: targetSong,
                 targetDifficulty: PlayStatePlaylist.campaignDifficulty,
                 targetVariation: targetVariation,
                 cameraFollowPoint: cameraFollowPoint.getPosition(),
-              });
+              }));
           });
         }
         else
@@ -3776,13 +3776,13 @@ class PlayState extends MusicBeatSubState
             targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
           }
           if (currentStage != null) this.remove(currentStage);
-          LoadingState.loadPlayState(
+          FlxG.switchState(new PlayState(
             {
               targetSong: targetSong,
               targetDifficulty: PlayStatePlaylist.campaignDifficulty,
               targetVariation: targetVariation,
               cameraFollowPoint: cameraFollowPoint.getPosition(),
-            });
+            }));
         }
       }
     }

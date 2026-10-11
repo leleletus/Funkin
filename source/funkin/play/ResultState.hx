@@ -807,7 +807,17 @@ class ResultState extends MusicBeatSubState
       }
     }
 
-    if (controls.PAUSE_P || controls.ACCEPT_P #if mobile || TouchUtil.pressAction() #end)
+    var gamepadConfirm:Bool = false;
+    for (gamepad in FlxG.gamepads.getActiveGamepads())
+    {
+      if (gamepad != null && (gamepad.justPressed.A || gamepad.justPressed.B || gamepad.justPressed.START))
+      {
+        gamepadConfirm = true;
+        break;
+      }
+    }
+
+    if (controls.PAUSE_P || controls.ACCEPT_P || controls.BACK_P || gamepadConfirm #if mobile || TouchUtil.pressAction() #end)
     {
       if (busy) return;
       if (_parentState is funkin.ui.debug.results.ResultsDebugSubState)
