@@ -1125,11 +1125,7 @@ class Controls extends FlxActionSet
         [];
       #end
       case Control.DEBUG_DISPLAY:
-        #if switch
-        [FlxGamepadInputID.BACK]; // Minus on Nintendo Switch
-        #else
         [];
-        #end
       default:
         [];
     }

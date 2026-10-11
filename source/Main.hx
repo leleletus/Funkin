@@ -196,6 +196,10 @@ class Main extends Sprite
     funkin.util.macro.ConsoleMacro.init();
     #end
 
+    #if switch
+    FlxG.debugger.toggleKeys = [];
+    #end
+
     #if !html5
     FlxG.scaleMode = new FullScreenScaleMode();
     #end
@@ -233,6 +237,10 @@ class Main extends Sprite
 
   function handleDebugDisplayKeys():Void
   {
+    #if switch
+    // On Switch, debug HUD is toggled ONLY via the 3-second combo (+ and R) in NXPerformance.
+    return;
+    #else
     var triggered:Bool = false;
 
     if (PlayerSettings.player1.controls != null && PlayerSettings.player1.controls.check(DEBUG_DISPLAY))
@@ -255,6 +263,7 @@ class Main extends Sprite
     }
 
     Preferences.debugDisplay = nextMode;
+    #end
   }
 
   #if mobile

@@ -594,7 +594,11 @@ class InitState extends FlxState
     LogStyle.WARNING.errorSound = null;
 
     // Disable using ~ to open the console (we use that for the Editor menu)
+    #if switch
+    FlxG.debugger.toggleKeys = [];
+    #else
     FlxG.debugger.toggleKeys = [F2];
+    #end
     TrackerUtil.initTrackers();
 
     // Adds a red button to the debugger.
