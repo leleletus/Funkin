@@ -385,9 +385,7 @@ class PlayState extends MusicBeatSubState
    */
   public var isBotPlayMode:Bool = false;
 
-  var botplayHoldTimer:Float = 0.0;
-  var botplayComboTriggered:Bool = false;
-  static final BOTPLAY_HOLD_DURATION:Float = 1.5;
+  var lastR3PressTime:Float = -1.0;
   var botplayNotificationText:Null<FlxText> = null;
 
   /**
@@ -765,6 +763,10 @@ class PlayState extends MusicBeatSubState
     playbackRate = params.playbackRate ?? 1.0;
     overrideMusic = params.overrideMusic ?? false;
     previousCameraFollowPoint = params.cameraFollowPoint;
+
+    #if switch
+    nx.NXDeepTrace.logSongInit(currentSong?.id ?? "unknown", currentDifficulty ?? "unknown", currentVariation ?? "unknown", 'timestamp: $startTimestamp');
+    #end
 
     // Basic object initialization
 
@@ -1196,21 +1198,22 @@ class PlayState extends MusicBeatSubState
         }
       }
 
-      // Safety fallback: On Switch OpenAL, onComplete event can occasionally fail to dispatch when reaching the end of the buffer stream.
-      // If the music has reached the final frames or finished playing and all notes have completed, ensure the song transitions cleanly.
-      if (!isSongEnd && !startingSong && !isGamePaused && FlxG.sound.music != null)
+      #if switch
+      // Watchdog seguro: Si OpenAL llega a AL_STOPPED y todas las notas han terminado sin emitir onComplete
+      if (!isSongEnd && !startingSong && !isGamePaused && FlxG.sound.music != null && !FlxG.sound.music.playing)
       {
-        var musicLen:Float = FlxG.sound.music.length;
-        var musicTime:Float = FlxG.sound.music.time;
-        if (musicLen > 0 && (musicTime >= (musicLen - 25) || (!FlxG.sound.music.playing && Conductor.instance.songPosition > 5000 && (musicTime >= (musicLen - 250) || (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0)))))
+        var alState = nx.NXAudioDiagnostics.getOpenALSourceState(FlxG.sound.music);
+        var notesCleared = (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0);
+        if (alState == "Stopped" && notesCleared && Conductor.instance.songPosition > 5000)
         {
           if (mayPauseGame)
           {
-            trace('PlayState: Song reached completion fallback (time: ${musicTime}ms / ${musicLen}ms). Ending song...');
+            trace('PlayState: Music reached AL_STOPPED and notes cleared. Completing song safely via watchdog...');
             endSong(skipEndingTransition);
           }
         }
       }
+      #end
     }
 
     var pauseButtonCheck:Bool = false;
@@ -1227,54 +1230,31 @@ class PlayState extends MusicBeatSubState
     // Attempt to pause the game.
     if ((controls.PAUSE_P || androidPause || pauseButtonCheck)) pause();
 
-    // Dynamic shortcut to toggle Botplay in-game: Press R3 (Right Stick click) or Hold L + R for 1.5s
+    // Dynamic shortcut to toggle Botplay in-game: Exclusively R3 (Right Stick click)
     if (!isGamePaused && !isInCutscene && !isSongEnd)
     {
-      var r3Pressed:Bool = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK));
+      var r3Pressed:Bool = false;
       #if switch
-      if (!r3Pressed && nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R))
+      if (nx.NXMain.nxController != null)
       {
-        r3Pressed = true;
+        r3Pressed = nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R);
       }
+      else if (FlxG.gamepads != null)
+      {
+        r3Pressed = FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK);
+      }
+      #else
+      r3Pressed = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK)) || FlxG.keys.justPressed.B;
       #end
 
-      if (r3Pressed)
+      var now:Float = Sys.time();
+      if (r3Pressed && (lastR3PressTime < 0 || (now - lastR3PressTime) >= 0.25))
       {
+        lastR3PressTime = now;
         toggleBotplay();
-      }
-      else
-      {
-        var lPressed:Bool = FlxG.gamepads.anyPressed(LEFT_SHOULDER);
-        var rPressed:Bool = FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
         #if switch
-        if (nx.NXMain.nxController != null)
-        {
-          if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.L)) lPressed = true;
-          if (nx.NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) rPressed = true;
-        }
+        nx.NXDeepTrace.logButtonEvent('R3', 'Toggled Botplay: ' + isBotPlayMode);
         #end
-        #if !switch
-        if (FlxG.keys.pressed.L && FlxG.keys.pressed.R)
-        {
-          lPressed = true;
-          rPressed = true;
-        }
-        #end
-
-        if (lPressed && rPressed)
-        {
-          botplayHoldTimer += elapsed;
-          if (botplayHoldTimer >= BOTPLAY_HOLD_DURATION && !botplayComboTriggered)
-          {
-            botplayComboTriggered = true;
-            toggleBotplay();
-          }
-        }
-        else
-        {
-          botplayHoldTimer = 0.0;
-          botplayComboTriggered = false;
-        }
       }
     }
 
@@ -1499,6 +1479,7 @@ class PlayState extends MusicBeatSubState
   {
     #if switch
     nx.NXAudioDiagnostics.onPause();
+    nx.NXDeepTrace.logAudioMetrics('PAUSE');
     #end
     final pauseSubState = new PauseSubState({mode: mode, lostFocus: lostFocus}, onPause);
     FlxTransitionableState.skipNextTransIn = true;
@@ -1789,6 +1770,7 @@ class PlayState extends MusicBeatSubState
       justUnpaused = true;
       #if switch
       nx.NXAudioDiagnostics.onResume();
+      nx.NXDeepTrace.logAudioMetrics('RESUME');
       #end
     }
     isGameOverState = false;
@@ -3587,6 +3569,9 @@ class PlayState extends MusicBeatSubState
      */
   public function endSong(rightGoddamnNow:Bool = false):Void
   {
+    #if switch
+    nx.NXDeepTrace.logAudioMetrics('END_SONG');
+    #end
     if (FlxG.sound.music != null) FlxG.sound.music.volume = 0;
     if (vocals != null) vocals.volume = 0;
     mayPauseGame = false;
@@ -3802,18 +3787,13 @@ class PlayState extends MusicBeatSubState
               targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
             }
             if (currentStage != null) this.remove(currentStage);
-            #if switch
-            funkin.FunkinMemory.purgeCache(true);
-            openfl.Assets.cache.clear();
-            cpp.vm.Gc.run(true);
-            #end
-            FlxG.switchState(() -> new PlayState(
+            LoadingState.loadPlayState(
               {
                 targetSong: targetSong,
                 targetDifficulty: PlayStatePlaylist.campaignDifficulty,
                 targetVariation: targetVariation,
                 cameraFollowPoint: cameraFollowPoint.getPosition(),
-              }));
+              });
           });
         }
         else
@@ -3825,18 +3805,13 @@ class PlayState extends MusicBeatSubState
             targetVariation = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty) ?? Constants.DEFAULT_VARIATION;
           }
           if (currentStage != null) this.remove(currentStage);
-          #if switch
-          funkin.FunkinMemory.purgeCache(true);
-          openfl.Assets.cache.clear();
-          cpp.vm.Gc.run(true);
-          #end
-          FlxG.switchState(() -> new PlayState(
+          LoadingState.loadPlayState(
             {
               targetSong: targetSong,
               targetDifficulty: PlayStatePlaylist.campaignDifficulty,
               targetVariation: targetVariation,
               cameraFollowPoint: cameraFollowPoint.getPosition(),
-            }));
+            });
         }
       }
     }

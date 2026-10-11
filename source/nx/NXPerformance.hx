@@ -34,6 +34,9 @@ class NXPerformance
   static var comboTriggered:Bool = false;
   static final COMBO_HOLD_DURATION:Float = 3.0;
 
+  static var lastL3PressTime:Float = -1.0;
+  static final L3_DEBOUNCE_COOLDOWN:Float = 0.25; // Minimum 250ms debounce cooldown
+
   /**
    * Called every frame from NXMain.update() to handle dock/undock transitions and button combos.
    */
@@ -47,14 +50,21 @@ class NXPerformance
       onDockStateChanged(currentDocked);
     }
 
-    // Universal HUD Toggle: L3 (Left Stick click) cycles Performance HUD anywhere in the game
-    var l3Pressed:Bool = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(LEFT_STICK_CLICK))
-      #if switch
-      || (NXMain.nxController != null && NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_L))
-      #end;
-
-    if (l3Pressed)
+    // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
+    var l3Pressed:Bool = false;
+    if (NXMain.nxController != null)
     {
+      l3Pressed = NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_L);
+    }
+    else if (FlxG.gamepads != null)
+    {
+      l3Pressed = FlxG.gamepads.anyJustPressed(LEFT_STICK_CLICK);
+    }
+
+    var now:Float = Sys.time();
+    if (l3Pressed && (lastL3PressTime < 0 || (now - lastL3PressTime) >= L3_DEBOUNCE_COOLDOWN))
+    {
+      lastL3PressTime = now;
       var nextMode:DebugDisplayMode;
       switch (Preferences.debugDisplay)
       {
@@ -73,6 +83,7 @@ class NXPerformance
         funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
       }
       catch (e:Dynamic) {}
+      nx.NXDeepTrace.logButtonEvent('L3', 'Cycled Performance HUD to $nextMode');
       trace('Switch: Cycled Performance HUD via L3 to: ' + Preferences.debugDisplay);
     }
 

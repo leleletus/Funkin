@@ -1656,22 +1656,29 @@ class FreeplayState extends MusicBeatSubState
     }
     #end // ^<-- FEATURE_DEBUG_FUNCTIONS
 
-    // Universal and reliable R3 check for character select (both FlxGamepad and NXController)
-    var r3Pressed:Bool = FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK);
+    // Universal and reliable R3 check for character select (single source on Switch)
+    var r3Pressed:Bool = false;
     #if switch
-    if (!r3Pressed && nx.NXMain.nxController != null)
+    if (nx.NXMain.nxController != null)
     {
       r3Pressed = nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R);
     }
+    else if (FlxG.gamepads != null)
+    {
+      r3Pressed = FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK);
+    }
+    #else
+    r3Pressed = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK));
     #end
 
-    if (r3Pressed && !FlxG.debugger.visible && (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle))
+    if (r3Pressed)
     {
-      fromCharSelect = false;
-      tryOpenCharSelect();
+      #if switch
+      nx.NXDeepTrace.logButtonEvent('R3', 'Freeplay Character Select requested');
+      #end
     }
 
-    if (uiStateMachine.canInteract())
+    if (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle)
     {
       #if switch
       // On Switch, ignore physical Y button to prevent triggering unsupported actions / black screen
