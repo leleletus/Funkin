@@ -47,7 +47,36 @@ class NXPerformance
       onDockStateChanged(currentDocked);
     }
 
-    // Safe button combo: hold PLUS and R for 3.0 seconds to toggle Performance HUD (FPS/RAM)
+    // Universal HUD Toggle: L3 (Left Stick click) cycles Performance HUD anywhere in the game
+    var l3Pressed:Bool = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(LEFT_STICK_CLICK))
+      #if switch
+      || (NXMain.nxController != null && NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_L))
+      #end;
+
+    if (l3Pressed)
+    {
+      var nextMode:DebugDisplayMode;
+      switch (Preferences.debugDisplay)
+      {
+        case DebugDisplayMode.Off:
+          nextMode = DebugDisplayMode.Simple;
+        case DebugDisplayMode.Simple:
+          nextMode = DebugDisplayMode.Advanced;
+        case DebugDisplayMode.Advanced:
+          nextMode = DebugDisplayMode.Off;
+      }
+      Preferences.debugDisplay = nextMode;
+      Preferences.switchShowPerfHud = (nextMode != DebugDisplayMode.Off);
+      updatePerfHud();
+      try
+      {
+        funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
+      }
+      catch (e:Dynamic) {}
+      trace('Switch: Cycled Performance HUD via L3 to: ' + Preferences.debugDisplay);
+    }
+
+    // Secondary button combo: hold PLUS and R for 3.0 seconds to toggle Performance HUD (FPS/RAM)
     var plusPressed:Bool = (NXMain.nxController != null && NXMain.nxController.isPressed(nx.controls.NXControlButton.PLUS)) || FlxG.gamepads.anyPressed(START);
     var rPressed:Bool = (NXMain.nxController != null && NXMain.nxController.isPressed(nx.controls.NXControlButton.R)) || FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
 
