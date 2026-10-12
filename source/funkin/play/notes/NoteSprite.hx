@@ -278,4 +278,15 @@ class NoteSprite extends FunkinSprite
     // Otherwise, we want the game to keep reusing note sprites to save memory.
     super.destroy();
   }
+
+  /**
+   * Updates clipping on the associated hold note sprite, if one exists.
+   */
+  public inline function updateClipping(songTime:Float = 0):Void
+  {
+    if (this.holdNoteSprite != null)
+    {
+      this.holdNoteSprite.updateClipping(songTime);
+    }
+  }
 }

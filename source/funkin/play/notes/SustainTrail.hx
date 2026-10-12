@@ -295,7 +295,23 @@ class SustainTrail extends FlxSprite
       return;
     }
 
-    var clipHeight:Float = sustainHeight(sustainLength - (songTime - strumTime), parentStrumline?.scrollSpeed ?? 1.0).clamp(0, graphicHeight);
+    var scroll:Float = parentStrumline?.scrollSpeed ?? 1.0;
+    var totalLength:Float = (fullSustainLength > 0) ? fullSustainLength : sustainLength;
+    var originalHeight:Float = sustainHeight(totalLength, scroll);
+
+    var currentSongTime:Float = (songTime > 0) ? songTime : (Conductor.instance?.songPosition ?? 0.0);
+
+    var clipHeight:Float;
+    if (currentSongTime > strumTime && totalLength > 0)
+    {
+      var heightToCut:Float = (((currentSongTime - strumTime) / totalLength) * originalHeight);
+      clipHeight = (originalHeight - heightToCut).clamp(0, originalHeight);
+    }
+    else
+    {
+      clipHeight = sustainHeight(sustainLength, scroll).clamp(0, originalHeight);
+    }
+
     if (clipHeight <= 0.1)
     {
       visible = false;
@@ -305,6 +321,8 @@ class SustainTrail extends FlxSprite
     {
       visible = true;
     }
+
+    graphicHeight = clipHeight;
 
     var bottomHeight:Float = graphic.height * zoom * endOffset;
     var partHeight:Float = clipHeight - bottomHeight;
