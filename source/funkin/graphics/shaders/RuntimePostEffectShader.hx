@@ -81,7 +81,7 @@ class RuntimePostEffectShader extends FlxRuntimeShader
 
 		// internally used to get the maximum `openfl_TextureCoordv`
 		vec2 bitmapCoordScale() {
-			return openfl_TextureCoordv / screenCoord;
+			return openfl_TextureCoordv / max(screenCoord, vec2(0.0001));
 		}
 
 		// internally used to compute bitmap coord

@@ -104,17 +104,108 @@ class FunkinCamera extends FlxCamera
     BitmapDataUtil.applyFilter(bgBitmap, filter);
   }
 
+  @:nullSafety(Off)
+  override function update(elapsed:Float):Void
+  {
+    #if switch
+    if (!funkin.Preferences.switchEnableShaders)
+    {
+      this.filtersEnabled = false;
+      this.filters = null;
+      if (this.flashSprite != null) this.flashSprite.filters = [];
+    }
+    else if (this.filters != null)
+    {
+      for (f in this.filters)
+      {
+        if (f == null || (Std.isOfType(f, ShaderFilter) && (cast(f, ShaderFilter).shader == null || cast(f, ShaderFilter).shader.data == null)))
+        {
+          this.filtersEnabled = false;
+          this.filters = null;
+          if (this.flashSprite != null) this.flashSprite.filters = [];
+          break;
+        }
+      }
+    }
+    #end
+
+    super.update(elapsed);
+  }
+
+  @:nullSafety(Off)
   public function setFilters(filters:Array<BitmapFilter>):Void
   {
-    this.filters = filters;
-    this.filtersEnabled = (filters != null && filters.length > 0);
-    @:nullSafety(Off)
+    #if switch
+    if (!funkin.Preferences.switchEnableShaders)
+    {
+      this.filters = null;
+      this.filtersEnabled = false;
+      if (this.flashSprite != null)
+      {
+        this.flashSprite.filters = [];
+      }
+      return;
+    }
+    #end
+
+    var validFilters:Array<BitmapFilter> = [];
+    var hasCorruptShader:Bool = false;
+
+    if (filters != null)
+    {
+      for (f in filters)
+      {
+        if (f == null)
+        {
+          hasCorruptShader = true;
+          continue;
+        }
+        if (Std.isOfType(f, ShaderFilter))
+        {
+          var sf:ShaderFilter = cast f;
+          if (sf.shader == null)
+          {
+            hasCorruptShader = true;
+            continue;
+          }
+          try
+          {
+            if (sf.shader.data == null)
+            {
+              hasCorruptShader = true;
+              continue;
+            }
+          }
+          catch (e:Dynamic)
+          {
+            hasCorruptShader = true;
+            continue;
+          }
+        }
+        validFilters.push(f);
+      }
+    }
+
+    if (hasCorruptShader && validFilters.length == 0)
+    {
+      this.filters = null;
+      this.filtersEnabled = false;
+      if (this.flashSprite != null)
+      {
+        this.flashSprite.filters = [];
+      }
+      return;
+    }
+
+    this.filters = (validFilters.length > 0) ? validFilters : null;
+    this.filtersEnabled = (validFilters.length > 0);
     if (this.flashSprite != null)
     {
-      this.flashSprite.filters = this.filtersEnabled ? filters : null;
+      this.flashSprite.filters = this.filtersEnabled ? validFilters : [];
     }
   }
 
+  @:nullSafety(Off)
   function squashTo(bitmap:BitmapData, applyFilters:Bool, isolate:Bool, clearScreen:Bool = false):Void
   {
     if (applyFilters && isolate)
@@ -139,28 +230,34 @@ class FunkinCamera extends FlxCamera
     renderSkipping(isolate ? bgItemCount : 0);
     bitmap.fillRect(bitmap.rect, 0);
     #if switch
-    if (!funkin.Preferences.switchEnableShaders)
+    var currentFilters = this.filters;
+    if (!funkin.Preferences.switchEnableShaders || !filtersEnabled || currentFilters == null || currentFilters.length == 0)
     {
       applyFilters = false;
     }
     #end
-    if (applyFilters)
+    if (applyFilters && filtersEnabled && filters != null && filters.length > 0)
     {
       bitmap.draw(flashSprite, matrix);
       filtersApplied = true;
-      if (filters != null && filtersEnabled)
+      @:nullSafety(Off)
+      flashSprite.filters = filters;
+    }
+    else
+    {
+      @:nullSafety(Off)
+      flashSprite.filters = null;
+      bitmap.draw(flashSprite, matrix);
+      if (filtersEnabled && filters != null && filters.length > 0)
       {
         @:nullSafety(Off)
         flashSprite.filters = filters;
       }
-    }
-    else
-    {
-      final tmp = flashSprite.filters;
-      @:nullSafety(Off)
-      flashSprite.filters = null;
-      bitmap.draw(flashSprite, matrix);
-      flashSprite.filters = tmp;
+      else
+      {
+        @:nullSafety(Off)
+        flashSprite.filters = null;
+      }
     }
 
     if (!isolate)
