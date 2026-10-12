@@ -93,6 +93,7 @@ class NXVideoPlayer
       if (!pngExists || !xmlExists)
       {
         trace('[NXVideoPlayer] No converted atlas (.png/.xml) found for "$videoName". Safe skip to avoid SIGSEGV.');
+        stop();
         return false;
       }
 
@@ -100,17 +101,52 @@ class NXVideoPlayer
       var frames:FlxAtlasFrames = null;
       try
       {
-        frames = Paths.getSparrowAtlas('converted/$videoName', 'videos');
+        if (Assets.exists('videos:assets/videos/converted/$videoName.png', IMAGE) &&
+            Assets.exists('videos:assets/videos/converted/$videoName.xml', TEXT))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            Assets.getBitmapData('videos:assets/videos/converted/$videoName.png'),
+            Assets.getText('videos:assets/videos/converted/$videoName.xml')
+          );
+        }
+        else if (Assets.exists('assets/videos/converted/$videoName.png', IMAGE) &&
+                 Assets.exists('assets/videos/converted/$videoName.xml', TEXT))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            Assets.getBitmapData('assets/videos/converted/$videoName.png'),
+            Assets.getText('assets/videos/converted/$videoName.xml')
+          );
+        }
+        #if sys
+        else if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.xml'))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            openfl.display.BitmapData.fromFile('romfs:/assets/videos/converted/$videoName.png'),
+            sys.io.File.getContent('romfs:/assets/videos/converted/$videoName.xml')
+          );
+        }
+        else if (sys.FileSystem.exists('assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('assets/videos/converted/$videoName.xml'))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            openfl.display.BitmapData.fromFile('assets/videos/converted/$videoName.png'),
+            sys.io.File.getContent('assets/videos/converted/$videoName.xml')
+          );
+        }
+        #end
       }
       catch (e:Dynamic)
       {
         trace('[NXVideoPlayer] Exception loading sparrow atlas: ' + e);
+        stop();
         return false;
       }
 
       if (frames == null || frames.frames == null || frames.frames.length == 0)
       {
         trace('[NXVideoPlayer] Loaded atlas frames were null or empty for "$videoName". Aborting.');
+        stop();
         return false;
       }
 

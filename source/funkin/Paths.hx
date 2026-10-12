@@ -142,11 +142,26 @@ class Paths implements ConsoleClass
     var normalSubPath:String = '$cleanFile.$ext';
     var nestedSubPath:String = 'videos/$cleanFile.$ext';
 
+    #if sys
+    if (sys.FileSystem.exists('assets/videos/$nestedSubPath') || sys.FileSystem.exists('romfs:/assets/videos/$nestedSubPath'))
+    {
+      return getPath(nestedSubPath, BINARY, targetLib);
+    }
+    if (sys.FileSystem.exists('assets/videos/$normalSubPath') || sys.FileSystem.exists('romfs:/assets/videos/$normalSubPath'))
+    {
+      return getPath(normalSubPath, BINARY, targetLib);
+    }
+    #end
+
     if (targetLib == 'videos')
     {
       if (openfl.utils.Assets.exists('videos:assets/videos/$normalSubPath', BINARY))
       {
         return getPath(normalSubPath, BINARY, targetLib);
+      }
+      if (openfl.utils.Assets.exists('videos:assets/videos/$nestedSubPath', BINARY))
+      {
+        return getPath(nestedSubPath, BINARY, targetLib);
       }
     }
 
