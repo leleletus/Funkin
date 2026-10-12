@@ -2937,6 +2937,9 @@ class PlayState extends MusicBeatSubState
         {
           holdNote.hitNote = true;
           holdNote.missedNote = false;
+          holdNote.handledMiss = false;
+          holdNote.sustainLength = (holdEndTime - Conductor.instance.songPosition);
+          holdNote.updateClipping(Conductor.instance.songPosition);
           playerStrumline.holdConfirm(holdNote.noteDirection);
           if (holdNote.cover != null && !holdNote.cover.visible)
           {
@@ -2949,6 +2952,7 @@ class PlayState extends MusicBeatSubState
         }
         else if (Conductor.instance.songPosition >= holdEndTime && holdNote.hitNote)
         {
+          holdNote.sustainLength = 0;
           var stillHolding:Bool = false;
           for (other in playerStrumline.holdNotes.members)
           {
@@ -2985,7 +2989,7 @@ class PlayState extends MusicBeatSubState
         }
       }
 
-      if (holdNote.missedNote && !holdNote.handledMiss)
+      if (!isBotPlayMode && holdNote.missedNote && !holdNote.handledMiss)
       {
         // The player dropped a hold note.
         holdNote.handledMiss = true;
@@ -3214,6 +3218,7 @@ class PlayState extends MusicBeatSubState
   {
     Preferences.botplay = !Preferences.botplay;
     isBotPlayMode = Preferences.botplay;
+    if (playerStrumline != null) playerStrumline.isPlayer = !isBotPlayMode;
 
     updateScoreText();
 
