@@ -15,7 +15,7 @@ Documento maestro de trazabilidad, control de versiones y especificación técni
 | **Preview 2** | `v0.8.1-nx-preview-2` | `295a02e` | Inestable | Intentos de optimización de assets y carga de texturas. |
 | **Preview 3** | `v0.8.1-nx-preview-3` | `65917b8c4` | Estable (Hito) | Restauración de Story Mode, controles R3/L3 con debounce, fix fin de canción, [A] en ResultState. |
 | **Build 4** | `feature/switch-fixes-and-perf` | `0a6324ec1` | Roto (Regresiones) | Crashes por scripts `.hxc`, pantalla blanca en Blazin', sustains a 2x velocidad de corte. |
-| **Build 5 (Actual)**| `feature/switch-fixes-and-perf` | Pendiente Commit | **Estable / Validado en Compilación** | Rollback total `.hxc`, corrección de recorte de sustains a 1x proporcional, eliminación de fondo blanco en Blazin' con sanitización de `flashSprite.filters`, blindaje OpenAL contra desincronización en cutscenes. |
+| **Build 5 (Actual)**| `v0.8.1-nx-preview-4` | `46e35c859` | **Estable / Validado en Compilación** | Rollback total `.hxc`, corrección de recorte de sustains a 1x proporcional, eliminación de fondo blanco en Blazin' con sanitización de `flashSprite.filters`, blindaje OpenAL contra desincronización en cutscenes. |
 
 ---
 
