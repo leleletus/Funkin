@@ -76,7 +76,7 @@ class FunkinDebugDisplay extends Sprite
   {
     removeChildren(0, numChildren);
 
-    final BG_WIDTH_MULTIPLIER:Float = #if html5 advanced ? 1 : 0.3 #else 1 #end;
+    final BG_WIDTH_MULTIPLIER:Float = #if html5 advanced ? 1 : 0.3 #elseif switch advanced ? 1.45 : 1.45 #else 1 #end;
 
     #if html5
     final BG_HEIGHT_MULTIPLIER:Float = advanced ? 0.45 : 0.15;
@@ -110,7 +110,7 @@ class FunkinDebugDisplay extends Sprite
 
   function createAdvancedElements():Void
   {
-    final graphsWidth:Int = OUTER_RECT_DIMENSIONS[0] + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3);
+    final graphsWidth:Int = #if switch Std.int((OUTER_RECT_DIMENSIONS[0] * 1.45) + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3)) #else OUTER_RECT_DIMENSIONS[0] + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3) #end;
     final graphsHeight:Int = 25;
 
     fpsGraph = new FunkinStatsGraph(OTHERS_OFFSET, OTHERS_OFFSET + 49, graphsWidth, graphsHeight, color);
@@ -212,11 +212,24 @@ class FunkinDebugDisplay extends Sprite
     fpsGraph.textDisplay.text = info.join('\n');
 
     #if !html5
+    #if switch
+    var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
+    var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
+    var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
+    gcMemGraph.textDisplay.text = 'GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB';
+    #else
     gcMemGraph.textDisplay.text = 'GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}';
+    #end
 
     if (taskMemGraph != null)
     {
+      #if switch
+      var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
+      var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
+      taskMemGraph.textDisplay.text = 'SYS RAM: ${sysUsedMB} MB / ${sysTotalMB} MB';
+      #else
       taskMemGraph.textDisplay.text = 'TASK MEM: ${FlxStringUtil.formatBytes(taskMem).toLowerCase()} / ${FlxStringUtil.formatBytes(taskMemPeak).toLowerCase()}';
+      #end
     }
     #end
   }
@@ -230,10 +243,17 @@ class FunkinDebugDisplay extends Sprite
       info.push('FPS: $currentFPS');
 
       #if !html5
+      #if switch
+      var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
+      var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
+      var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
+      info.push('GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB');
+      #else
       info.push('GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}');
 
       if (MemoryUtil.supportsTaskMem())
         info.push('TASK MEM: ${FlxStringUtil.formatBytes(taskMem).toLowerCase()} / ${FlxStringUtil.formatBytes(taskMemPeak).toLowerCase()}');
+      #end
       #end
 
       infoDisplay.text = info.join('\n');

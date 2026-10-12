@@ -5,6 +5,9 @@ import funkin.Preferences;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 #if switch
 import nx.NXMain;
+#if cpp
+@:cppInclude("switch.h")
+#end
 #end
 
 /**
@@ -217,6 +220,70 @@ class NXPerformance
     return Preferences.switchNoteSplashes;
     #else
     return true;
+    #end
+  }
+
+  /**
+   * Returns physical memory currently used by the process in megabytes (MB) directly from Horizon OS kernel (svcGetInfo).
+   */
+  public static function getPhysicalMemoryUsed():Float
+  {
+    #if (switch && cpp)
+    var usedBytes:Float = 0;
+    untyped __cpp__('
+      u64 usedMemory = 0;
+      #ifndef InfoType_UsedPhysicalMemory
+      #define InfoType_UsedPhysicalMemory 7
+      #endif
+      svcGetInfo(&usedMemory, InfoType_UsedPhysicalMemory, CUR_PROCESS_HANDLE, 0);
+      {0} = (double)usedMemory;
+    ', usedBytes);
+    return usedBytes / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Returns total physical memory available to the process in megabytes (MB) directly from Horizon OS kernel (svcGetInfo).
+   * Title Override grants ~3200 MB (3.2 GB), while Applet Mode grants ~450 MB.
+   */
+  public static function getPhysicalMemoryTotal():Float
+  {
+    #if (switch && cpp)
+    var totalBytes:Float = 0;
+    untyped __cpp__('
+      u64 totalMemory = 0;
+      #ifndef InfoType_TotalPhysicalMemoryAvailable
+      #define InfoType_TotalPhysicalMemoryAvailable 6
+      #endif
+      svcGetInfo(&totalMemory, InfoType_TotalPhysicalMemoryAvailable, CUR_PROCESS_HANDLE, 0);
+      {0} = (double)totalMemory;
+    ', totalBytes);
+    return totalBytes / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Returns physical memory currently used by the process in raw bytes.
+   */
+  public static function getPhysicalMemoryUsedBytes():Float
+  {
+    #if (switch && cpp)
+    var usedBytes:Float = 0;
+    untyped __cpp__('
+      u64 usedMemory = 0;
+      #ifndef InfoType_UsedPhysicalMemory
+      #define InfoType_UsedPhysicalMemory 7
+      #endif
+      svcGetInfo(&usedMemory, InfoType_UsedPhysicalMemory, CUR_PROCESS_HANDLE, 0);
+      {0} = (double)usedMemory;
+    ', usedBytes);
+    return usedBytes;
+    #else
+    return 0.0;
     #end
   }
 }

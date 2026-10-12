@@ -169,7 +169,7 @@ class NXAudioDiagnostics
     var activeSounds:Int = getActiveSoundsCount();
     var drift:Float = Math.round(getSyncDriftMs() * 10.0) / 10.0;
     var musicTime:Float = (FlxG.sound.music != null) ? FlxG.sound.music.time : -1.0;
-    var memMb:Float = Math.round((openfl.system.System.totalMemory / (1024 * 1024)) * 10.0) / 10.0;
+    var memMb:Float = #if switch Math.round(NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0 #else Math.round((openfl.system.System.totalMemory / (1024 * 1024)) * 10.0) / 10.0 #end;
 
     var logLine:String = '[AUDIO-TELEM] Time: ${Math.round(musicTime)}ms | State: $musicState | Channels: $activeSounds | Drift: ${drift}ms | Drops: $frameDropsCount | RAM: ${memMb}MB';
 

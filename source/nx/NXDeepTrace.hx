@@ -138,7 +138,7 @@ class NXDeepTrace
     var activeChannels:Int = NXAudioDiagnostics.getActiveSoundsCount();
     var musicTime:Float = (FlxG.sound.music != null) ? FlxG.sound.music.time : -1.0;
     var musicLen:Float = (FlxG.sound.music != null) ? FlxG.sound.music.length : -1.0;
-    var memMb:Float = Math.round((openfl.system.System.totalMemory / (1024 * 1024)) * 10.0) / 10.0;
+    var memMb:Float = #if switch Math.round(NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0 #else Math.round((openfl.system.System.totalMemory / (1024 * 1024)) * 10.0) / 10.0 #end;
     var drift:Float = Math.round(NXAudioDiagnostics.getSyncDriftMs() * 10.0) / 10.0;
 
     writeEntry('AUDIO', '[$context] Time: ${Math.round(musicTime)}/${Math.round(musicLen)}ms | OpenAL: $alState | Channels: $activeChannels | Drift: ${drift}ms | RAM: ${memMb}MB');
