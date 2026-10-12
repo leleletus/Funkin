@@ -148,6 +148,7 @@ class Save implements ConsoleClass
           switchVerboseAudioLog: false,
           botplay: false,
           ghostTapping: true,
+          switchShowLoadingScreen: false,
         },
       #if mobile
       mobileOptions:
@@ -1283,6 +1284,11 @@ typedef SaveDataOptions =
    * @default `true`
    */
   var ?ghostTapping:Bool;
+
+  /**
+   * Whether loading screen is shown between songs in Story Mode on Switch (default: false).
+   */
+  var ?switchShowLoadingScreen:Bool;
 
   var controls:
     {

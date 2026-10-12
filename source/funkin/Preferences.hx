@@ -793,6 +793,29 @@ class Preferences
     }
     return value;
   }
+
+  /**
+   * Whether the loading screen is shown between songs in Story Mode on Switch.
+   * When false (default), transitions between songs are native and direct 1:1 like PC.
+   * @default `false`
+   */
+  public static var switchShowLoadingScreen(get, set):Bool;
+
+  static function get_switchShowLoadingScreen():Bool
+  {
+    return Save?.instance?.options?.switchShowLoadingScreen ?? false;
+  }
+
+  static function set_switchShowLoadingScreen(value:Bool):Bool
+  {
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      var save:Save = Save.instance;
+      save.options.switchShowLoadingScreen = value;
+      if (Save.system != null) Save.system.flush();
+    }
+    return value;
+  }
 }
 
 

@@ -315,23 +315,30 @@ class LoadingState extends MusicBeatSubState
     }
 
     #if (NO_PRELOAD_ALL || switch)
-    // Switch to loading state while we load assets (default on HTML5 target, and on Switch).
-    var loadStateCtor = function() {
-      var result = new LoadingState(playStateCtor, shouldStopMusic, params);
-      @:privateAccess
-      result.asSubState = asSubState;
-      return result;
-    }
-    if (asSubState)
+    var useLoadingScreen:Bool = #if switch funkin.Preferences.switchShowLoadingScreen #else true #end;
+
+    if (useLoadingScreen)
     {
-      FlxG.state.openSubState(cast loadStateCtor());
+      // Switch to loading state while we load assets (default on HTML5 target, or if explicitly enabled on Switch).
+      var loadStateCtor = function() {
+        var result = new LoadingState(playStateCtor, shouldStopMusic, params);
+        @:privateAccess
+        result.asSubState = asSubState;
+        return result;
+      }
+      if (asSubState)
+      {
+        FlxG.state.openSubState(cast loadStateCtor());
+      }
+      else
+      {
+        FlxG.switchState(loadStateCtor);
+      }
+      return;
     }
-    else
-    {
-      FlxG.switchState(loadStateCtor);
-    }
-    #else
-    // All assets preloaded, switch directly to play state (defualt on other targets).
+    #end
+
+    // All assets preloaded, switch directly to play state (default on PC/other targets, or when switchShowLoadingScreen is false).
     @:nullSafety(Off)
     if (shouldStopMusic && FlxG.sound.music != null)
     {
@@ -431,7 +438,6 @@ class LoadingState extends MusicBeatSubState
       });
       FlxG.switchState(playStateCtor);
     }
-    #end
   }
 
   #if (NO_PRELOAD_ALL && !switch)

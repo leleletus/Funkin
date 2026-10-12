@@ -174,42 +174,9 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     #end
 
     #if switch
-    createPrefItemEnum('Resolution Mode', 'Adjust game resolution (720p is native handheld and optimal for Tegra X1).', [
-      "720p Fijo" => "720p",
-      "Dinámico / Docked" => "Docked",
-      "540p Rendimiento" => "540p"
-    ], function(key:String, value:String):Void {
-      Preferences.switchResolutionMode = value;
-    }, switch (Preferences.switchResolutionMode)
-      {
-        case "540p": "540p Rendimiento";
-        case "Docked": "Dinámico / Docked";
-        default: "720p Fijo";
-      });
-
-    createPrefItemCheckbox('Shaders / FX', 'Enable camera shaders. Disable to significantly improve GPU performance.', function(value:Bool):Void {
-      Preferences.switchEnableShaders = value;
-    }, Preferences.switchEnableShaders);
-
-    createPrefItemCheckbox('Anti-Aliasing', 'Smooth sprite edges. Disable to reduce GPU fillrate overhead.', function(value:Bool):Void {
-      Preferences.switchAntialiasing = value;
-    }, Preferences.switchAntialiasing);
-
-    createPrefItemCheckbox('Note Splashes', 'Particle effects when hitting Sick notes. Disable to reduce draw calls.', function(value:Bool):Void {
-      Preferences.switchNoteSplashes = value;
-    }, Preferences.switchNoteSplashes);
-
-    createPrefItemCheckbox('Performance Monitor', 'Show FPS and memory counter in the top-left corner.', function(value:Bool):Void {
-      Preferences.switchShowPerfHud = value;
-    }, Preferences.switchShowPerfHud);
-
-    createPrefItemCheckbox('Audio Telemetry Log', 'Log detailed OpenAL metrics and timing drift to SDMC logs for diagnostics.', function(value:Bool):Void {
-      Preferences.switchVerboseAudioLog = value;
-    }, Preferences.switchVerboseAudioLog);
-
-    createPrefItemCheckbox('Botplay / Autoplay', 'Automatically hits notes perfectly for testing transitions and performance.', function(value:Bool):Void {
-      Preferences.botplay = value;
-    }, Preferences.botplay);
+    createPrefItemButton('Nintendo Switch', 'Ajustes dedicados de hardware, rendimiento y telemetria de Nintendo Switch.', function() {
+      codex.switchPage(SwitchSettings);
+    });
     #end
 
     #if web
@@ -370,6 +337,12 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     var item = new EnumPreferenceItem<T>(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, values, defaultKey, onChange);
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
+    preferenceDesc.push(prefDesc);
+  }
+
+  function createPrefItemButton(prefName:String, prefDesc:String, callback:Void->Void):Void
+  {
+    items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, callback, false, true);
     preferenceDesc.push(prefDesc);
   }
 
