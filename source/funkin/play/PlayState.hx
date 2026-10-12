@@ -2729,6 +2729,7 @@ class PlayState extends MusicBeatSubState
     {
       // FlxG.sound.music.time = startTimestamp - Conductor.instance.combinedOffset;
       handleSkippedNotes();
+      resyncVocals();
     }
 
     dispatchEvent(new ScriptEvent(SONG_START));
@@ -2736,8 +2737,6 @@ class PlayState extends MusicBeatSubState
     #if FEATURE_NEWGROUNDS
     Events.logStartSong(currentSong.id, currentVariation);
     #end
-
-    resyncVocals();
   }
 
   /**
@@ -2749,6 +2748,12 @@ class PlayState extends MusicBeatSubState
 
     // Skip this if the music is paused (GameOver, Pause menu, start-of-song offset, etc.)
     if (!(FlxG.sound.music?.playing ?? false)) return;
+
+    // Evitar desmantelar OpenAL si el desfase es imperceptible (< 25ms) y las vocales ya están reproduciendo
+    if (vocals.playing && Math.abs(vocals.time - FlxG.sound.music.time) < 25.0)
+    {
+      return;
+    }
 
     var timeToPlayAt:Float = Math.min(FlxG.sound.music.length,
       Math.max(Math.min(Conductor.instance.combinedOffset, 0), Conductor.instance.songPosition) - Conductor.instance.combinedOffset);

@@ -973,6 +973,9 @@ class SongDifficulty
     for (playerVoice in playerVoiceList)
     {
       if (!Assets.exists(playerVoice)) continue;
+      #if switch
+      funkin.FunkinMemory.cacheSound(playerVoice);
+      #end
       result.addPlayerVoice(FunkinSound.load(playerVoice, 1.0, false, false, false, false, null, null, true));
     }
 
@@ -980,6 +983,9 @@ class SongDifficulty
     for (opponentVoice in opponentVoiceList)
     {
       if (!Assets.exists(opponentVoice)) continue;
+      #if switch
+      funkin.FunkinMemory.cacheSound(opponentVoice);
+      #end
       result.addOpponentVoice(FunkinSound.load(opponentVoice, 1.0, false, false, false, false, null, null, true));
     }
 

@@ -263,6 +263,28 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     return this;
   }
 
+  override function set_time(time:Float):Float
+  {
+    if (_time < 0)
+    {
+      return _time = time;
+    }
+
+    // Si el sonido ya está reproduciendo y el desfase con el nuevo tiempo es despreciable (< 15ms),
+    // no desmantelar ni recrear los búferes de streaming OpenAL para evitar bloqueos del mixer
+    if (_channel != null && playing && Math.abs(_time - time) < 15.0)
+    {
+      return _time = time;
+    }
+
+    if (_channel != null)
+    {
+      cleanup(false, true);
+      startSound(time);
+    }
+    return _time = time;
+  }
+
   /**
    * Call after adjusting the volume to update the sound channel's settings.
    */

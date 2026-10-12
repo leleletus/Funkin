@@ -55,17 +55,21 @@ class VoicesGroup extends SoundGroup
 
   override function set_time(time:Float):Float
   {
-    forEachAlive(function(snd) {
-      // account for different offsets per sound?
-      snd.time = time;
-    });
-
-    playerVoices?.forEachAlive(function(voice:FunkinSound) {
-      voice.time -= playerVoicesOffset;
-    });
-    opponentVoices?.forEachAlive(function(voice:FunkinSound) {
-      voice.time -= opponentVoicesOffset;
-    });
+    if (playerVoicesOffset != 0 || opponentVoicesOffset != 0)
+    {
+      playerVoices?.forEachAlive(function(voice:FunkinSound) {
+        voice.time = time - playerVoicesOffset;
+      });
+      opponentVoices?.forEachAlive(function(voice:FunkinSound) {
+        voice.time = time - opponentVoicesOffset;
+      });
+    }
+    else
+    {
+      forEachAlive(function(snd) {
+        snd.time = time;
+      });
+    }
 
     return time;
   }
