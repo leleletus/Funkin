@@ -358,10 +358,6 @@ class FreeplayState extends MusicBeatSubState
 
   override function create():Void
   {
-    #if switch
-    funkin.FunkinMemory.purgeVRAMAggressive();
-    #end
-
     super.create();
 
     FlxG.state.persistentUpdate = false;

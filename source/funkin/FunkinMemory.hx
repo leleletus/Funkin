@@ -26,7 +26,19 @@ class FunkinMemory
   static var currentCachedSounds:Map<String, Sound> = [];
   static var previousCachedSounds:Map<String, Sound> = [];
 
-  static var purgeFilter:Array<String> = ["/week", "/characters", "/charSelect", "/results"];
+  static var purgeFilter:Array<String> = [
+    "/week",
+    "/characters",
+    "/charSelect",
+    "/results",
+    "phillyStreets/",
+    "phillyBlazin/",
+    "phillyTrain",
+    "spraycan",
+    "Spraypaint",
+    "SpraycanPile",
+    "wked1_cutscene"
+  ];
 
   /**
    * Caches textures that are always required.
@@ -96,7 +108,32 @@ class FunkinMemory
   }
 
   /**
-   * Clears the current texture and sound caches.
+   * Evaluates whether a graphic belongs to essential UI, fonts, Polymod scripts,
+   * FlxBar elements, or permanent assets and must NEVER be destroyed.
+   */
+  public static function isProtectedGraphic(key:String, obj:Null<FlxGraphic>):Bool
+  {
+    if (key == null || obj == null) return true;
+    if (obj.persist) return true;
+    if (permanentCachedTextures.exists(key)) return true;
+
+    // Resguardar fuentes
+    if (key.contains("fonts")) return true;
+
+    // Resguardar elementos de UI e iconos
+    if (key.contains("healthBar") || key.contains("icons") || key.contains("ui/") || key.contains("flixel/")) return true;
+
+    // Resguardar graficos internos generados por FlxBar
+    if (key.contains("FlxBar") || key.contains("flxBar")) return true;
+
+    // Resguardar scripts de Polymod, backing cards y elementos de Freeplay
+    if (key.contains("scripts/") || key.contains("backcards/") || key.contains("sortedLetters")) return true;
+
+    return false;
+  }
+
+  /**
+   * Clears unused texture and sound caches safely.
    */
   public static inline function purgeCache(callGarbageCollector:Bool = false):Void
   {
@@ -105,48 +142,16 @@ class FunkinMemory
     preparePurgeSoundCache();
     purgeSoundCache();
     #if (cpp || neko || hl)
-    if (callGarbageCollector) funkin.util.MemoryUtil.collect(true);
+    if (callGarbageCollector) cpp.vm.Gc.run(false);
     #end
   }
 
   /**
-   * Aggressively purges non-persistent VRAM textures and RAM caches on Nintendo Switch
-   * to prevent Out-Of-Memory (OOM) crashes across state transitions.
+   * Safe stub that avoids destructive cache clearing.
    */
-  public static function purgeVRAMAggressive():Void
+  public static inline function purgeVRAMAggressive():Void
   {
-    purgeCache(true);
-
-    @:privateAccess
-    {
-      if (FlxG.bitmap != null && FlxG.bitmap._cache != null)
-      {
-        var keysToRemove:Array<String> = [];
-        for (key in FlxG.bitmap._cache.keys())
-        {
-          var obj:Null<FlxGraphic> = FlxG.bitmap._cache.get(key);
-          if (obj != null && !obj.persist && !permanentCachedTextures.exists(key) && !key.contains("fonts"))
-          {
-            keysToRemove.push(key);
-          }
-        }
-        for (key in keysToRemove)
-        {
-          var obj:Null<FlxGraphic> = FlxG.bitmap._cache.get(key);
-          FlxG.bitmap.removeByKey(key);
-          if (obj != null && !obj.isDestroyed)
-          {
-            obj.destroy();
-          }
-        }
-      }
-    }
-
-    openfl.Assets.cache.clear();
-
-    #if (cpp || neko || hl)
-    cpp.vm.Gc.run(true);
-    #end
+    purgeCache(false);
   }
 
   ///// TEXTURES /////
@@ -277,11 +282,15 @@ class FunkinMemory
         continue;
       }
 
-      if (graphicKey.contains("fonts")) continue;
-
       var graphic:Null<FlxGraphic> = previousCachedTextures.get(graphicKey);
       if (graphic != null)
       {
+        if (isProtectedGraphic(graphicKey, graphic))
+        {
+          previousCachedTextures.remove(graphicKey);
+          continue;
+        }
+
         FlxG.bitmap.remove(graphic);
         graphic.persist = false;
         graphic.destroy();
@@ -297,17 +306,21 @@ class FunkinMemory
     }
 
     @:privateAccess
-    for (key in FlxG.bitmap._cache.keys())
     {
-      var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
-
-      if (obj == null || (obj.persist && permanentCachedTextures.exists(key)) || key.contains("fonts"))
+      var keysToCheck:Array<String> = [];
+      for (key in FlxG.bitmap._cache.keys())
       {
-        continue;
+        keysToCheck.push(key);
       }
 
-      if (obj.useCount > 0)
+      for (key in keysToCheck)
       {
+        var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
+        if (obj == null || isProtectedGraphic(key, obj))
+        {
+          continue;
+        }
+
         for (purgeEntry in purgeFilter)
         {
           if (key.contains(purgeEntry))
@@ -315,6 +328,7 @@ class FunkinMemory
             FlxG.bitmap.removeKey(key);
             obj.persist = false;
             obj.destroy();
+            break;
           }
         }
       }

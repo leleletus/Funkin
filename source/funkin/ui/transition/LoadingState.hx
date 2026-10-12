@@ -81,9 +81,7 @@ class LoadingState extends MusicBeatSubState
 
     new FlxTimer().start(0.05, function(_) {
       #if switch
-      funkin.FunkinMemory.purgeCache(true);
-      openfl.Assets.cache.clear();
-      cpp.vm.Gc.run(true);
+      funkin.FunkinMemory.purgeCache(false);
       #end
       var shouldPreloadLevelAssets:Bool = !(playParams?.minimalMode ?? false);
       if (shouldPreloadLevelAssets && playParams != null)

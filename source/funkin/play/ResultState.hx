@@ -1038,7 +1038,7 @@ class ResultState extends MusicBeatSubState
                 else
                   funkin.FunkinMemory.purgeCache();
                 #elseif switch
-                funkin.FunkinMemory.purgeVRAMAggressive();
+                funkin.FunkinMemory.purgeCache(false);
                 #else
                 funkin.FunkinMemory.purgeCache(true);
                 #end
@@ -1070,7 +1070,7 @@ class ResultState extends MusicBeatSubState
           else
             funkin.FunkinMemory.purgeCache();
           #elseif switch
-          funkin.FunkinMemory.purgeVRAMAggressive();
+          funkin.FunkinMemory.purgeCache(false);
           #else
           funkin.FunkinMemory.purgeCache(true);
           #end

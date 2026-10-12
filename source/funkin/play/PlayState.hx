@@ -1979,10 +1979,6 @@ class PlayState extends MusicBeatSubState
   {
     performCleanup();
 
-    #if switch
-    funkin.FunkinMemory.purgeVRAMAggressive();
-    #end
-
     #if mobile
     // Syncing allowScreenTimeout with Preferences option.
     lime.system.System.allowScreenTimeout = Preferences.screenTimeout;
@@ -3930,10 +3926,6 @@ class PlayState extends MusicBeatSubState
     GameOverSubState.reset();
     PauseSubState.reset();
     Countdown.reset();
-
-    #if switch
-    funkin.FunkinMemory.purgeVRAMAggressive();
-    #end
 
     // Clear the static reference to this state.
     instance = null;
