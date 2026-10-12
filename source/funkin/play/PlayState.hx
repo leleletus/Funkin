@@ -1980,9 +1980,7 @@ class PlayState extends MusicBeatSubState
     performCleanup();
 
     #if switch
-    funkin.FunkinMemory.purgeCache(true);
-    openfl.Assets.cache.clear();
-    cpp.vm.Gc.run(true);
+    funkin.FunkinMemory.purgeVRAMAggressive();
     #end
 
     #if mobile
@@ -3934,9 +3932,7 @@ class PlayState extends MusicBeatSubState
     Countdown.reset();
 
     #if switch
-    funkin.FunkinMemory.purgeCache(true);
-    openfl.Assets.cache.clear();
-    cpp.vm.Gc.run(true);
+    funkin.FunkinMemory.purgeVRAMAggressive();
     #end
 
     // Clear the static reference to this state.

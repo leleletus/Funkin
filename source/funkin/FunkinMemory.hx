@@ -109,6 +109,46 @@ class FunkinMemory
     #end
   }
 
+  /**
+   * Aggressively purges non-persistent VRAM textures and RAM caches on Nintendo Switch
+   * to prevent Out-Of-Memory (OOM) crashes across state transitions.
+   */
+  public static function purgeVRAMAggressive():Void
+  {
+    purgeCache(true);
+
+    @:privateAccess
+    {
+      if (FlxG.bitmap != null && FlxG.bitmap._cache != null)
+      {
+        var keysToRemove:Array<String> = [];
+        for (key in FlxG.bitmap._cache.keys())
+        {
+          var obj:Null<FlxGraphic> = FlxG.bitmap._cache.get(key);
+          if (obj != null && !obj.persist && !permanentCachedTextures.exists(key) && !key.contains("fonts"))
+          {
+            keysToRemove.push(key);
+          }
+        }
+        for (key in keysToRemove)
+        {
+          var obj:Null<FlxGraphic> = FlxG.bitmap._cache.get(key);
+          FlxG.bitmap.removeByKey(key);
+          if (obj != null && !obj.isDestroyed)
+          {
+            obj.destroy();
+          }
+        }
+      }
+    }
+
+    openfl.Assets.cache.clear();
+
+    #if (cpp || neko || hl)
+    cpp.vm.Gc.run(true);
+    #end
+  }
+
   ///// TEXTURES /////
 
   /**

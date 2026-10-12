@@ -441,6 +441,10 @@ class CharSelectSubState extends MusicBeatSubState
   {
     CharSelectAtlasHandler.clearAtlasCache();
     super.destroy();
+
+    #if switch
+    funkin.FunkinMemory.purgeVRAMAggressive();
+    #end
   }
 
   function checkNewChar():Void

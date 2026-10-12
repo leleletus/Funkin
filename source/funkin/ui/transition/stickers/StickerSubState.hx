@@ -211,6 +211,8 @@ class StickerSubState extends MusicBeatSubState
                 if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
                 else
                   funkin.FunkinMemory.purgeCache();
+                #elseif switch
+                funkin.FunkinMemory.purgeVRAMAggressive();
                 #else
                 funkin.FunkinMemory.purgeCache(true);
                 #end

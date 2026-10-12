@@ -1038,9 +1038,7 @@ class ResultState extends MusicBeatSubState
                 else
                   funkin.FunkinMemory.purgeCache();
                 #elseif switch
-                funkin.FunkinMemory.purgeCache(true);
-                openfl.Assets.cache.clear();
-                cpp.vm.Gc.run(true);
+                funkin.FunkinMemory.purgeVRAMAggressive();
                 #else
                 funkin.FunkinMemory.purgeCache(true);
                 #end
@@ -1072,9 +1070,7 @@ class ResultState extends MusicBeatSubState
           else
             funkin.FunkinMemory.purgeCache();
           #elseif switch
-          funkin.FunkinMemory.purgeCache(true);
-          openfl.Assets.cache.clear();
-          cpp.vm.Gc.run(true);
+          funkin.FunkinMemory.purgeVRAMAggressive();
           #else
           funkin.FunkinMemory.purgeCache(true);
           #end
