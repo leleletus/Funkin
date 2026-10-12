@@ -119,8 +119,18 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   public function new()
   {
-    super(Assets.getText(Paths.frag('rain')));
+    var fragSource:String = Assets.getText(Paths.frag('rain'));
+    if (fragSource != null && fragSource.indexOf('precision') == -1)
+    {
+      fragSource = '#ifdef GL_ES\nprecision mediump float;\n#endif\n' + fragSource;
+    }
+    super(fragSource);
     this.rainColor = 0xFF6680cc;
+
+    #if switch
+    var status:String = (this.data != null) ? "SUCCESS" : "UNLINKED";
+    nx.NXDeepTrace.writeEntry('SHADER', 'RuntimeRainShader compilation status: ' + status);
+    #end
   }
 
   public function update(elapsed:Float):Void
