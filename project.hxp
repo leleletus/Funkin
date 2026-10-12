@@ -1107,6 +1107,7 @@ class Project extends HXProject
       setHaxedef("lime-cairo", "false");
       this.defines.set("LIME_CAIRO", "0");
       this.defines.set("LIME_OPENGL", "1");
+      setHaxedef("native_audio_buffers", "8");
       this.defines.set("APP_ID", SWITCH_APP_ID);
       config.set("switch.ip", SWITCH_IP);
     }

@@ -86,9 +86,10 @@ class NXAudioDiagnostics
       if (sound._channel != null)
       {
         var sc:Dynamic = sound._channel;
-        if (sc.__source != null && sc.__source.__backend != null)
+        var audioSrc:Dynamic = (sc.__audioSource != null) ? sc.__audioSource : sc.__source;
+        if (audioSrc != null && audioSrc.__backend != null)
         {
-          var handle:Dynamic = sc.__source.__backend.handle;
+          var handle:Dynamic = audioSrc.__backend.handle;
           if (handle != null)
           {
             var state:Int = AL.getSourcei(handle, AL.SOURCE_STATE);
@@ -208,23 +209,29 @@ class NXAudioDiagnostics
     if (musicLen > 0 && targetSongPosition >= (musicLen - 250)) return;
 
     var state:String = getOpenALSourceState(FlxG.sound.music);
-    var musicStopped:Bool = !FlxG.sound.music.playing || state == "Stopped";
+    var enginePlaying:Bool = FlxG.sound.music.playing;
+    var musicStalled:Bool = (!enginePlaying || state == "Stopped") && targetSongPosition > 500;
 
-    if (musicStopped && targetSongPosition > 500)
+    if (musicStalled)
     {
       var now:Float = Sys.time();
       if (lastStallTime < 0 || (now - lastStallTime) > 1.0)
       {
-        lastStallTime = now;
-        if (recoveryAttempts >= 3)
+        // Reset recovery attempts if playback was stable for more than 10 seconds
+        if (lastStallTime > 0 && (now - lastStallTime) > 10.0)
         {
-          // Audio hardware unrecoverable or song finished; avoid spamming OpenAL to prevent channel exhaustion
-          return;
+          recoveryAttempts = 0;
         }
-        recoveryAttempts++;
-        generateStallDump(targetSongPosition, state);
 
-        trace('[AUDIO-WATCHDOG] Anomaly detected: Music stalled at ${targetSongPosition}ms (State: $state). Auto-recovering (attempt $recoveryAttempts/3)...');
+        lastStallTime = now;
+        recoveryAttempts++;
+
+        #if switch
+        nx.NXDeepTrace.writeEntry('AUDIO', '[AUDIO-WATCHDOG] OpenAL Stall Detected at ${Math.round(targetSongPosition)}ms (State: $state, EnginePlaying: $enginePlaying). Recovery attempt #$recoveryAttempts...');
+        #end
+
+        trace('[AUDIO-WATCHDOG] Anomaly detected: Music stalled at ${targetSongPosition}ms (State: $state). Auto-recovering (attempt #$recoveryAttempts)...');
+
         try
         {
           #if (cpp && !macro)
@@ -249,16 +256,53 @@ class NXAudioDiagnostics
             }
           }
 
-          FlxG.sound.music.play();
-          FlxG.sound.music.time = targetSongPosition;
+          // Hardware-level OpenAL recovery
+          var hardwareRecovered:Bool = false;
+          @:privateAccess
+          if (FlxG.sound.music._channel != null)
+          {
+            var sc:Dynamic = FlxG.sound.music._channel;
+            var audioSrc:Dynamic = (sc.__audioSource != null) ? sc.__audioSource : sc.__source;
+            if (audioSrc != null && audioSrc.__backend != null)
+            {
+              var backend:Dynamic = audioSrc.__backend;
+              if (backend.handle != null)
+              {
+                if (backend.stream)
+                {
+                  backend.refillBuffers();
+                }
+                AL.sourcePlay(backend.handle);
+                var curAlState:Int = AL.getSourcei(backend.handle, AL.SOURCE_STATE);
+                if (curAlState == 0x1012) hardwareRecovered = true;
+              }
+            }
+          }
+
+          if (!hardwareRecovered)
+          {
+            FlxG.sound.music.pause();
+            FlxG.sound.music.time = targetSongPosition;
+            FlxG.sound.music.play();
+          }
+
           if (vocals != null)
           {
-            vocals.play();
+            vocals.pause();
             vocals.time = targetSongPosition;
+            vocals.play();
           }
+
+          #if switch
+          var postState:String = getOpenALSourceState(FlxG.sound.music);
+          nx.NXDeepTrace.writeEntry('AUDIO', '[AUDIO-WATCHDOG] Stall recovery complete. Resulting OpenAL state: $postState');
+          #end
         }
         catch (e:Dynamic)
         {
+          #if switch
+          nx.NXDeepTrace.logError('[AUDIO-WATCHDOG] Recovery attempt failed: ' + e);
+          #end
           trace('[AUDIO-WATCHDOG] Recovery attempt failed: $e');
         }
       }
