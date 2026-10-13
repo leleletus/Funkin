@@ -1961,6 +1961,10 @@ class Project extends HXProject
     }
 
     var asset = new Asset(path, rename, null, embed, true);
+    if (isSwitch() && library == "videos")
+    {
+      asset.type = BINARY;
+    }
     @:nullSafety(Off)
     {
       asset.library = library ?? "default";

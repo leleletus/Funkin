@@ -37,15 +37,18 @@ class NXVideoPlayer
    * @param videoPath The original video path (e.g. "assets/videos/videos/stressPicoCutscene.mkv" or "stressPicoCutscene")
    * @param onComplete Callback invoked when the cutscene finishes or is skipped.
    * @return `true` if a converted cutscene was found and started, `false` otherwise.
-   */
-  static function hasAsset(path:String, type:openfl.utils.AssetType):Bool
+  static function hasAsset(path:String, ?type:openfl.utils.AssetType):Bool
   {
     try
     {
-      if (Assets.exists('videos:' + path, type) || Assets.exists(path, type)) return true;
       #if sys
       if (sys.FileSystem.exists('romfs:/' + path) || sys.FileSystem.exists(path)) return true;
       #end
+      if (type != null)
+      {
+        if (Assets.exists('videos:' + path, type) || Assets.exists(path, type)) return true;
+      }
+      if (Assets.exists('videos:' + path) || Assets.exists(path)) return true;
     }
     catch (e:Dynamic) {}
     return false;
@@ -55,12 +58,22 @@ class NXVideoPlayer
   {
     try
     {
-      if (Assets.exists('videos:' + path, IMAGE)) return Assets.getBitmapData('videos:' + path);
-      if (Assets.exists(path, IMAGE)) return Assets.getBitmapData(path);
       #if sys
       if (sys.FileSystem.exists('romfs:/' + path)) return openfl.display.BitmapData.fromFile('romfs:/' + path);
       if (sys.FileSystem.exists(path)) return openfl.display.BitmapData.fromFile(path);
       #end
+      if (Assets.exists('videos:' + path, IMAGE)) return Assets.getBitmapData('videos:' + path);
+      if (Assets.exists(path, IMAGE)) return Assets.getBitmapData(path);
+      if (Assets.exists('videos:' + path))
+      {
+        var bytes = Assets.getBytes('videos:' + path);
+        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
+      }
+      if (Assets.exists(path))
+      {
+        var bytes = Assets.getBytes(path);
+        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
+      }
     }
     catch (e:Dynamic) {}
     return null;
@@ -70,12 +83,14 @@ class NXVideoPlayer
   {
     try
     {
-      if (Assets.exists('videos:' + path, TEXT)) return Assets.getText('videos:' + path);
-      if (Assets.exists(path, TEXT)) return Assets.getText(path);
       #if sys
       if (sys.FileSystem.exists('romfs:/' + path)) return sys.io.File.getContent('romfs:/' + path);
       if (sys.FileSystem.exists(path)) return sys.io.File.getContent(path);
       #end
+      if (Assets.exists('videos:' + path, TEXT)) return Assets.getText('videos:' + path);
+      if (Assets.exists(path, TEXT)) return Assets.getText(path);
+      if (Assets.exists('videos:' + path)) return Assets.getText('videos:' + path);
+      if (Assets.exists(path)) return Assets.getText(path);
     }
     catch (e:Dynamic) {}
     return null;
@@ -207,6 +222,12 @@ class NXVideoPlayer
         try
         {
           var audioKey:String = Assets.exists('videos:assets/videos/converted/$videoName.ogg') ? 'videos:assets/videos/converted/$videoName.ogg' : 'assets/videos/converted/$videoName.ogg';
+          #if sys
+          if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.ogg'))
+          {
+            audioKey = 'romfs:/assets/videos/converted/$videoName.ogg';
+          }
+          #end
           currentAudio = FunkinSound.load(Paths.file(audioKey), 1.0, false, true, false, false, finishCutscene, null, true);
           if (currentAudio != null)
           {
