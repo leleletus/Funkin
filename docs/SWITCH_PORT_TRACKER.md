@@ -17,7 +17,8 @@ Documento maestro de trazabilidad, control de versiones y especificación técni
 | **Build 4** | `feature/switch-fixes-and-perf` | `0a6324ec1` | Roto (Regresiones) | Crashes por scripts `.hxc`, pantalla blanca en Blazin', sustains a 2x velocidad de corte. |
 | **Build 5** | `v0.8.1-nx-preview-4` | `46e35c859` | **Validado en Hardware Real (Éxito)** | 100% erradicación de errores `.hxc`, sustains perfectos (manual y Botplay universal en Bopeebo), shaders de lluvia y reflejos activos y visibles en Philly Streets, eliminación de pantalla blanca en Blazin', controles L3/R3/[A] con total estabilidad. |
 | **Build 6** | `v0.8.1-nx-preview-5` | `a621511f0` | **Inestable (Regresión de memoria)** | Purga agresiva destructiva (`purgeVRAMAggressive()`) provocó colapsos en `FlxBar` (UI de salud destruida) y excepciones en scripts de Polymod (`backcard-bf.hxc`, `sortedLetters`). |
-| **Build 7 (Actual)**| `v0.8.1-nx-preview-6` | `c50d3862d` | **Validado en Compilación / Release** | Erradicación de purga ciega destructiva; implementación de política de retención selectiva (protección de UI `FlxBar`, fuentes, íconos y Polymod `backcards`/`sortedLetters`). Submenú de configuración dedicado "Nintendo Switch" con toggle de Loading Screen (default OFF para 1:1 con PC). Telemetría real de memoria física de Horizon OS mediante `svcGetInfo` (`GC: [Haxe MB] | SYS: [used / total MB]`). |
+| **Build 7** | `v0.8.1-nx-preview-6` | `c50d3862d` | Validado en Hardware (Con hallazgos) | UI y Polymod 100% estables, pantalla de carga intermedia erradicada. Sin embargo, retención excesiva de escenarios (Weekend 1) provocó saturación de heap y crash por OOM en 2Hot/Freeplay. |
+| **Build 8 (Actual)** | `v0.8.1-nx-preview-7` | `7194358b5` | **Validado en Hardware / Release** | Purga selectiva de escenarios pesados (`purgeStageCache`), remoción del bypass de retención `persist=true`, consolidación de heap Horizon OS (`cpp.vm.Gc.run(true)` / `compact()`), watchdog de audio contra softlock por parada anómala al final de canción, reorganización de menús de Switch y defaults de test (Advanced HUD, Botplay activo, Loading Screen false). |
 
 ---
 
@@ -26,7 +27,7 @@ Documento maestro de trazabilidad, control de versiones y especificación técni
 Los siguientes componentes han sido exhaustivamente verificados en hardware real de Nintendo Switch y **NO DEBEN SER ALTERADOS NI REFACTORIZADOS**:
 
 ### Controles y Mapeo NX
-- **L3 (Stick Izquierdo Push):** Cicla el overlay de rendimiento (`NXPerformanceHUD`: Off -> Simple -> Advanced) con debounce real de 250ms.
+- **L3 (Stick Izquierdo Push):** Cicla el overlay de rendimiento nativo (`Preferences.debugDisplay`: Off -> Simple -> Advanced) con debounce real de 250ms.
 - **R3 (Stick Derecho Push):**
   - En partida (`PlayState`): Alterna Botplay de forma inmediata sin corromper la entrada del jugador.
   - En Freeplay (`FreeplayState`): Abre selector de personaje (`CharSelectSubState`).
@@ -36,21 +37,28 @@ Los siguientes componentes han sido exhaustivamente verificados en hardware real
 ### Menús y Transiciones
 - **Story Menu -> PlayState:** Transición fluida sin corrupción de datos de notas.
 - **LoadingState:** Pantalla de carga opcional gobernada por `Preferences.switchShowLoadingScreen` (por defecto `false` para transiciones 1:1 nativas idénticas a PC).
-- **Submenú "Nintendo Switch":** Submenú dedicado accesible desde las opciones del juego con 6 toggles principales (Performance HUD, Ghost Tapping, Botplay, Stage Shaders, Show Loading Screen, Verbose Audio Telemetry) más controles de resolución (720p, Docked, 540p), Anti-Aliasing y Note Splashes.
+- **Submenú "Nintendo Switch":** Submenú dedicado con exclusivamente 5 ajustes de hardware: `Stage Shaders`, `Show Loading Screen` (default false), `Verbose Audio Telemetry`, `Resolution Mode` (720p, Docked, 540p) y `Note Splashes`.
+- **Menú General de Opciones:** `Ghost Tapping` preservado en Jugabilidad (Gameplay) general; Performance HUD unificado con `Debug Display` nativo.
 
-### Política de Memoria y Retención de Assets
+### Política de Memoria y Purga Selectiva de Escenarios
 - **NUNCA destruir cachés globales a ciegas:** Se erradicó `purgeVRAMAggressive()`, `openfl.Assets.cache.clear()` y el vaciado indiscriminado de `FlxG.bitmap._cache`.
 - **Protección estricta de UI y Scripts:** `FunkinMemory.isProtectedGraphic()` resguarda permanentemente:
   - Elementos de UI (`healthBar`, `icons`, `fonts`, `ui/`, `flixel/`).
   - Bitmaps dinámicos generados por `FlxBar` (`flixel.ui.FlxBar`).
   - Assets y spritesheets requeridos por scripts de Polymod (`assets/scripts/`, `backcards/`, `sortedLetters`).
-  - Bitmaps marcados con `persist = true`.
-- **Descarga selectiva:** Solo se purgan texturas pesadas con prefijos de escenarios anteriores (`phillyStreets/`, `phillyBlazin/`, etc.) al desmontar por completo la escena previa tras las transiciones de salida.
-- **Recolección de basura no destructiva:** `cpp.vm.Gc.run(false)` sin desmantelar descriptores gráficos activos.
+- **Purga Selectiva de Escenarios (`FunkinMemory.purgeStageCache`):**
+  - Identifica y destruye bitmaps pesados asociados a escenarios concluidos (`philly`, `stage`, `erect`, `spraycan`, `Spraypaint`, `weekend1`, etc.) al terminar canción o salir de semana.
+  - Asegura que al salir de Story Mode al menú principal o Freeplay, los recursos gráficos de Weekend 1 queden 100% liberados de la GPU/VRAM antes de montar `FreeplayState`.
+  - Invocación obligatoria de `cpp.vm.Gc.run(true)` y `cpp.vm.Gc.compact()` inmediatamente tras la purga para consolidar el heap de memoria unificada en Horizon OS.
+
+### Watchdog de Audio en PlayState
+- **Supervisión de fin de canción:** Si `!isGamePaused` y `!isInCutscene`, y la última nota del chart ya cruzó la línea de impacto hace más de 2.0 segundos, pero `FlxG.sound.music` no ha disparado `onComplete` o se detuvo anómalamente por underrun de buffer en OpenAL:
+  - Se despacha limpiamente `endSong(true)`.
+  - Evita softlocks donde el Conductor se congela y la partida queda atrapada en un bucle zombi.
 
 ### Telemetría de Sistema Real (Horizon OS)
 - **libnx `svcGetInfo`:** Consulta directa al kernel de Horizon OS mediante `InfoType_UsedMemorySize` (7) y `InfoType_TotalMemorySize` (6) con `CUR_PROCESS_HANDLE`.
-- **Overlay HUD Avanzado y Simple:** Muestra `GC: [Haxe MB] | SYS: [usedMemory / totalMemory MB]`, reportando con exactitud la memoria física real utilizada de los ~3.2 GB asignados en Title Override.
+- **Overlay HUD Avanzado y Simple:** Muestra `GC: [Haxe MB] | SYS: [usedMemory / totalMemory MB]`, reportando con exactitud la memoria física real utilizada frente al heap total mapeado por libnx con `svcSetHeapSize`.
 
 ### Shaders y Efectos Gráficos
 - **RuntimeRainShader:** Compilación y renderizado exitoso de lluvia y reflejos en Philly Streets y Philly Streets Erect sobre Tegra X1 (Mesa OpenGLES).
@@ -91,6 +99,9 @@ Los siguientes componentes han sido exhaustivamente verificados en hardware real
 | **INC-05** | Regresión Preview-5: Crash en `FlxBar.hx` y en scripts de Polymod (`backcard-bf.hxc`, `sortedLetters`). | `purgeVRAMAggressive()` destruyó indiscriminadamente `FlxG.bitmap._cache` y `openfl.Assets.cache`, eliminando bitmaps internos de `FlxBar` y spritesheets requeridos por Polymod antes de montar o durante el desmontaje de estados. | **RESUELTO:** Erradicación total de purgas ciegas. Creación de lista blanca `isProtectedGraphic` para UI, FlxBar, fuentes y Polymod. Purga selectiva no destructiva y `cpp.vm.Gc.run(false)`. |
 | **INC-06** | Auditoría y compatibilidad de rutas de videos/cinemáticas en RomFS. | En upstream, las cinemáticas de Weekend 1 y Week 7 dependen de archivos de vídeo (`.mp4`/`.mkv`) ubicados en `assets/videos/videos/`. En Switch, `FEATURE_VIDEO_PLAYBACK` no está habilitado por carecer de libvlc. `Paths.videos()` debe resolver rutas tanto anidadas como de raíz sin romper el prefijo de OpenFL. | **RESUELTO:** `Paths.videos()` ahora verifica existencia física y en RomFS de `videos/$file` y `$file`. `NXVideoPlayer` realiza omisión segura garantizada sin fugas de audio si no existen atlas convertidos (`.png`/`.xml`). Pipeline de conversión disponible en `tools/nx-tools/convert_video.py`. |
 | **INC-07** | Agrupación limpia de opciones y telemetría de memoria física real en Horizon OS. | Opciones de Switch dispersas contaminaban el menú de preferencias estándar. El contador de RAM del HUD sólo reportaba el heap de Haxe (`openfl.system.System.totalMemory`), omitiendo el consumo de texturas de GPU y buffers de OpenAL. | **RESUELTO:** Submenú dedicado "Nintendo Switch" en `SwitchSettingsMenu.hx`. Consulta directa al kernel de Switch mediante `svcGetInfo` en `NXPerformance.hx` reflejada en el HUD como `GC: [Haxe MB] | SYS: [used / total MB]`. |
+| **INC-08** | Saturación de VRAM y Crash por OOM al reentrar a Weekend 1 / 2Hot en Freeplay. | En Preview 6, `isProtectedGraphic` consideraba protegido todo asset con `persist = true`. Como `cacheTexture()` marca por defecto todos los gráficos con `persist = true`, los fondos, props y partículas pesadas de Weekend 1 (`phillyStreets`, `phillyBlazin`, `SpraycanPile`, etc.) se retuvieron indefinidamente. El valor `SYS: 3185 / 3189 MB` reflejaba el heap virtual mapeado por libnx con `svcSetHeapSize`, dejando margen nulo ante picos de asignación de GPU. | **RESUELTO:** Implementado `FunkinMemory.purgeStageCache(stageId)` que destruye explícitamente bitmaps de escenarios concluidos sin tocar UI ni Polymod. Eliminada la comprobación `if (obj.persist) return true;` para assets de escenario. Invocación de `cpp.vm.Gc.run(true)` y `cpp.vm.Gc.compact()` para consolidar el heap de memoria unificada. |
+| **INC-09** | Softlock zombi por detención anómala de streaming OpenAL al final de canciones. | En ocasiones, tras la última nota, OpenAL no disparaba `onComplete` o sufría un corte por underrun de buffer, congelando el avance del Conductor e impidiendo la transición a `ResultState` o a la siguiente canción. | **RESUELTO:** Implementado watchdog en `PlayState.hx:update()`. Si han transcurrido > 2.0s desde que la última nota del chart cruzó la línea de impacto (`lastChartNoteTime`) y la música se encuentra detenida o no dispara `onComplete`, se invoca limpiamente `endSong(true)`. |
+| **INC-10** | Duplicación de opciones y falta de defaults optimizados para testing en Switch. | Opciones duplicadas entre menús y necesidad de encender manualmente HUD y Botplay en cada sesión de prueba. | **RESUELTO:** Reorganizado `SwitchSettingsMenu.hx` limitándolo a 5 ajustes de hardware. Ghost Tapping conservado en Gameplay general. Defaults para builds de prueba: `debugDisplay = "Advanced"`, `botplay = true`, `switchShowLoadingScreen = false`. |
 
 ---
 
