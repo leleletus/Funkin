@@ -113,8 +113,7 @@ class FunkinMemory
    */
   public static function isProtectedGraphic(key:String, obj:Null<FlxGraphic>):Bool
   {
-    if (key == null || obj == null) return true;
-    if (obj.persist) return true;
+    if (key == null) return true;
     if (permanentCachedTextures.exists(key)) return true;
 
     // Resguardar fuentes
@@ -130,6 +129,89 @@ class FunkinMemory
     if (key.contains("scripts/") || key.contains("backcards/") || key.contains("sortedLetters")) return true;
 
     return false;
+  }
+
+  /**
+   * Selectively purges graphics associated with a specific stage (or all previous stages and temporary props)
+   * while safeguarding UI (healthBar, icons, fonts, ui/), FlxBar, and Polymod scripts.
+   * Runs Gc.run(true) and Gc.compact() to consolidate unified memory on Switch.
+   * @param stageId Optional stage ID to purge. If null, purges all previous stages, cutscenes, and temporary characters.
+   */
+  public static function purgeStageCache(?stageId:String):Void
+  {
+    @:privateAccess
+    if (FlxG.bitmap._cache == null) return;
+
+    var keysToPurge:Array<String> = [];
+
+    @:privateAccess
+    for (key in FlxG.bitmap._cache.keys())
+    {
+      var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
+      if (obj == null || isProtectedGraphic(key, obj)) continue;
+
+      var shouldPurge:Bool = false;
+
+      // Coincidencia por escenario específico
+      if (stageId != null && stageId.length > 0 && key.toLowerCase().contains(stageId.toLowerCase()))
+      {
+        shouldPurge = true;
+      }
+
+      // Prefijos y patrones de escenarios pesados y props temporales
+      if (!shouldPurge)
+      {
+        if (key.contains("philly")
+          || (key.contains("stage") && !key.contains("StageProp") && !key.contains("Stage"))
+          || key.contains("erect")
+          || key.contains("spraycan")
+          || key.contains("Spraypaint")
+          || key.contains("CanImpact")
+          || key.contains("wked1_cutscene")
+          || (key.contains("weekend1") && !key.contains("fonts") && !key.contains("ui"))
+          || key.contains("tankmanBattlefield")
+          || key.contains("school")
+          || key.contains("limo")
+          || key.contains("mall")
+          || key.contains("spookyMansion"))
+        {
+          shouldPurge = true;
+        }
+      }
+
+      // Si stageId es null (salida completa de gameplay/semana), purgar también personajes temporales
+      if (!shouldPurge && stageId == null)
+      {
+        if (key.contains("characters/") || key.contains("charSelect/"))
+        {
+          shouldPurge = true;
+        }
+      }
+
+      if (shouldPurge)
+      {
+        keysToPurge.push(key);
+      }
+    }
+
+    for (key in keysToPurge)
+    {
+      var graphic:Null<FlxGraphic> = FlxG.bitmap.get(key);
+      if (graphic != null)
+      {
+        FlxG.bitmap.remove(graphic);
+        graphic.persist = false;
+        graphic.destroy();
+      }
+      currentCachedTextures.remove(key);
+      previousCachedTextures.remove(key);
+      openfl.Assets.cache.removeBitmapData(key);
+    }
+
+    #if (cpp || neko || hl)
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    #end
   }
 
   /**

@@ -735,6 +735,9 @@ class StoryMenuState extends MusicBeatState
     if (exitingMenu || selectedLevel || (stickerSubState?.switchingState ?? false)) return;
 
     exitingMenu = true;
+    #if switch
+    funkin.FunkinMemory.purgeStageCache(null);
+    #end
     FlxG.keys.enabled = false;
     FlxG.switchState(() -> new MainMenuState());
     FunkinSound.playOnce(Paths.sound('cancelMenu'));

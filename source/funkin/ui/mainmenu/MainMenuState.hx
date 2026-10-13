@@ -151,12 +151,19 @@ class MainMenuState extends MusicBeatState
     createMenuItem('storymode', 'mainmenu/storymode', () -> {
       FlxG.signals.preStateSwitch.addOnce(() -> {
         funkin.FunkinMemory.clearFreeplay();
+        #if switch
+        funkin.FunkinMemory.purgeStageCache(null);
+        #else
         funkin.FunkinMemory.purgeCache();
+        #end
       });
       startExitState(() -> new StoryMenuState());
     });
 
     createMenuItem('freeplay', 'mainmenu/freeplay', function() {
+      #if switch
+      funkin.FunkinMemory.purgeStageCache(null);
+      #end
       persistentDraw = true;
       persistentUpdate = false;
       rememberedSelectedIndex = menuItems?.selectedIndex ?? 0;

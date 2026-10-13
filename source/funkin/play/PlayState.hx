@@ -1977,7 +1977,12 @@ class PlayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
+    var stageIdToPurge:Null<String> = (currentStage != null) ? currentStage.id : null;
     performCleanup();
+
+    #if switch
+    funkin.FunkinMemory.purgeStageCache(stageIdToPurge);
+    #end
 
     #if mobile
     // Syncing allowScreenTimeout with Preferences option.
