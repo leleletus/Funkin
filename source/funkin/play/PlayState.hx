@@ -2639,11 +2639,12 @@ class PlayState extends MusicBeatSubState
     isInCutscene = false;
 
     // Pre-carga y pre-buffering de music y vocals durante el conteo para evitar freeze en startSong
-    if (!overrideMusic && !isGamePaused && currentChart != null)
+    if (!overrideMusic && !isGamePaused)
     {
-      if (FlxG.sound.music == null || !FlxG.sound.music.playing)
+      var chart = currentChart;
+      if (chart != null && (FlxG.sound.music == null || !FlxG.sound.music.playing))
       {
-        currentChart.playInst(1.0, currentInstrumental, false);
+        chart.playInst(1.0, currentInstrumental, false);
       }
       if (FlxG.sound.music != null)
       {
@@ -2725,11 +2726,12 @@ class PlayState extends MusicBeatSubState
     if (hitbox != null) hitbox.visible = true;
     #end
 
-    if (!overrideMusic && !isGamePaused && currentChart != null)
+    if (!overrideMusic && !isGamePaused)
     {
-      if (FlxG.sound.music == null)
+      var chart = currentChart;
+      if (chart != null && FlxG.sound.music == null)
       {
-        currentChart.playInst(1.0, currentInstrumental, false);
+        chart.playInst(1.0, currentInstrumental, false);
       }
     }
 

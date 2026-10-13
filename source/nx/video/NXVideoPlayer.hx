@@ -220,10 +220,20 @@ class NXVideoPlayer
       }
 
       cutsceneSpr.animation.play('play');
-      cutsceneSpr.animation.finishCallback = function(_)
+      if (cutsceneSpr.animation.onFinish != null)
       {
-        if (!hasAudio) finishCutscene();
-      };
+        cutsceneSpr.animation.onFinish.add(function(_)
+        {
+          if (!hasAudio) finishCutscene();
+        });
+      }
+      else
+      {
+        cutsceneSpr.animation.finishCallback = function(_)
+        {
+          if (!hasAudio) finishCutscene();
+        };
+      }
 
       return true;
     }
