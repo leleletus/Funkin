@@ -632,6 +632,16 @@ class PlayState extends MusicBeatSubState
 
   public var isSongEnd:Bool = false;
 
+  /**
+   * Timestamp in milliseconds of the last note in the chart.
+   */
+  var lastChartNoteTime:Float = 0.0;
+
+  /**
+   * Watchdog timer for completing the song if audio stops or fails to trigger onComplete.
+   */
+  var postSongWatchdogTimer:Float = 0.0;
+
   #if mobile
   /**
    * The pause button for the game, only appears in Mobile targets.
@@ -1198,22 +1208,43 @@ class PlayState extends MusicBeatSubState
         }
       }
 
-      #if switch
-      // Watchdog seguro: Si OpenAL llega a AL_STOPPED y todas las notas han terminado sin emitir onComplete
-      if (!isSongEnd && !startingSong && !isGamePaused && FlxG.sound.music != null && !FlxG.sound.music.playing)
+      // Audio Watchdog: Evitar softlock cuando el audio se detiene o falla onComplete
+      if (!isSongEnd && !isGamePaused && !isInCutscene && !startingSong && lastChartNoteTime > 0)
       {
-        var alState = nx.NXAudioDiagnostics.getOpenALSourceState(FlxG.sound.music);
-        var notesCleared = (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0);
-        if (alState == "Stopped" && notesCleared && Conductor.instance.songPosition > 5000)
+        var noteCrossedThreshold:Bool = (Conductor.instance.songPosition >= (lastChartNoteTime + 2000.0));
+        var musicAnomaly:Bool = false;
+
+        if (FlxG.sound.music == null || !FlxG.sound.music.playing)
         {
-          if (mayPauseGame)
+          musicAnomaly = true;
+        }
+        #if switch
+        else
+        {
+          var alState = nx.NXAudioDiagnostics.getOpenALSourceState(FlxG.sound.music);
+          if (alState == "Stopped" || alState == "Paused")
           {
-            trace('PlayState: Music reached AL_STOPPED and notes cleared. Completing song safely via watchdog...');
-            endSong(skipEndingTransition);
+            musicAnomaly = true;
           }
         }
+        #end
+
+        var notesCleared:Bool = (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0);
+
+        if (noteCrossedThreshold || (notesCleared && musicAnomaly && Conductor.instance.songPosition >= lastChartNoteTime))
+        {
+          postSongWatchdogTimer += elapsed;
+          if (postSongWatchdogTimer >= 2.0 || noteCrossedThreshold)
+          {
+            trace('PlayState Audio Watchdog: Ultima nota cruzada hace >2.0s y musica anomala/sin onComplete. Despachando endSong(true)...');
+            endSong(true);
+          }
+        }
+        else
+        {
+          postSongWatchdogTimer = 0.0;
+        }
       }
-      #end
     }
 
     var pauseButtonCheck:Bool = false;
@@ -2530,8 +2561,14 @@ class PlayState extends MusicBeatSubState
     var playerNoteData:Array<SongNoteData> = [];
     var opponentNoteData:Array<SongNoteData> = [];
 
+    lastChartNoteTime = 0.0;
+    postSongWatchdogTimer = 0.0;
+
     for (songNote in builtNoteData)
     {
+      var noteEndTime:Float = songNote.time + (songNote.length > 0 ? songNote.length : 0.0);
+      if (noteEndTime > lastChartNoteTime) lastChartNoteTime = noteEndTime;
+
       var strumTime:Float = songNote.time;
       if (strumTime < startTime) continue; // Skip notes that are before the start time.
 
