@@ -93,7 +93,7 @@ class OptionsState extends MusicBeatState
       #end
       saveData.onExit.add(optionsCodex.switchPage.bind(Options));
       #if switch
-      switchSettings.onExit.add(optionsCodex.switchPage.bind(Options));
+      switchSettings.onExit.add(optionsCodex.switchPage.bind(Preferences));
       #end
     }
     else
@@ -177,9 +177,6 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     add(items = new TextMenuList());
 
     createItem("PREFERENCES", function() codex.switchPage(Preferences));
-    #if switch
-    createItem("NINTENDO SWITCH", function() codex.switchPage(SwitchSettings));
-    #end
     #if mobile
     if (ControlsHandler.hasExternalInputDevice)
     #end
