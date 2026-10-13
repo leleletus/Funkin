@@ -2638,6 +2638,36 @@ class PlayState extends MusicBeatSubState
 
     isInCutscene = false;
 
+    // Pre-carga y pre-buffering de music y vocals durante el conteo para evitar freeze en startSong
+    if (!overrideMusic && !isGamePaused && currentChart != null)
+    {
+      if (FlxG.sound.music == null || !FlxG.sound.music.playing)
+      {
+        currentChart.playInst(1.0, currentInstrumental, false);
+      }
+      if (FlxG.sound.music != null)
+      {
+        FlxG.sound.music.pause();
+        FlxG.sound.music.time = Math.max(0, startTimestamp);
+        FlxG.sound.music.pitch = playbackRate;
+        FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
+        FlxG.sound.music.onComplete = function() {
+          if (mayPauseGame) endSong(skipEndingTransition);
+        };
+      }
+    }
+
+    if (vocals != null)
+    {
+      if (!members.contains(vocals)) add(vocals);
+      vocals.pitch = playbackRate;
+      vocals.playerVolume = (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0;
+      vocals.opponentVolume = (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0;
+      vocals.play();
+      vocals.pause();
+      vocals.time = Math.max(0, startTimestamp);
+    }
+
     // TODO: Maybe tween in the camera after any cutscenes.
     camHUD.visible = true;
   }
@@ -2697,7 +2727,10 @@ class PlayState extends MusicBeatSubState
 
     if (!overrideMusic && !isGamePaused && currentChart != null)
     {
-      currentChart?.playInst(1.0, currentInstrumental, false);
+      if (FlxG.sound.music == null)
+      {
+        currentChart.playInst(1.0, currentInstrumental, false);
+      }
     }
 
     if (FlxG.sound.music == null)
@@ -2706,12 +2739,14 @@ class PlayState extends MusicBeatSubState
       return;
     }
 
-    FlxG.sound.music.onComplete = function() {
-      if (mayPauseGame) endSong(skipEndingTransition);
-    };
+    if (FlxG.sound.music.onComplete == null)
+    {
+      FlxG.sound.music.onComplete = function() {
+        if (mayPauseGame) endSong(skipEndingTransition);
+      };
+    }
 
-    FlxG.sound.music.pause();
-    FlxG.sound.music.time = startTimestamp;
+    FlxG.sound.music.time = Math.max(0, startTimestamp);
     FlxG.sound.music.pitch = playbackRate;
 
     if (Preferences.subtitles)
