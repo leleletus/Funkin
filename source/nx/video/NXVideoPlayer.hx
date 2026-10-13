@@ -37,6 +37,7 @@ class NXVideoPlayer
    * @param videoPath The original video path (e.g. "assets/videos/videos/stressPicoCutscene.mkv" or "stressPicoCutscene")
    * @param onComplete Callback invoked when the cutscene finishes or is skipped.
    * @return `true` if a converted cutscene was found and started, `false` otherwise.
+   */
   static function hasAsset(path:String, ?type:openfl.utils.AssetType):Bool
   {
     try
