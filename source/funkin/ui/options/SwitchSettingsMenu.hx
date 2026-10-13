@@ -102,18 +102,6 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
 
   function createPrefItems():Void
   {
-    createPrefItemCheckbox('Performance HUD', 'Muestra el monitor de FPS y memoria en pantalla (tambien alternable con L3).', function(value:Bool):Void {
-      Preferences.switchShowPerfHud = value;
-    }, Preferences.switchShowPerfHud);
-
-    createPrefItemCheckbox('Ghost Tapping', 'Permite presionar flechas en vacio sin penalizaciones de fallo ni perder combo.', function(value:Bool):Void {
-      Preferences.ghostTapping = value;
-    }, Preferences.ghostTapping);
-
-    createPrefItemCheckbox('Botplay', 'Activa la reproduccion automatica por la maquina (tambien alternable con R3).', function(value:Bool):Void {
-      Preferences.botplay = value;
-    }, Preferences.botplay);
-
     createPrefItemCheckbox('Stage Shaders', 'Habilita efectos visuales avanzados y shaders de lluvia/escenario en Switch.', function(value:Bool):Void {
       Preferences.switchEnableShaders = value;
     }, Preferences.switchEnableShaders);
@@ -138,10 +126,6 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
         case "Docked": "Dinamico / Docked";
         default: "720p Fijo";
       });
-
-    createPrefItemCheckbox('Anti-Aliasing', 'Suavizado de bordes en sprites. Desactivado reduce sobrecarga de fillrate en GPU.', function(value:Bool):Void {
-      Preferences.switchAntialiasing = value;
-    }, Preferences.switchAntialiasing);
 
     createPrefItemCheckbox('Note Splashes', 'Efectos de particulas al golpear notas Sick. Desactivar reduce llamadas de dibujado.', function(value:Bool):Void {
       Preferences.switchNoteSplashes = value;

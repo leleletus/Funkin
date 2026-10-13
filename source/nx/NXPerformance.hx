@@ -100,14 +100,14 @@ class NXPerformance
       if (comboHoldTimer >= COMBO_HOLD_DURATION && !comboTriggered)
       {
         comboTriggered = true;
-        Preferences.switchShowPerfHud = !Preferences.switchShowPerfHud;
-        updatePerfHud();
+        var nextMode:DebugDisplayMode = (Preferences.debugDisplay == DebugDisplayMode.Off) ? DebugDisplayMode.Advanced : DebugDisplayMode.Off;
+        Preferences.debugDisplay = nextMode;
         try
         {
           funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
         }
         catch (e:Dynamic) {}
-        trace('Switch: Toggled Performance HUD via PLUS+R combo: ' + Preferences.switchShowPerfHud);
+        trace('Switch: Toggled Performance HUD via PLUS+R combo to: ' + Preferences.debugDisplay);
       }
     }
     else
@@ -172,19 +172,9 @@ class NXPerformance
    */
   public static function updatePerfHud():Void
   {
-    if (FlxG.game == null || FlxG.game.parent == null) return;
-
-    if (Preferences.switchShowPerfHud)
-    {
-      if (Preferences.debugDisplay == DebugDisplayMode.Off)
-      {
-        Preferences.debugDisplay = DebugDisplayMode.Simple;
-      }
-    }
-    else
-    {
-      Preferences.debugDisplay = DebugDisplayMode.Off;
-    }
+    #if switch
+    Preferences.setDebugDisplayMode(Preferences.debugDisplay);
+    #end
   }
 
   /**

@@ -148,7 +148,7 @@ class Preferences
     return DebugDisplayMode.Off;
     #end
 
-    return Save?.instance?.options?.debugDisplay ?? 'Off';
+    return Save?.instance?.options?.debugDisplay ?? #if switch DebugDisplayMode.Advanced #else 'Off' #end;
   }
 
   static function set_debugDisplay(value:DebugDisplayMode):DebugDisplayMode
@@ -480,6 +480,19 @@ class Preferences
    */
   public static function init():Void
   {
+    #if switch
+    // Defaults for test builds: Advanced Debug Display, Botplay active, Direct loading
+    if (Save.instance != null && Save.instance.options != null)
+    {
+      if (Save.instance.options.debugDisplay == null)
+        Save.instance.options.debugDisplay = DebugDisplayMode.Advanced;
+      if (Save.instance.options.botplay == null)
+        Save.instance.options.botplay = true;
+      if (Save.instance.options.switchShowLoadingScreen == null)
+        Save.instance.options.switchShowLoadingScreen = false;
+    }
+    #end
+
     // Apply the autoPause setting (enables automatic pausing on focus lost).
     FlxG.autoPause = Preferences.autoPause;
 
@@ -780,7 +793,7 @@ class Preferences
 
   static function get_botplay():Bool
   {
-    return Save?.instance?.options?.botplay ?? false;
+    return Save?.instance?.options?.botplay ?? #if switch true #else false #end;
   }
 
   static function set_botplay(value:Bool):Bool
