@@ -1517,11 +1517,12 @@ class Project extends HXProject
     addAssetLibrary("shared", shouldEmbed, shouldPreload);
     addAssetPath("assets/shared", "assets/shared", "shared", ["*"], exclude, shouldEmbed, "assets");
 
-    if (FEATURE_VIDEO_PLAYBACK.isEnabled(this))
+    if (FEATURE_VIDEO_PLAYBACK.isEnabled(this) || isSwitch())
     {
       var shouldEmbedVideos = false;
       addAssetLibrary("videos", shouldEmbedVideos, shouldPreload);
-      addAssetPath("assets/videos", "assets/videos", "videos", ["*"], exclude, shouldEmbedVideos, "assets");
+      var videoExclude = isSwitch() ? exclude.concat(["*.mp4", "*.mkv", "*.webm"]) : exclude;
+      addAssetPath("assets/videos", "assets/videos", "videos", ["*"], videoExclude, shouldEmbedVideos, "assets");
     }
 
     // Level asset libraries

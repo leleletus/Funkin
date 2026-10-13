@@ -75,7 +75,7 @@ def extract_frames(input_file: str, temp_dir: str, fps: int = 24, width: int = 1
     return frames
 
 
-def pack_sparrow_atlas(temp_dir: str, frames: list, output_base: str, width: int = 1280, height: int = 720, max_atlas_size: int = 4096):
+def pack_sparrow_atlas(temp_dir: str, frames: list, output_base: str, width: int = 1280, height: int = 720, max_atlas_size: int = 4096, fps: int = 24):
     print(f"[*] Empaquetando {len(frames)} fotogramas en hoja de sprites Sparrow...")
 
     cols = max_atlas_size // width
@@ -106,6 +106,7 @@ def pack_sparrow_atlas(temp_dir: str, frames: list, output_base: str, width: int
         root_xml = ET.Element("TextureAtlas")
         sheet_filename = f"{os.path.basename(output_base)}.png" if total_sheets == 1 else f"{os.path.basename(output_base)}_{sheet_index}.png"
         root_xml.set("imagePath", sheet_filename)
+        root_xml.set("fps", str(fps))
 
         for i, frame_name in enumerate(sheet_frames):
             frame_path = os.path.join(temp_dir, frame_name)
@@ -166,7 +167,7 @@ def main():
 
     with tempfile.TemporaryDirectory() as temp_dir:
         frames = extract_frames(args.input, temp_dir, args.fps, args.width, args.height)
-        pack_sparrow_atlas(temp_dir, frames, args.output, args.width, args.height)
+        pack_sparrow_atlas(temp_dir, frames, args.output, args.width, args.height, fps=args.fps)
 
     print("\n[✓] ¡Conversión completada con éxito!")
     print(f"    Archivos generados en: {os.path.dirname(os.path.abspath(args.output))}")
