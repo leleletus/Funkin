@@ -2013,6 +2013,9 @@ class PlayState extends MusicBeatSubState
 
     #if switch
     funkin.FunkinMemory.purgeStageCache(stageIdToPurge);
+    funkin.FunkinMemory.purgeCache(true);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
     #end
 
     #if mobile

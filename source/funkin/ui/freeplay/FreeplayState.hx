@@ -358,6 +358,13 @@ class FreeplayState extends MusicBeatSubState
 
   override function create():Void
   {
+    #if switch
+    funkin.FunkinMemory.purgeStageCache();
+    funkin.FunkinMemory.purgeCache(true);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    #end
+
     super.create();
 
     FlxG.state.persistentUpdate = false;
@@ -3068,6 +3075,13 @@ class FreeplayState extends MusicBeatSubState
    */
   public static function build(?params:FreeplayStateParams, ?stickers:StickerSubState):MusicBeatState
   {
+    #if switch
+    funkin.FunkinMemory.purgeStageCache();
+    funkin.FunkinMemory.purgeCache(true);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    #end
+
     // Since CUTOUT_WIDTH is static it might retain some old inccrect values so we update it before loading freeplay
     CUTOUT_WIDTH = FullScreenScaleMode.gameCutoutSize.x / 1.5;
     var result:MainMenuState;

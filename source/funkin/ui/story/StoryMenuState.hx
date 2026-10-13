@@ -126,6 +126,13 @@ class StoryMenuState extends MusicBeatState
 
   override function create():Void
   {
+    #if switch
+    funkin.FunkinMemory.purgeStageCache();
+    funkin.FunkinMemory.purgeCache(true);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    #end
+
     super.create();
 
     levelList = LevelRegistry.instance.listSortedLevelIds();
