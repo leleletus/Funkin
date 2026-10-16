@@ -31,6 +31,9 @@ class FunkinMemory
     "/characters",
     "/charSelect",
     "/results",
+    "storymenu",
+    "freeplay",
+    "stages",
     "phillyStreets/",
     "phillyBlazin/",
     "phillyTrain",
@@ -418,7 +421,7 @@ class FunkinMemory
       for (key in keysToCheck)
       {
         var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
-        if (obj == null || isProtectedGraphic(key, obj))
+        if (obj == null || isProtectedGraphic(key, obj) || key.contains("stickers"))
         {
           continue;
         }

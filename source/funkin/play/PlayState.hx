@@ -722,7 +722,7 @@ class PlayState extends MusicBeatSubState
    * The threshold for resyncing the song.
    * If the vocals deviate from the instrumental by more than this amount, then `resyncVocals()` will be called.
    */
-  static final RESYNC_THRESHOLD:Float = 40;
+  static final RESYNC_THRESHOLD:Float = 85;
 
   /**
    * The threshold for how much the conductor lerp can drift from the music.
@@ -1958,12 +1958,15 @@ class PlayState extends MusicBeatSubState
         @:nullSafety(Off)
         @:privateAccess // todo: maybe make the groups public :thinking:
         {
+          var instTime:Float = FlxG.sound.music.time;
           vocals.playerVoices?.forEachAlive(function(voice:FunkinSound) {
+            if (!voice.playing || instTime >= (voice.length - 150)) return;
             var currentRawVoiceTime:Float = voice.time + vocals.playerVoicesOffset;
             if (Math.abs(currentRawVoiceTime - correctSync) > Math.abs(playerVoicesError)) playerVoicesError = currentRawVoiceTime - correctSync;
           });
 
           vocals.opponentVoices?.forEachAlive(function(voice:FunkinSound) {
+            if (!voice.playing || instTime >= (voice.length - 150)) return;
             var currentRawVoiceTime:Float = voice.time + vocals.opponentVoicesOffset;
             if (Math.abs(currentRawVoiceTime - correctSync) > Math.abs(opponentVoicesError)) opponentVoicesError = currentRawVoiceTime - correctSync;
           });
@@ -2831,18 +2834,14 @@ class PlayState extends MusicBeatSubState
       return;
     }
 
-    var timeToPlayAt:Float = Math.min(FlxG.sound.music.length,
-      Math.max(Math.min(Conductor.instance.combinedOffset, 0), Conductor.instance.songPosition) - Conductor.instance.combinedOffset);
-    trace('Resyncing vocals to ${timeToPlayAt}');
-
-    FlxG.sound.music.pause();
-    vocals.pause();
-
-    FlxG.sound.music.time = timeToPlayAt;
-    FlxG.sound.music.play(false, timeToPlayAt);
-
-    vocals.time = timeToPlayAt;
-    vocals.play(false, timeToPlayAt);
+    var vocalTargetTime:Float = FlxG.sound.music.time;
+    if (vocalTargetTime >= 0 && vocalTargetTime < FlxG.sound.music.length)
+    {
+      trace('Resyncing vocals to ${vocalTargetTime}');
+      vocals.pause();
+      vocals.time = vocalTargetTime;
+      vocals.play(false, vocalTargetTime);
+    }
   }
 
   /**
@@ -4103,7 +4102,18 @@ class PlayState extends MusicBeatSubState
       }
 
     persistentUpdate = false;
-    vocals?.stop();
+    if (vocals != null)
+    {
+      vocals.stop();
+      vocals.destroy();
+      vocals = null;
+    }
+    if (currentStage != null)
+    {
+      remove(currentStage);
+      currentStage.kill();
+      currentStage = null;
+    }
     camHUD.alpha = 1;
 
     var talliesToUse:Tallies = PlayStatePlaylist.isStoryMode ? Highscore.talliesLevel : Highscore.tallies;

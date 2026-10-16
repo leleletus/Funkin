@@ -146,7 +146,7 @@ class NXVideoPlayer
       if (isMultiSheet)
       {
         var sheetIdx:Int = 1;
-        while (true)
+        while (sheetIdx < 50)
         {
           var nextPng = 'assets/videos/converted/${videoName}_$sheetIdx.png';
           var nextXml = 'assets/videos/converted/${videoName}_$sheetIdx.xml';
@@ -321,8 +321,7 @@ class NXVideoPlayer
         currentSprite = null;
       }
 
-      #if switch
-      funkin.FunkinMemory.purgeCache(true);
+      #if (cpp || switch)
       cpp.vm.Gc.run(true);
       cpp.vm.Gc.compact();
       #end

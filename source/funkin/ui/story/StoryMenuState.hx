@@ -9,6 +9,7 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
 import funkin.audio.FunkinSound;
+import funkin.FunkinMemory;
 import funkin.data.story.level.LevelRegistry;
 import funkin.data.song.SongRegistry;
 import funkin.graphics.FunkinSprite;
@@ -692,6 +693,7 @@ class StoryMenuState extends MusicBeatState
             ease: FlxEase.linear,
             onComplete: function(_) {
               remove(oldBackground);
+              oldBackground.destroy();
             }
           });
 
@@ -780,5 +782,11 @@ class StoryMenuState extends MusicBeatState
         levelTitles.members[i].targetY = previousItem.targetY + (previousItem.height + 20);
       }
     }
+  }
+
+  public override function destroy():Void
+  {
+    super.destroy();
+    FunkinMemory.purgeTextureCache();
   }
 }

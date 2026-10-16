@@ -15,6 +15,7 @@ import flixel.util.FlxColor;
 import openfl.filters.ShaderFilter;
 import flixel.util.FlxTimer;
 import funkin.audio.FunkinSound;
+import funkin.FunkinMemory;
 import funkin.data.freeplay.player.PlayerRegistry;
 import funkin.ui.freeplay.dj.BaseFreeplayDJ;
 import funkin.ui.freeplay.dj.AnimateAtlasFreeplayDJ;
@@ -2224,11 +2225,11 @@ class FreeplayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
-    super.destroy();
-    // remove and destroy freeplay camera
-    FlxG.cameras.remove(funnyCam);
-    // Cancel all song preview timers just in case a preview loads after we exit.
     clearPreviews();
+    FunkinSound.emptyPartialQueue();
+    FlxG.cameras.remove(funnyCam);
+    FlxG.cameras.remove(rankCamera);
+    super.destroy();
   }
 
   function goBack():Void
@@ -2819,6 +2820,7 @@ class FreeplayState extends MusicBeatSubState
       #end
       funnyCam.fade(FlxColor.BLACK, 0.2, false, function() {
         Paths.setCurrentLevel(cap?.freeplayData?.levelId);
+        FunkinMemory.clearFreeplay();
         LoadingState.loadPlayState(
           {
             targetSong: targetSong,
