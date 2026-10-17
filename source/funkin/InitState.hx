@@ -475,6 +475,9 @@ class InitState extends FlxState
         FlxG.switchState(() -> new TitleState());
       }
       #else
+      #if switch
+      if (nx.NXAutoTest.checkAndRun()) return;
+      #end
       FlxG.switchState(() -> new TitleState());
       #end
     }

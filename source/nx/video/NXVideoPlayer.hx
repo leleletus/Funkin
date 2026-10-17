@@ -27,11 +27,108 @@ class NXVideoPlayer
   static var currentVideoName:String = "";
   static var currentSheetIndex:Int = 0;
   static var totalSheets:Int = 0;
-  static var animFps:Int = 24;
+  static var animFps:Float = 24.0;
   static var onCompleteCallback:Null<Void->Void> = null;
   static var activeBitmapData:Null<openfl.display.BitmapData> = null;
   static var activeGraphic:Null<FlxGraphic> = null;
   static var isAdvancingSheet:Bool = false;
+
+  // Sincronización A/V por reloj de audio (Frame-Sync)
+  static var sheetStartGlobalFrame:Int = 0;
+  static var currentSheetFrameCount:Int = 0;
+  static var lastValidAudioSec:Float = 0.0;
+  static var lastWallTimestamp:Float = 0.0;
+
+  // Pre-decodificación asíncrona de hojas en hilo secundario
+  #if sys
+  static var prefetchMutex:Null<sys.thread.Mutex> = null;
+  static var prefetchedSheetIndex:Int = -1;
+  static var prefetchedImage:Null<lime.graphics.Image> = null;
+  static var prefetchedXml:Null<String> = null;
+  static var isPrefetching:Bool = false;
+  #end
+
+  static function prefetchNextSheet(nextIndex:Int):Void
+  {
+    #if sys
+    if (nextIndex >= totalSheets || !isPlaying) return;
+
+    if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
+
+    prefetchMutex.acquire();
+    if (isPrefetching || prefetchedSheetIndex == nextIndex)
+    {
+      prefetchMutex.release();
+      return;
+    }
+    isPrefetching = true;
+    prefetchMutex.release();
+
+    var vidName:String = currentVideoName;
+    var sheetsTotal:Int = totalSheets;
+
+    sys.thread.Thread.create(function() {
+      // Thread-safety: Proteger todo el cuerpo en try/catch y jamás invocar OpenFL/OpenGL ni FlxG
+      try
+      {
+        var pngPath:String = (sheetsTotal > 1) ? 'assets/videos/converted/${vidName}_$nextIndex.png' : 'assets/videos/converted/$vidName.png';
+        var xmlPath:String = (sheetsTotal > 1) ? 'assets/videos/converted/${vidName}_$nextIndex.xml' : 'assets/videos/converted/$vidName.xml';
+
+        var img:Null<lime.graphics.Image> = null;
+        var romfsPng:String = 'romfs:/' + pngPath;
+        if (sys.FileSystem.exists(romfsPng))
+        {
+          var bytes = sys.io.File.getBytes(romfsPng);
+          if (bytes != null && bytes.length > 0)
+          {
+            img = lime.graphics.Image.fromBytes(bytes);
+          }
+        }
+        else if (sys.FileSystem.exists(pngPath))
+        {
+          var bytes = sys.io.File.getBytes(pngPath);
+          if (bytes != null && bytes.length > 0)
+          {
+            img = lime.graphics.Image.fromBytes(bytes);
+          }
+        }
+
+        var xmlStr:Null<String> = null;
+        var romfsXml:String = 'romfs:/' + xmlPath;
+        if (sys.FileSystem.exists(romfsXml))
+        {
+          xmlStr = sys.io.File.getContent(romfsXml);
+        }
+        else if (sys.FileSystem.exists(xmlPath))
+        {
+          xmlStr = sys.io.File.getContent(xmlPath);
+        }
+
+        if (prefetchMutex != null)
+        {
+          prefetchMutex.acquire();
+          if (img != null && xmlStr != null)
+          {
+            prefetchedImage = img;
+            prefetchedXml = xmlStr;
+            prefetchedSheetIndex = nextIndex;
+          }
+          isPrefetching = false;
+          prefetchMutex.release();
+        }
+      }
+      catch (e:Dynamic)
+      {
+        if (prefetchMutex != null)
+        {
+          prefetchMutex.acquire();
+          isPrefetching = false;
+          prefetchMutex.release();
+        }
+      }
+    });
+    #end
+  }
 
   /**
    * Returns whether a cutscene is actively rendering or playing audio.
@@ -318,6 +415,11 @@ class NXVideoPlayer
       // Desacoplado 100% de FlxSignal: Usamos exclusivamente postUpdate
       FlxG.signals.postUpdate.add(onPostUpdate);
 
+      sheetStartGlobalFrame = 0;
+      currentSheetFrameCount = 0;
+      lastValidAudioSec = 0.0;
+      lastWallTimestamp = haxe.Timer.stamp();
+
       // Start sheet 0
       if (!loadAndPlaySheet(0))
       {
@@ -363,8 +465,38 @@ class NXVideoPlayer
     var pngPath:String = (totalSheets > 1) ? 'assets/videos/converted/${currentVideoName}_$sheetIndex.png' : 'assets/videos/converted/$currentVideoName.png';
     var xmlPath:String = (totalSheets > 1) ? 'assets/videos/converted/${currentVideoName}_$sheetIndex.xml' : 'assets/videos/converted/$currentVideoName.xml';
 
-    var newBmd = getBitmap(pngPath);
-    var newXmlStr = getText(xmlPath);
+    var newBmd:Null<openfl.display.BitmapData> = null;
+    var newXmlStr:Null<String> = null;
+
+    #if sys
+    if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
+    prefetchMutex.acquire();
+    if (prefetchedSheetIndex == sheetIndex && prefetchedImage != null && prefetchedXml != null)
+    {
+      try
+      {
+        // EXCLUSIVAMENTE en el hilo principal: conversión Image -> BitmapData
+        newBmd = openfl.display.BitmapData.fromImage(prefetchedImage);
+        newXmlStr = prefetchedXml;
+      }
+      catch (e:Dynamic)
+      {
+        newBmd = null;
+        newXmlStr = null;
+      }
+      prefetchedImage = null;
+      prefetchedXml = null;
+      prefetchedSheetIndex = -1;
+    }
+    prefetchMutex.release();
+    #end
+
+    if (newBmd == null || newXmlStr == null)
+    {
+      newBmd = getBitmap(pngPath);
+      newXmlStr = getText(xmlPath);
+    }
+
     if (newBmd == null || newXmlStr == null)
     {
       trace('[NXVideoPlayer] Missing sheet assets at index $sheetIndex ($pngPath / $xmlPath)');
@@ -385,7 +517,8 @@ class NXVideoPlayer
       return false;
     }
 
-    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height}, frames: ${newFrames.frames.length} ($pngPath)');
+    currentSheetFrameCount = newFrames.frames.length;
+    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height}, frames: $currentSheetFrameCount ($pngPath)');
 
     var oldGraphic = activeGraphic;
     var oldFrames = currentSprite.frames;
@@ -399,19 +532,25 @@ class NXVideoPlayer
     currentSprite.animation.destroyAnimations();
 
     var animName:String = 'sheet_$sheetIndex';
-    currentSprite.animation.addByPrefix(animName, 'cutscene', animFps, false);
+    // FPS = 0 obligatorio
+    currentSprite.animation.addByPrefix(animName, 'cutscene', 0, false);
 
     // Fallback garantizado por si los nombres de subtextura en XML difieren
     if (currentSprite.animation.getByName(animName) == null || currentSprite.animation.getByName(animName).numFrames == 0)
     {
       var allIndices:Array<Int> = [for (i in 0...newFrames.frames.length) i];
-      currentSprite.animation.add(animName, allIndices, animFps, false);
+      currentSprite.animation.add(animName, allIndices, 0, false);
     }
 
-    // Reproducir primero para que frameWidth y frameHeight sean los del frame 0 de la animación
+    // Iniciar animación con 0 FPS y pausar
     currentSprite.animation.play(animName, true);
+    if (currentSprite.animation.curAnim != null)
+    {
+      currentSprite.animation.curAnim.paused = true;
+      currentSprite.animation.curAnim.curFrame = 0;
+    }
 
-    // CRÍTICO: Ajustar tamaño, hitbox y centrado DESPUÉS de animation.play()
+    // Ajustar tamaño, hitbox, centrado y marcar dirty = true
     currentSprite.setGraphicSize(1280, 720);
     currentSprite.updateHitbox();
     currentSprite.screenCenter();
@@ -419,8 +558,9 @@ class NXVideoPlayer
     currentSprite.zIndex = 10000;
     currentSprite.visible = true;
     currentSprite.alpha = 1.0;
+    currentSprite.dirty = true;
 
-    // Dispose old assets immediately to keep RAM at ~35 MB
+    // 1. OBLIGATORIO: Destruye por completo la hoja anterior y ejecuta GC ANTES de lanzar prefetch
     if (oldFrames != null && oldFrames != newFrames)
     {
       oldFrames.destroy();
@@ -436,6 +576,16 @@ class NXVideoPlayer
       oldBmd.dispose();
     }
 
+    #if (cpp || switch)
+    cpp.vm.Gc.run(false);
+    #end
+
+    // 2. DESPUÉS: Lanzar prefetch de la siguiente hoja en segundo plano (máximo 2 hojas en RAM)
+    if (sheetIndex + 1 < totalSheets)
+    {
+      prefetchNextSheet(sheetIndex + 1);
+    }
+
     return true;
   }
 
@@ -443,31 +593,64 @@ class NXVideoPlayer
   {
     if (!isPlaying || currentSprite == null || isAdvancingSheet) return;
 
-    if (currentSprite.animation != null && currentSprite.animation.curAnim != null)
+    var elapsedSec:Float = 0.0;
+    if (currentAudio != null && currentAudio.playing)
     {
-      if (currentSprite.animation.curAnim.finished)
-      {
-        onSheetAnimationComplete();
-      }
-    }
-  }
-
-  static function onSheetAnimationComplete():Void
-  {
-    if (!isPlaying || isAdvancingSheet) return;
-    isAdvancingSheet = true;
-
-    if (currentSheetIndex + 1 < totalSheets)
-    {
-      currentSheetIndex++;
-      loadAndPlaySheet(currentSheetIndex);
-      isAdvancingSheet = false;
+      elapsedSec = currentAudio.time / 1000.0;
+      lastValidAudioSec = elapsedSec;
+      lastWallTimestamp = haxe.Timer.stamp();
     }
     else
     {
-      // Final sheet finished!
-      isAdvancingSheet = false;
-      finishCutscene();
+      // Fallback cuando el audio termina antes que la última hoja
+      if (currentAudio != null && !currentAudio.playing && lastValidAudioSec > 1.0)
+      {
+        if (currentSheetIndex >= totalSheets - 1)
+        {
+          trace('[NXVideoPlayer] Audio completed on final sheet. Concluding cutscene cleanly.');
+          finishCutscene();
+          return;
+        }
+      }
+      elapsedSec = lastValidAudioSec + (haxe.Timer.stamp() - lastWallTimestamp);
+    }
+
+    var targetGlobalFrame:Int = Std.int(Math.floor(elapsedSec * animFps));
+
+    // Bucle while obligatorio para avance/salto de hojas sin desincronización
+    while (isPlaying && targetGlobalFrame >= (sheetStartGlobalFrame + currentSheetFrameCount))
+    {
+      if (currentSheetIndex + 1 < totalSheets)
+      {
+        var prevSheetFrameCount:Int = currentSheetFrameCount;
+        sheetStartGlobalFrame += prevSheetFrameCount;
+        currentSheetIndex++;
+        isAdvancingSheet = true;
+        var loaded:Bool = loadAndPlaySheet(currentSheetIndex);
+        isAdvancingSheet = false;
+        if (!loaded)
+        {
+          return;
+        }
+      }
+      else
+      {
+        finishCutscene();
+        return;
+      }
+    }
+
+    if (!isPlaying || currentSprite == null) return;
+
+    // Posicionar inmediatamente el localFrame de la hoja actual en este mismo tick
+    var localFrame:Int = targetGlobalFrame - sheetStartGlobalFrame;
+    if (localFrame < 0) localFrame = 0;
+    if (localFrame >= currentSheetFrameCount) localFrame = currentSheetFrameCount - 1;
+
+    if (currentSprite.animation != null && currentSprite.animation.curAnim != null)
+    {
+      currentSprite.animation.curAnim.curFrame = localFrame;
+      currentSprite.dirty = true;
     }
   }
 
@@ -528,6 +711,23 @@ class NXVideoPlayer
     isAdvancingSheet = false;
     onCompleteCallback = null;
     FlxG.signals.postUpdate.remove(onPostUpdate);
+
+    #if sys
+    if (prefetchMutex != null)
+    {
+      prefetchMutex.acquire();
+      prefetchedImage = null;
+      prefetchedXml = null;
+      prefetchedSheetIndex = -1;
+      isPrefetching = false;
+      prefetchMutex.release();
+    }
+    #end
+
+    sheetStartGlobalFrame = 0;
+    currentSheetFrameCount = 0;
+    lastValidAudioSec = 0.0;
+    lastWallTimestamp = 0.0;
 
     try
     {

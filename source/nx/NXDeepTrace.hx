@@ -65,7 +65,7 @@ class NXDeepTrace
         var strMsg:String = Std.string(v);
         var isImportant:Bool = false;
         if (strMsg.indexOf("ERROR") != -1 || strMsg.indexOf("Exception") != -1 || strMsg.indexOf("CRASH") != -1
-            || strMsg.indexOf("[NXVideoPlayer]") != -1 || strMsg.indexOf("STAGE") != -1 || strMsg.indexOf("SONG") != -1
+            || strMsg.indexOf("[NXVideoPlayer]") != -1 || strMsg.indexOf("[AUTOTEST]") != -1 || strMsg.indexOf("STAGE") != -1 || strMsg.indexOf("SONG") != -1
             || strMsg.indexOf("MEMORY") != -1 || strMsg.indexOf("LoadingState") != -1)
         {
           isImportant = true;
