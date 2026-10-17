@@ -16,7 +16,7 @@ import lime.media.AudioBuffer;
  * Modular Cutscene & Video abstraction for Nintendo Switch.
  * Streams converted in-engine sprite/atlas sheets 1 at a time to prevent RAM spikes (keeps GC heap ~35 MB).
  * Safely plays synchronized Vorbis audio and features watchdog timers against softlocks.
- * Armored against Null Pointer Exceptions (SIGSEGV) and missing assets.
+ * Completely decoupled from FlxSignal.dispatch to eliminate Null Object Reference crashes.
  */
 class NXVideoPlayer
 {
@@ -72,23 +72,59 @@ class NXVideoPlayer
     try
     {
       #if sys
-      if (sys.FileSystem.exists('romfs:/' + path)) return openfl.display.BitmapData.fromFile('romfs:/' + path);
-      if (sys.FileSystem.exists(path)) return openfl.display.BitmapData.fromFile(path);
+      var romfsPath:String = 'romfs:/' + path;
+      if (sys.FileSystem.exists(romfsPath))
+      {
+        var bmd = openfl.display.BitmapData.fromFile(romfsPath);
+        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+
+        var bytes = sys.io.File.getBytes(romfsPath);
+        if (bytes != null && bytes.length > 0)
+        {
+          var bmdFromBytes = openfl.display.BitmapData.fromBytes(bytes);
+          if (bmdFromBytes != null && bmdFromBytes.width > 0 && bmdFromBytes.height > 0) return bmdFromBytes;
+        }
+      }
+      if (sys.FileSystem.exists(path))
+      {
+        var bmd = openfl.display.BitmapData.fromFile(path);
+        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+      }
       #end
-      if (Assets.exists('videos:' + path, IMAGE)) return Assets.getBitmapData('videos:' + path);
-      if (Assets.exists(path, IMAGE)) return Assets.getBitmapData(path);
+
+      if (Assets.exists('videos:' + path, IMAGE))
+      {
+        var bmd = Assets.getBitmapData('videos:' + path);
+        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+      }
+      if (Assets.exists(path, IMAGE))
+      {
+        var bmd = Assets.getBitmapData(path);
+        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+      }
       if (Assets.exists('videos:' + path))
       {
         var bytes = Assets.getBytes('videos:' + path);
-        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
+        if (bytes != null && bytes.length > 0)
+        {
+          var bmd = openfl.display.BitmapData.fromBytes(bytes);
+          if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        }
       }
       if (Assets.exists(path))
       {
         var bytes = Assets.getBytes(path);
-        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
+        if (bytes != null && bytes.length > 0)
+        {
+          var bmd = openfl.display.BitmapData.fromBytes(bytes);
+          if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        }
       }
     }
-    catch (e:Dynamic) {}
+    catch (e:Dynamic)
+    {
+      trace('[NXVideoPlayer] Error loading bitmap ($path): ' + e);
+    }
     return null;
   }
 
@@ -258,18 +294,27 @@ class NXVideoPlayer
       PlayState.instance.isInCutscene = true;
       PlayState.instance.camHUD.visible = false;
 
+      // Configurar cámara camCutscene con fondo negro puro y máxima visibilidad
+      if (PlayState.instance.camCutscene != null)
+      {
+        PlayState.instance.camCutscene.visible = true;
+        PlayState.instance.camCutscene.alpha = 1.0;
+        PlayState.instance.camCutscene.bgColor = 0xFF000000;
+      }
+
       var cutsceneSpr:FlxSprite = new FlxSprite(0, 0);
-      cutsceneSpr.setGraphicSize(1280, 720);
-      cutsceneSpr.updateHitbox();
-      cutsceneSpr.screenCenter();
       cutsceneSpr.cameras = [PlayState.instance.camCutscene];
       cutsceneSpr.scrollFactor.set(0, 0);
+      cutsceneSpr.zIndex = 10000;
+      cutsceneSpr.visible = true;
+      cutsceneSpr.alpha = 1.0;
 
       currentSprite = cutsceneSpr;
       PlayState.instance.add(cutsceneSpr);
+      PlayState.instance.refresh();
 
-      // Connect preUpdate watchdog
-      FlxG.signals.preUpdate.add(onPreUpdate);
+      // Desacoplado 100% de FlxSignal: Usamos exclusivamente postUpdate
+      FlxG.signals.postUpdate.add(onPostUpdate);
 
       // Start sheet 0
       if (!loadAndPlaySheet(0))
@@ -325,6 +370,8 @@ class NXVideoPlayer
       return false;
     }
 
+    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height} ($pngPath)');
+
     // Wrap in FlxGraphic with persist = false to prevent bitmap leaks
     var newGraphic = FlxGraphic.fromBitmapData(newBmd, false, pngPath, false);
     newGraphic.persist = false;
@@ -344,14 +391,21 @@ class NXVideoPlayer
 
     activeGraphic = newGraphic;
     activeBitmapData = newBmd;
+
+    // Asignar nuevos frames
     currentSprite.frames = newFrames;
+
+    // CRÍTICO: frames = newFrames resetea la escala en Flixel. Debemos reajustar tamaño, hitbox y centrar.
+    currentSprite.setGraphicSize(1280, 720);
+    currentSprite.updateHitbox();
+    currentSprite.screenCenter();
+    currentSprite.zIndex = 10000;
+    currentSprite.visible = true;
+    currentSprite.alpha = 1.0;
 
     var animName:String = 'sheet_$sheetIndex';
     currentSprite.animation.addByPrefix(animName, 'cutscene', animFps, false);
-    currentSprite.animation.finishCallback = function(name:String)
-    {
-      onSheetAnimationComplete();
-    };
+    // NOTA: PROHIBIDO asignar finishCallback o onFinish aquí para no mutar el estado dentro de FlxSignal.dispatch
     currentSprite.animation.play(animName, true);
 
     // Dispose old assets immediately to keep RAM at ~35 MB
@@ -373,7 +427,7 @@ class NXVideoPlayer
     return true;
   }
 
-  static function onPreUpdate():Void
+  static function onPostUpdate():Void
   {
     if (!isPlaying || currentSprite == null || isAdvancingSheet) return;
 
@@ -461,7 +515,7 @@ class NXVideoPlayer
     isPlaying = false;
     isAdvancingSheet = false;
     onCompleteCallback = null;
-    FlxG.signals.preUpdate.remove(onPreUpdate);
+    FlxG.signals.postUpdate.remove(onPostUpdate);
 
     try
     {
@@ -505,6 +559,10 @@ class NXVideoPlayer
 
       if (PlayState.instance != null)
       {
+        if (PlayState.instance.camCutscene != null)
+        {
+          PlayState.instance.camCutscene.bgColor = 0x00000000;
+        }
         PlayState.instance.camHUD.visible = true;
         PlayState.instance.isInCutscene = false;
       }

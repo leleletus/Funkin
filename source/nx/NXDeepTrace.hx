@@ -61,6 +61,20 @@ class NXDeepTrace
       var oldTrace = haxe.Log.trace;
       haxe.Log.trace = function(v:Dynamic, ?infos:haxe.PosInfos) {
         oldTrace(v, infos);
+
+        var strMsg:String = Std.string(v);
+        var isImportant:Bool = false;
+        if (strMsg.indexOf("ERROR") != -1 || strMsg.indexOf("Exception") != -1 || strMsg.indexOf("CRASH") != -1
+            || strMsg.indexOf("[NXVideoPlayer]") != -1 || strMsg.indexOf("STAGE") != -1 || strMsg.indexOf("SONG") != -1
+            || strMsg.indexOf("MEMORY") != -1 || strMsg.indexOf("LoadingState") != -1)
+        {
+          isImportant = true;
+        }
+
+        #if switch
+        if (!isImportant && !funkin.Preferences.switchVerboseAudioLog) return;
+        #end
+
         var origin:String = (infos != null) ? '${infos.className}:${infos.lineNumber}' : 'trace';
         writeEntry('TRACE', '[$origin] $v');
       };

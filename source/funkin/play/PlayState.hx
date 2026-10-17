@@ -2011,7 +2011,7 @@ class PlayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
-    var stageIdToPurge:Null<String> = (currentStage != null) ? currentStage.id : null;
+    var stageIdToPurge:String = currentStageId;
     performCleanup();
 
     #if mobile
@@ -4016,6 +4016,26 @@ class PlayState extends MusicBeatSubState
 
     FlxTween.globalManager.clear();
     FlxTimer.globalManager.clear();
+
+    // Clear camera filters and shader pipelines to prevent GPU leaks / crashes on state change
+    if (camGame != null)
+    {
+      camGame.filters = [];
+      camGame.filtersEnabled = false;
+      camGame.stopFX();
+    }
+    if (camHUD != null)
+    {
+      camHUD.filters = [];
+      camHUD.filtersEnabled = false;
+      camHUD.stopFX();
+    }
+    if (FlxG.camera != null)
+    {
+      FlxG.camera.filters = [];
+      FlxG.camera.filtersEnabled = false;
+      FlxG.camera.stopFX();
+    }
 
     // Remove reference to stage and remove sprites from it to save memory.
     if (currentStage != null)
