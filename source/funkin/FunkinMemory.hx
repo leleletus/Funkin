@@ -41,7 +41,8 @@ class FunkinMemory
   ];
 
   static final STAGE_PURGE_PATTERNS:Array<String> = [
-    "philly", "erect", "spraycan", "Spraypaint", "CanImpact", "wked1_cutscene",
+    "philly", "blazin", "picoBlazin", "darnellBlazin", "lightning", "skyBlur", "streetBlur",
+    "erect", "spraycan", "Spraypaint", "CanImpact", "wked1_cutscene",
     "weekend1", "tank", "mountains", "cityruins", "smokeLeft", "smokeRight", "bricksGround",
     "school", "weeb", "petals", "limo", "fastCar", "mall", "santa", "evilTree",
     "evilSnowman", "spooky", "halloween", "bgTrees", "sserafim", "truck", "counter-stretch",
@@ -136,8 +137,20 @@ class FunkinMemory
     // Resguardar scripts de Polymod, backing cards y elementos de Freeplay
     if (key.contains("scripts/") || key.contains("backcards/") || key.contains("sortedLetters")) return true;
 
-    // Resguardar atlas de FlxAnimate (spritemap) y elementos de Freeplay
-    if (key.indexOf("spritemap") != -1 || key.indexOf("backing-text") != -1 || key.indexOf("freeplay/") != -1) return true;
+    // NUNCA resguardar texturas o personajes de Blazin (picoBlazin, darnellBlazin, phillyBlazin) para evitar OOM
+    var keyLower:String = key.toLowerCase();
+    if (keyLower.contains("blazin")) return false;
+
+    // Resguardar atlas de FlxAnimate exclusivos de UI, Freeplay y selector de personajes
+    if (key.indexOf("backing-text") != -1 || key.indexOf("freeplay/") != -1 || key.indexOf("charSelect") != -1) return true;
+
+    // Resguardar personajes base reutilizados globalmente (evita Use-After-Free en GF/BF/Pico/Nene)
+    if (key.indexOf("characters/gf") != -1 || key.indexOf("characters/bf") != -1
+        || key.indexOf("characters/pico/") != -1 || key.indexOf("characters/picoCheer") != -1
+        || key.indexOf("characters/nene") != -1)
+    {
+      return true;
+    }
 
     return false;
   }
@@ -164,9 +177,18 @@ class FunkinMemory
       var shouldPurge:Bool = false;
 
       // Coincidencia por escenario específico
-      if (stageId != null && stageId.length > 0 && key.toLowerCase().contains(stageId.toLowerCase()))
+      if (stageId != null && stageId.length > 0)
       {
-        shouldPurge = true;
+        var sid:String = stageId.toLowerCase();
+        if (key.toLowerCase().contains(sid))
+        {
+          shouldPurge = true;
+        }
+        // Si el escenario es phillyBlazin, purgar también los personajes específicos de la pelea (picoBlazin, darnellBlazin)
+        if (sid.contains("blazin") && (key.toLowerCase().contains("blazin") || key.toLowerCase().contains("darnellblazin") || key.toLowerCase().contains("picoblazin")))
+        {
+          shouldPurge = true;
+        }
       }
 
       // Prefijos y patrones de escenarios pesados y props temporales
@@ -218,6 +240,31 @@ class FunkinMemory
       currentCachedTextures.remove(key);
       previousCachedTextures.remove(key);
       openfl.Assets.cache.removeBitmapData(key);
+    }
+
+    // Limpiar también las entradas correspondientes en animate.FlxAnimateFrames._cachedAtlases
+    @:privateAccess
+    if (animate.FlxAnimateFrames._cachedAtlases != null)
+    {
+      var atlasKeysToPurge:Array<String> = [];
+      for (atlasKey in animate.FlxAnimateFrames._cachedAtlases.keys())
+      {
+        var akLower:String = atlasKey.toLowerCase();
+        if ((stageId != null && stageId.length > 0 && akLower.contains(stageId.toLowerCase()))
+            || akLower.contains("blazin") || akLower.contains("picoblazin") || akLower.contains("darnellblazin"))
+        {
+          atlasKeysToPurge.push(atlasKey);
+        }
+      }
+      for (ak in atlasKeysToPurge)
+      {
+        var atlas = animate.FlxAnimateFrames._cachedAtlases.get(ak);
+        if (atlas != null)
+        {
+          atlas.destroy();
+        }
+        animate.FlxAnimateFrames._cachedAtlases.remove(ak);
+      }
     }
 
     #if (cpp || neko || hl)

@@ -76,31 +76,31 @@ class NXVideoPlayer
       if (sys.FileSystem.exists(romfsPath))
       {
         var bmd = openfl.display.BitmapData.fromFile(romfsPath);
-        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
 
         var bytes = sys.io.File.getBytes(romfsPath);
         if (bytes != null && bytes.length > 0)
         {
           var bmdFromBytes = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmdFromBytes != null && bmdFromBytes.width > 0 && bmdFromBytes.height > 0) return bmdFromBytes;
+          if (bmdFromBytes != null && bmdFromBytes.image != null && bmdFromBytes.width > 0 && bmdFromBytes.height > 0) return bmdFromBytes;
         }
       }
       if (sys.FileSystem.exists(path))
       {
         var bmd = openfl.display.BitmapData.fromFile(path);
-        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
       }
       #end
 
       if (Assets.exists('videos:' + path, IMAGE))
       {
         var bmd = Assets.getBitmapData('videos:' + path);
-        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
       }
       if (Assets.exists(path, IMAGE))
       {
         var bmd = Assets.getBitmapData(path);
-        if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
       }
       if (Assets.exists('videos:' + path))
       {
@@ -108,7 +108,7 @@ class NXVideoPlayer
         if (bytes != null && bytes.length > 0)
         {
           var bmd = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
         }
       }
       if (Assets.exists(path))
@@ -117,7 +117,7 @@ class NXVideoPlayer
         if (bytes != null && bytes.length > 0)
         {
           var bmd = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmd != null && bmd.width > 0 && bmd.height > 0) return bmd;
+          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
         }
       }
     }
@@ -300,6 +300,8 @@ class NXVideoPlayer
         PlayState.instance.camCutscene.visible = true;
         PlayState.instance.camCutscene.alpha = 1.0;
         PlayState.instance.camCutscene.bgColor = 0xFF000000;
+        PlayState.instance.camCutscene.scroll.set(0, 0);
+        PlayState.instance.camCutscene.zoom = 1.0;
       }
 
       var cutsceneSpr:FlxSprite = new FlxSprite(0, 0);
@@ -370,8 +372,6 @@ class NXVideoPlayer
       return false;
     }
 
-    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height} ($pngPath)');
-
     // Wrap in FlxGraphic with persist = false to prevent bitmap leaks
     var newGraphic = FlxGraphic.fromBitmapData(newBmd, false, pngPath, false);
     newGraphic.persist = false;
@@ -385,6 +385,8 @@ class NXVideoPlayer
       return false;
     }
 
+    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height}, frames: ${newFrames.frames.length} ($pngPath)');
+
     var oldGraphic = activeGraphic;
     var oldFrames = currentSprite.frames;
     var oldBmd = activeBitmapData;
@@ -392,21 +394,31 @@ class NXVideoPlayer
     activeGraphic = newGraphic;
     activeBitmapData = newBmd;
 
-    // Asignar nuevos frames
+    // Asignar nuevos frames y resetear animaciones previas
     currentSprite.frames = newFrames;
-
-    // CRÍTICO: frames = newFrames resetea la escala en Flixel. Debemos reajustar tamaño, hitbox y centrar.
-    currentSprite.setGraphicSize(1280, 720);
-    currentSprite.updateHitbox();
-    currentSprite.screenCenter();
-    currentSprite.zIndex = 10000;
-    currentSprite.visible = true;
-    currentSprite.alpha = 1.0;
+    currentSprite.animation.destroyAnimations();
 
     var animName:String = 'sheet_$sheetIndex';
     currentSprite.animation.addByPrefix(animName, 'cutscene', animFps, false);
-    // NOTA: PROHIBIDO asignar finishCallback o onFinish aquí para no mutar el estado dentro de FlxSignal.dispatch
+
+    // Fallback garantizado por si los nombres de subtextura en XML difieren
+    if (currentSprite.animation.getByName(animName) == null || currentSprite.animation.getByName(animName).numFrames == 0)
+    {
+      var allIndices:Array<Int> = [for (i in 0...newFrames.frames.length) i];
+      currentSprite.animation.add(animName, allIndices, animFps, false);
+    }
+
+    // Reproducir primero para que frameWidth y frameHeight sean los del frame 0 de la animación
     currentSprite.animation.play(animName, true);
+
+    // CRÍTICO: Ajustar tamaño, hitbox y centrado DESPUÉS de animation.play()
+    currentSprite.setGraphicSize(1280, 720);
+    currentSprite.updateHitbox();
+    currentSprite.screenCenter();
+    currentSprite.scrollFactor.set(0, 0);
+    currentSprite.zIndex = 10000;
+    currentSprite.visible = true;
+    currentSprite.alpha = 1.0;
 
     // Dispose old assets immediately to keep RAM at ~35 MB
     if (oldFrames != null && oldFrames != newFrames)
