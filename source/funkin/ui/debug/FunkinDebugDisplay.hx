@@ -199,6 +199,8 @@ class FunkinDebugDisplay extends Sprite
 
   function updateAdvancedDisplay():Void
   {
+    if (fpsGraph == null || gcMemGraph == null) return;
+
     updateFPSGraph();
     #if !html5
     updateGcMemGraph();
@@ -209,19 +211,19 @@ class FunkinDebugDisplay extends Sprite
     info.push('FPS: $currentFPS');
     info.push('AVG FPS: ${Math.floor(fpsGraph.average())}');
     info.push('1% LOW FPS: ${Math.floor(fpsGraph.lowest())}');
-    fpsGraph.textDisplay.text = info.join('\n');
+    if (fpsGraph.textDisplay != null) fpsGraph.textDisplay.text = info.join('\n');
 
     #if !html5
     #if switch
     var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
     var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
     var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
-    gcMemGraph.textDisplay.text = 'GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB';
+    if (gcMemGraph.textDisplay != null) gcMemGraph.textDisplay.text = 'GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB';
     #else
-    gcMemGraph.textDisplay.text = 'GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}';
+    if (gcMemGraph.textDisplay != null) gcMemGraph.textDisplay.text = 'GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}';
     #end
 
-    if (taskMemGraph != null)
+    if (taskMemGraph != null && taskMemGraph.textDisplay != null)
     {
       #if switch
       var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
@@ -262,6 +264,7 @@ class FunkinDebugDisplay extends Sprite
 
   function updateFPSGraph(?currentFPS:Int = 0):Void
   {
+    if (fpsGraph == null) return;
     fpsGraph.maxValue = FlxG.drawFramerate;
     fpsGraph.update(times.length);
   }
@@ -269,6 +272,7 @@ class FunkinDebugDisplay extends Sprite
   #if !html5
   function updateGcMemGraph(?currentFPS:Int = 0):Void
   {
+    if (gcMemGraph == null) return;
     gcMemGraph.maxValue = gcMemPeak;
     gcMemGraph.update(gcMem);
   }

@@ -55,39 +55,50 @@ class NXPerformance
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
-    if (NXMain.nxController != null)
+    try
     {
-      l3Pressed = NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_L);
+      if (NXMain.nxController != null)
+      {
+        l3Pressed = NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_L);
+      }
+      else if (FlxG.gamepads != null)
+      {
+        l3Pressed = FlxG.gamepads.anyJustPressed(LEFT_STICK_CLICK);
+      }
     }
-    else if (FlxG.gamepads != null)
-    {
-      l3Pressed = FlxG.gamepads.anyJustPressed(LEFT_STICK_CLICK);
-    }
+    catch (e:Dynamic) {}
 
     var now:Float = Sys.time();
     if (l3Pressed && (lastL3PressTime < 0 || (now - lastL3PressTime) >= L3_DEBOUNCE_COOLDOWN))
     {
       lastL3PressTime = now;
-      var nextMode:DebugDisplayMode;
-      switch (Preferences.debugDisplay)
-      {
-        case DebugDisplayMode.Off:
-          nextMode = DebugDisplayMode.Simple;
-        case DebugDisplayMode.Simple:
-          nextMode = DebugDisplayMode.Advanced;
-        case DebugDisplayMode.Advanced:
-          nextMode = DebugDisplayMode.Off;
-      }
-      Preferences.debugDisplay = nextMode;
-      Preferences.switchShowPerfHud = (nextMode != DebugDisplayMode.Off);
-      updatePerfHud();
       try
       {
-        funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
+        var nextMode:DebugDisplayMode;
+        switch (Preferences.debugDisplay)
+        {
+          case DebugDisplayMode.Off:
+            nextMode = DebugDisplayMode.Simple;
+          case DebugDisplayMode.Simple:
+            nextMode = DebugDisplayMode.Advanced;
+          case DebugDisplayMode.Advanced:
+            nextMode = DebugDisplayMode.Off;
+        }
+        Preferences.debugDisplay = nextMode;
+        Preferences.switchShowPerfHud = (nextMode != DebugDisplayMode.Off);
+        updatePerfHud();
+        try
+        {
+          funkin.audio.FunkinSound.playOnce(funkin.Paths.sound('confirmMenu'), 0.7);
+        }
+        catch (e:Dynamic) {}
+        nx.NXDeepTrace.logButtonEvent('L3', 'Cycled Performance HUD to $nextMode');
+        trace('Switch: Cycled Performance HUD via L3 to: ' + Preferences.debugDisplay);
       }
-      catch (e:Dynamic) {}
-      nx.NXDeepTrace.logButtonEvent('L3', 'Cycled Performance HUD to $nextMode');
-      trace('Switch: Cycled Performance HUD via L3 to: ' + Preferences.debugDisplay);
+      catch (e:Dynamic)
+      {
+        trace('Warning: Failed to cycle debug display via L3: ' + e);
+      }
     }
 
     // Secondary button combo: hold PLUS and R for 3.0 seconds to toggle Performance HUD (FPS/RAM)

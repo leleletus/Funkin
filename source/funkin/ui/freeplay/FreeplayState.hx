@@ -359,13 +359,6 @@ class FreeplayState extends MusicBeatSubState
 
   override function create():Void
   {
-    #if switch
-    funkin.FunkinMemory.purgeStageCache();
-    funkin.FunkinMemory.purgeCache(true);
-    cpp.vm.Gc.run(true);
-    cpp.vm.Gc.compact();
-    #end
-
     super.create();
 
     FlxG.state.persistentUpdate = false;

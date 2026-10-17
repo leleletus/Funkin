@@ -520,15 +520,22 @@ class Preferences
 
   public static function setDebugDisplayMode(mode:DebugDisplayMode):Void
   {
-    if (FlxG.game == null || FlxG.game.parent == null || Main.debugDisplay == null) return;
+    try
+    {
+      if (FlxG.game == null || FlxG.game.parent == null || Main.debugDisplay == null) return;
 
-    if (FlxG.game.parent.contains(Main.debugDisplay)) FlxG.game.parent.removeChild(Main.debugDisplay);
+      if (FlxG.game.parent.contains(Main.debugDisplay)) FlxG.game.parent.removeChild(Main.debugDisplay);
 
-    if (mode == DebugDisplayMode.Off) return;
+      if (mode == DebugDisplayMode.Off) return;
 
-    Main.debugDisplay.isAdvanced = (mode == DebugDisplayMode.Advanced);
+      Main.debugDisplay.isAdvanced = (mode == DebugDisplayMode.Advanced);
 
-    FlxG.game.parent.addChild(Main.debugDisplay);
+      FlxG.game.parent.addChild(Main.debugDisplay);
+    }
+    catch (e:Dynamic)
+    {
+      trace('Warning: Failed to set debug display mode: ' + e);
+    }
   }
 
   static function setDebugDisplayBGOpacity(value:Float):Void

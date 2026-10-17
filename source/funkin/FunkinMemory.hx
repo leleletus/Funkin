@@ -14,7 +14,7 @@ import lime.app.Promise;
  * Handles caching of textures and sounds for the game.
  * TODO: Remove this once Eric finishes the memory system.
  */
-@:nullSafety
+@:nullSafety(Off)
 class FunkinMemory
 {
   static var permanentCachedTextures:Map<String, FlxGraphic> = [];
@@ -31,9 +31,6 @@ class FunkinMemory
     "/characters",
     "/charSelect",
     "/results",
-    "storymenu",
-    "freeplay",
-    "stages",
     "phillyStreets/",
     "phillyBlazin/",
     "phillyTrain",
@@ -41,6 +38,14 @@ class FunkinMemory
     "Spraypaint",
     "SpraycanPile",
     "wked1_cutscene"
+  ];
+
+  static final STAGE_PURGE_PATTERNS:Array<String> = [
+    "philly", "erect", "spraycan", "Spraypaint", "CanImpact", "wked1_cutscene",
+    "weekend1", "tank", "mountains", "cityruins", "smokeLeft", "smokeRight", "bricksGround",
+    "school", "weeb", "petals", "limo", "fastCar", "mall", "santa", "evilTree",
+    "evilSnowman", "spooky", "halloween", "bgTrees", "sserafim", "truck", "counter-stretch",
+    "burger-cutscene", "front-stool", "back-tables", "back-stools"
   ];
 
   /**
@@ -164,41 +169,20 @@ class FunkinMemory
       // Prefijos y patrones de escenarios pesados y props temporales
       if (!shouldPurge)
       {
-        if (key.contains("philly")
-          || (key.contains("stage") && !key.contains("StageProp") && !key.contains("Stage"))
-          || key.contains("erect")
-          || key.contains("spraycan")
-          || key.contains("Spraypaint")
-          || key.contains("CanImpact")
-          || key.contains("wked1_cutscene")
-          || (key.contains("weekend1") && !key.contains("fonts") && !key.contains("ui"))
-          || key.contains("tank")
-          || key.contains("mountains")
-          || key.contains("cityruins")
-          || key.contains("smokeLeft")
-          || key.contains("smokeRight")
-          || key.contains("bricksGround")
-          || key.contains("school")
-          || key.contains("weeb")
-          || key.contains("petals")
-          || key.contains("limo")
-          || key.contains("fastCar")
-          || key.contains("mall")
-          || key.contains("santa")
-          || key.contains("evilTree")
-          || key.contains("evilSnowman")
-          || key.contains("spooky")
-          || key.contains("halloween")
-          || key.contains("bgTrees")
-          || key.contains("sserafim")
-          || key.contains("truck")
-          || key.contains("counter-stretch")
-          || key.contains("burger-cutscene")
-          || key.contains("front-stool")
-          || key.contains("back-tables")
-          || key.contains("back-stools"))
+        if (key.contains("stage") && !key.contains("StageProp") && !key.contains("Stage"))
         {
           shouldPurge = true;
+        }
+        else
+        {
+          for (pattern in STAGE_PURGE_PATTERNS)
+          {
+            if (key.contains(pattern))
+            {
+              shouldPurge = true;
+              break;
+            }
+          }
         }
       }
 
@@ -220,8 +204,10 @@ class FunkinMemory
     for (key in keysToPurge)
     {
       var graphic:Null<FlxGraphic> = FlxG.bitmap.get(key);
-      if (graphic != null)
+      if (graphic != null && !graphic.isDestroyed)
       {
+        if (graphic.useCount > 0) continue;
+
         FlxG.bitmap.remove(graphic);
         graphic.persist = false;
         graphic.destroy();
@@ -421,7 +407,12 @@ class FunkinMemory
       for (key in keysToCheck)
       {
         var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
-        if (obj == null || isProtectedGraphic(key, obj) || key.contains("stickers"))
+        if (obj == null || obj.isDestroyed || isProtectedGraphic(key, obj) || key.contains("stickers"))
+        {
+          continue;
+        }
+
+        if (obj.useCount > 0)
         {
           continue;
         }

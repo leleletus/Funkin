@@ -1154,12 +1154,12 @@ class PauseSubState extends MusicBeatSubState
     FlxTransitionableState.skipNextTransIn = true;
     FlxTransitionableState.skipNextTransOut = true;
 
-    #if switch
-    funkin.FunkinMemory.purgeStageCache();
-    funkin.FunkinMemory.purgeCache(true);
-    cpp.vm.Gc.run(true);
-    cpp.vm.Gc.compact();
-    #end
+    if (PlayState.instance != null)
+    {
+      PlayState.instance.persistentDraw = false;
+      PlayState.instance.persistentUpdate = false;
+      PlayState.instance.visible = false;
+    }
 
     var targetState:funkin.ui.transition.stickers.StickerSubState->FlxState = (PlayStatePlaylist.isStoryMode) ? (sticker) ->
       new StoryMenuState(sticker) : (sticker) -> FreeplayState.build(sticker);

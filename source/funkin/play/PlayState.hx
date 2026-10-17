@@ -2014,13 +2014,6 @@ class PlayState extends MusicBeatSubState
     var stageIdToPurge:Null<String> = (currentStage != null) ? currentStage.id : null;
     performCleanup();
 
-    #if switch
-    funkin.FunkinMemory.purgeStageCache(stageIdToPurge);
-    funkin.FunkinMemory.purgeCache(true);
-    cpp.vm.Gc.run(true);
-    cpp.vm.Gc.compact();
-    #end
-
     #if mobile
     // Syncing allowScreenTimeout with Preferences option.
     lime.system.System.allowScreenTimeout = Preferences.screenTimeout;
@@ -2031,6 +2024,13 @@ class PlayState extends MusicBeatSubState
     #end
 
     super.destroy();
+
+    #if switch
+    funkin.FunkinMemory.purgeStageCache(stageIdToPurge);
+    funkin.FunkinMemory.purgeCache(true);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    #end
   }
 
   public override function initConsoleHelpers():Void
