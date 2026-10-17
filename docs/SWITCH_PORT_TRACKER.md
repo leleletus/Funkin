@@ -19,7 +19,8 @@ Documento maestro de trazabilidad, control de versiones y especificación técni
 | **Build 6** | `v0.8.1-nx-preview-5` | `a621511f0` | **Inestable (Regresión de memoria)** | Purga agresiva destructiva (`purgeVRAMAggressive()`) provocó colapsos en `FlxBar` (UI de salud destruida) y excepciones en scripts de Polymod (`backcard-bf.hxc`, `sortedLetters`). |
 | **Build 7** | `v0.8.1-nx-preview-6` | `c50d3862d` | Validado en Hardware (Con hallazgos) | UI y Polymod 100% estables, pantalla de carga intermedia erradicada. Sin embargo, retención excesiva de escenarios (Weekend 1) provocó saturación de heap y crash por OOM en 2Hot/Freeplay. |
 | **Build 8** | `v0.8.1-nx-preview-7` | `7194358b5` | Validado en Hardware (Con hallazgos) | Purga selectiva de escenarios pesados (`purgeStageCache`), remoción del bypass de retención `persist=true`, consolidación de heap Horizon OS (`cpp.vm.Gc.run(true)` / `compact()`), watchdog de audio contra softlock por parada anómala al final de canción, reorganización de menús de Switch y defaults de test. Hallazgos: OOM al salir por menú de pausa, freeze en Spaghetti por buffering sincrónico de audio en Go!, cinemáticas sin empaquetar en RomFS. |
-| **Build 9 (Actual)** | `v0.8.1-nx-preview-8` | `06fa488ce` | **Validado en Hardware / Release** | Confinamiento de `SwitchSettingsMenu` dentro de `PreferencesMenu`, erradicación total de fuga OOM en salidas por pausa (`PauseSubState.quitToMenu`), precarga y pre-buffering de OpenAL durante el conteo para eliminar freeze en `startSong` (Spaghetti), integración y empaquetado de cinemáticas convertidas en RomFS (`assets/videos/converted/`) con soporte multi-sheet en `NXVideoPlayer`. |
+| **Build 9** | `v0.8.1-nx-preview-8` | `06fa488ce` | Validado en Hardware | Confinamiento de `SwitchSettingsMenu` dentro de `PreferencesMenu`, erradicación total de fuga OOM en salidas por pausa (`PauseSubState.quitToMenu`), precarga y pre-buffering de OpenAL durante el conteo para eliminar freeze en `startSong` (Spaghetti), integración y empaquetado de cinemáticas convertidas en RomFS (`assets/videos/converted/`) con soporte multi-sheet en `NXVideoPlayer`. |
+| **Build 10 (Actual)** | `v0.8.1-nx-preview-9` | `737ff949f` | **Validado en Hardware / Release (1.1 GB)** | Blindaje OpenAL contra micro-congelamientos de resync (música continua sin pausar, RESYNC_THRESHOLD=85ms, omisión de voces terminadas); erradicación de colapso de canciones con cinemática al eliminar purgeCache destructivo en NXVideoPlayer.stop(); liberación de vocals y currentStage.kill() previa a ResultState; limpieza en FreeplayState (capsuleOnConfirmDefault) y StoryMenuState; bucle acotado anti-cuelgue en NXVideoPlayer; remotos y flujo de push configurados. |
 
 ---
 
@@ -107,7 +108,51 @@ Los siguientes componentes han sido exhaustivamente verificados en hardware real
 | **INC-12** | Congelamiento del hilo principal en "Go!" en Spaghetti (I/O contention). | Al pasar de `startCountdown()` a `startSong()`, la inicialización sincrónica de múltiples canales vocales con 8 buffers OpenAL (`native_audio_buffers=8`) bloqueaba el hilo principal por ~33 segundos. | **RESUELTO:** Precarga y encolado de buffers OpenAL en `PlayState.hx:startCountdown()` durante el conteo "Three, Two, One" manteniéndolos en pausa; en beat 0 ("Go!") solo se invoca `.play()` sin contención de I/O. |
 | **INC-13** | Cinemáticas saltadas por ausencia de assets en RomFS y soporte multi-sheet. | `FEATURE_VIDEO_PLAYBACK` omitía la librería de assets `videos` en `project.hxp` para Switch. Además, faltaba ejecutar `convert_video.py` y `NXVideoPlayer.hx` carecía de soporte para hojas de atlas múltiples (`_0.png`, `_1.png`). | **RESUELTO:** Empaquetado de `assets/videos` en `project.hxp` para Switch (excluyendo contenedores pesados `.mp4`/`.mkv`). Conversión de todas las cinemáticas de campaña a secuencias Sparrow con audio Vorbis. `NXVideoPlayer.hx` extendido con soporte multi-sheet (`frames.addAtlas()`), escalado automático a 720p y purga de VRAM al terminar. |
 | **INC-14** | `SwitchSettingsMenu` expuesto en la raíz de `OptionsState.hx`. | La entrada "Nintendo Switch" en la raíz del menú de opciones contaminaba la lista oficial de FNF. | **RESUELTO:** Eliminada la categoría de la raíz de `OptionsState.hx`; acceso confinado exclusivamente dentro de `PreferencesMenu.hx`. |
+| **INC-15** | Destrucción de texturas de escenario y personajes al concluir cinemáticas. | `NXVideoPlayer.stop()` ejecutaba `FunkinMemory.purgeCache(true)`. En canciones como Ugh, Guns, Stress o Darnell, `PlayState.create()` precarga el escenario y los personajes antes de reproducir el video. Al terminar el video, `purgeCache(true)` destruía las texturas recién cargadas, causando sprites invisibles o colapsos Use-After-Free al iniciar el conteo. | **RESUELTO:** Eliminado `purgeCache(true)` de `NXVideoPlayer.stop()`. El reproductor ahora solo destruye sus propios `FlxAtlasFrames` y consolida memoria con `cpp.vm.Gc.run(true)` y `cpp.vm.Gc.compact()`. |
+| **INC-16** | Micro-congelamientos por resync de OpenAL en gameplay y acumulación de VRAM en transición a `ResultState`. | En `PlayState.resyncVocals()`, se pausaba y relanzaba `FlxG.sound.music`, provocando micro-cortes y estallidos de buffer OpenAL. En `beatHit()`, las pistas de voz ya finalizadas seguían evaluándose provocando resyncs falsos. Al finalizar la canción, `ResultState` se instanciaba mientras el escenario (`currentStage`) y las voces permanecían cargados en VRAM/heap. | **RESUELTO:** `FlxG.sound.music` se mantiene continuo sin pausa; solo se ajusta `vocals.time` si el desfase supera `RESYNC_THRESHOLD = 85ms`. Pistas de voz terminadas (`instTime >= voice.length - 150`) son ignoradas. En `moveToResultsScreen()`, `vocals` se destruyen y `currentStage.kill()` se ejecuta antes de crear `ResultState`. Adicionalmente, en `StoryMenuState` se destruye `oldBackground` tras el fade y se invoca `super.destroy()` antes de `purgeTextureCache()`, y en `FreeplayState` se ejecuta `FunkinMemory.clearFreeplay()` al confirmar canción. |
+| **INC-17** | Cuelgues en el analizador de Haxe / compilador por bucle `while (true)` en `NXVideoPlayer.hx`. | `while (true)` sin cota superior de iteración para buscar hojas múltiples (`_0.png`, `_1.png`...) podía causar bucles infinitos en el analizador de macros de Haxe o ante ambigüedades en RomFS. | **RESUELTO:** Bucle acotado explícitamente a `while (sheetIdx < 50)`. |
 
 ---
+
+## 5. Arquitectura de Git, Remotos y Flujo de Despliegue Automático
+
+Para garantizar sincronización fluida entre computadoras de desarrollo y evitar desfasajes o sobreescrituras accidentales de historial, se define la siguiente topología de remotos:
+
+### Mapeo de Remotos Git
+
+| Nombre Remoto | URL del Repositorio | Propósito | Rama de Trabajo |
+| :--- | :--- | :--- | :--- |
+| **`personal`** *(Principal)* | `https://github.com/leleletus/Funkin.git` | Fork personal de desarrollo activo de @djvemo / @leleletus. **Aquí se suben los avances locales y versiones compiladas**. | `feature/switch-fixes-and-perf` |
+| **`origin`** | `https://github.com/FunkinNXTeam/Funkin.git` | Repositorio central de la organización FunkinNXTeam. | `feature/switch-fixes-and-perf` / `nx-develop` |
+| **`upstream`** | `https://github.com/FunkinCrew/Funkin.git` | Repositorio oficial de Friday Night Funkin' (upstream base). | `main` |
+
+### Comandos de Despliegue y Sincronización Automática
+
+1. **Subir cambios a GitHub personal (Recomendado):**
+   ```bash
+   git push personal feature/switch-fixes-and-perf
+   ```
+   *Si se ha reescrito o restaurado historial con commits limpios (como tras un rescate por reflog):*
+   ```bash
+   git push --force-with-lease personal feature/switch-fixes-and-perf
+   ```
+
+2. **Actualizar el fork personal hacia la organización (`origin`):**
+   ```bash
+   git push origin feature/switch-fixes-and-perf
+   ```
+
+3. **Sincronizar otra PC desde el fork personal:**
+   ```bash
+   git fetch personal
+   git checkout feature/switch-fixes-and-perf
+   git pull personal feature/switch-fixes-and-perf
+   ```
+
+4. **Regla de Oro Anti-Desfase:**
+   - La rama local `feature/switch-fixes-and-perf` está configurada para rastrear `personal/feature/switch-fixes-and-perf`.
+   - Antes de iniciar sesión de trabajo en otra máquina: `git pull personal feature/switch-fixes-and-perf`.
+   - Al finalizar cada sesión de trabajo: `git push personal feature/switch-fixes-and-perf`.
+
 
 
