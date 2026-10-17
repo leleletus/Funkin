@@ -1207,6 +1207,31 @@ class PlayState extends MusicBeatSubState
           Conductor.instance.update();
         }
       }
+      #if switch
+      else if (!isGamePaused && !isInCutscene && !isPlayerDying && !isSongEnd)
+      {
+        if (FlxG.sound.music != null)
+        {
+          var expectedTime:Float = Conductor.instance.songPosition - Conductor.instance.combinedOffset;
+          if (expectedTime < (FlxG.sound.music.length - 500))
+          {
+            // Ocurrio un corte anomalo de canal en OpenAL a mitad de cancion (por micro-tiron o por Sleep/Wake)
+            Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
+
+            var recoverTime:Float = Math.max(0, Math.min(expectedTime, FlxG.sound.music.length - 200));
+            trace('[NXAudioRecovery] Mid-song stream drop detected at ${recoverTime}ms! Re-igniting OpenAL stream...');
+            FlxG.sound.music.play(false, recoverTime);
+            FlxG.sound.music.pitch = playbackRate;
+            FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
+            resyncVocals();
+          }
+          else
+          {
+            if (mayPauseGame) endSong(skipEndingTransition);
+          }
+        }
+      }
+      #end
 
       // Audio Watchdog: Evitar softlock cuando el audio se detiene o falla onComplete
       if (!isSongEnd && !isGamePaused && !isInCutscene && !startingSong && lastChartNoteTime > 0)
@@ -1451,7 +1476,11 @@ class PlayState extends MusicBeatSubState
         openPauseSubState(Cutscene, camPause, lostFocus, () -> VideoCutscene.pauseVideo());
 
       default: // also known as standard
+        #if switch
+        if (!lostFocus && (!isInCountdown || isInCutscene)) return;
+        #else
         if (!isInCountdown || isInCutscene) return;
+        #end
 
         Countdown.pauseCountdown();
         preparePauseUI();
@@ -1511,6 +1540,7 @@ class PlayState extends MusicBeatSubState
     #if switch
     nx.NXAudioDiagnostics.onPause();
     nx.NXDeepTrace.logAudioMetrics('PAUSE');
+    camPause.visible = true;
     #end
     final pauseSubState = new PauseSubState({mode: mode, lostFocus: lostFocus}, onPause);
     FlxTransitionableState.skipNextTransIn = true;
@@ -1802,6 +1832,7 @@ class PlayState extends MusicBeatSubState
       #if switch
       nx.NXAudioDiagnostics.onResume();
       nx.NXDeepTrace.logAudioMetrics('RESUME');
+      if (camPause != null) camPause.visible = false;
       #end
     }
     isGameOverState = false;
@@ -1849,6 +1880,33 @@ class PlayState extends MusicBeatSubState
     }
     #end
 
+    #if switch
+    if (nx.video.NXVideoPlayer.isCutscenePlaying())
+    {
+      nx.video.NXVideoPlayer.resume();
+    }
+
+    if (startingSong && isInCountdown)
+    {
+      if (Countdown.countdownStep != BEFORE && Countdown.countdownStep != AFTER)
+      {
+        Countdown.resumeCountdown();
+      }
+      var chart = currentChart;
+      if (FlxG.sound.music == null && chart != null)
+      {
+        trace('[NXSleepWake] FlxG.sound.music was null during countdown; rebuilding instrumental stream...');
+        chart.playInst(instrumentalVolume > 0 ? instrumentalVolume : 1.0, currentInstrumental, false);
+        if (FlxG.sound.music != null)
+        {
+          FlxG.sound.music.pause();
+          FlxG.sound.music.time = startTimestamp;
+          FlxG.sound.music.pitch = playbackRate;
+        }
+      }
+    }
+    #end
+
     super.onFocus();
   }
 
@@ -1857,6 +1915,13 @@ class PlayState extends MusicBeatSubState
      */
   public override function onFocusLost():Void
   {
+    #if switch
+    if (nx.video.NXVideoPlayer.isCutscenePlaying())
+    {
+      nx.video.NXVideoPlayer.pause();
+    }
+    #end
+
     #if html5
     if (Preferences.autoPause) VideoCutscene.pauseVideo();
     #end
@@ -1888,7 +1953,7 @@ class PlayState extends MusicBeatSubState
       }
       else
       {
-        pause(true);
+        pause(Standard, true);
       }
     }
     super.onFocusLost();
@@ -2060,6 +2125,12 @@ class PlayState extends MusicBeatSubState
     FlxG.cameras.add(camCutouts, false);
     if (Preferences.subtitles) FlxG.cameras.add(camSubtitles, false);
     FlxG.cameras.add(camPause, false);
+
+    #if switch
+    camCutscene.visible = false;
+    camPause.visible = false;
+    if (camSubtitles != null) camSubtitles.visible = false;
+    #end
 
     // Configure camera follow point.
     if (previousCameraFollowPoint != null)
@@ -2697,6 +2768,9 @@ class PlayState extends MusicBeatSubState
   public function startConversation(conversationId:String):Void
   {
     isInCutscene = true;
+    #if switch
+    camCutscene.visible = true;
+    #end
 
     currentConversation = ConversationRegistry.instance.fetchEntry(conversationId);
     if (currentConversation == null) return;
@@ -2718,6 +2792,9 @@ class PlayState extends MusicBeatSubState
   function onConversationComplete():Void
   {
     isInCutscene = false;
+    #if switch
+    camCutscene.visible = false;
+    #end
 
     if (currentConversation != null)
     {
@@ -2775,7 +2852,13 @@ class PlayState extends MusicBeatSubState
       {
         subtitlesFile += '-${currentVariation}';
       }
-      if (subtitles != null) subtitles.assignSubtitles(subtitlesFile, FlxG.sound.music);
+      if (subtitles != null)
+      {
+        subtitles.assignSubtitles(subtitlesFile, FlxG.sound.music);
+        #if switch
+        if (camSubtitles != null) camSubtitles.visible = @:privateAccess (subtitles.subtitlesData != null && subtitles.subtitlesData.length > 0);
+        #end
+      }
     }
 
     // Prevent the volume from being wrong.

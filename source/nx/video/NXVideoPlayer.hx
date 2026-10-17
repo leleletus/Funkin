@@ -67,6 +67,8 @@ class NXVideoPlayer
     var vidName:String = currentVideoName;
     var sheetsTotal:Int = totalSheets;
 
+    trace('[NXVideoPlayer] Scheduling prefetch for sheet $nextIndex...');
+
     sys.thread.Thread.create(function() {
       // Thread-safety: Proteger todo el cuerpo en try/catch y jamás invocar OpenFL/OpenGL ni FlxG
       try
@@ -82,6 +84,7 @@ class NXVideoPlayer
           if (bytes != null && bytes.length > 0)
           {
             img = lime.graphics.Image.fromBytes(bytes);
+            bytes = null;
           }
         }
         else if (sys.FileSystem.exists(pngPath))
@@ -90,6 +93,7 @@ class NXVideoPlayer
           if (bytes != null && bytes.length > 0)
           {
             img = lime.graphics.Image.fromBytes(bytes);
+            bytes = null;
           }
         }
 
@@ -112,6 +116,11 @@ class NXVideoPlayer
             prefetchedImage = img;
             prefetchedXml = xmlStr;
             prefetchedSheetIndex = nextIndex;
+            trace('[NXVideoPlayer] Prefetch READY for sheet $nextIndex (${img.width}x${img.height})');
+          }
+          else
+          {
+            trace('[NXVideoPlayer] Prefetch FAILED for sheet $nextIndex (img: ${img != null}, xml: ${xmlStr != null})');
           }
           isPrefetching = false;
           prefetchMutex.release();
@@ -119,6 +128,7 @@ class NXVideoPlayer
       }
       catch (e:Dynamic)
       {
+        trace('[NXVideoPlayer] Prefetch EXCEPTION on sheet $nextIndex: $e');
         if (prefetchMutex != null)
         {
           prefetchMutex.acquire();
@@ -173,31 +183,64 @@ class NXVideoPlayer
       if (sys.FileSystem.exists(romfsPath))
       {
         var bmd = openfl.display.BitmapData.fromFile(romfsPath);
-        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+        {
+          trace('[NXVideoPlayer] getBitmap loaded fromFile: $romfsPath');
+          return bmd;
+        }
 
         var bytes = sys.io.File.getBytes(romfsPath);
         if (bytes != null && bytes.length > 0)
         {
           var bmdFromBytes = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmdFromBytes != null && bmdFromBytes.image != null && bmdFromBytes.width > 0 && bmdFromBytes.height > 0) return bmdFromBytes;
+          bytes = null;
+          if (bmdFromBytes != null && bmdFromBytes.image != null && bmdFromBytes.width > 0 && bmdFromBytes.height > 0)
+          {
+            trace('[NXVideoPlayer] getBitmap loaded fromBytes: $romfsPath');
+            return bmdFromBytes;
+          }
         }
       }
       if (sys.FileSystem.exists(path))
       {
         var bmd = openfl.display.BitmapData.fromFile(path);
-        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+        {
+          trace('[NXVideoPlayer] getBitmap loaded fromFile: $path');
+          return bmd;
+        }
       }
       #end
 
       if (Assets.exists('videos:' + path, IMAGE))
       {
-        var bmd = Assets.getBitmapData('videos:' + path);
-        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        var bmd = Assets.getBitmapData('videos:' + path, false);
+        #if openfl
+        if (openfl.utils.Assets.cache != null) openfl.utils.Assets.cache.removeBitmapData('videos:' + path);
+        #end
+        #if lime
+        if (lime.utils.Assets.cache != null) lime.utils.Assets.cache.image.remove('videos:' + path);
+        #end
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+        {
+          trace('[NXVideoPlayer] getBitmap loaded Assets: videos:$path');
+          return bmd;
+        }
       }
       if (Assets.exists(path, IMAGE))
       {
-        var bmd = Assets.getBitmapData(path);
-        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+        var bmd = Assets.getBitmapData(path, false);
+        #if openfl
+        if (openfl.utils.Assets.cache != null) openfl.utils.Assets.cache.removeBitmapData(path);
+        #end
+        #if lime
+        if (lime.utils.Assets.cache != null) lime.utils.Assets.cache.image.remove(path);
+        #end
+        if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+        {
+          trace('[NXVideoPlayer] getBitmap loaded Assets: $path');
+          return bmd;
+        }
       }
       if (Assets.exists('videos:' + path))
       {
@@ -205,7 +248,12 @@ class NXVideoPlayer
         if (bytes != null && bytes.length > 0)
         {
           var bmd = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+          bytes = null;
+          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+          {
+            trace('[NXVideoPlayer] getBitmap loaded Assets getBytes: videos:$path');
+            return bmd;
+          }
         }
       }
       if (Assets.exists(path))
@@ -214,7 +262,12 @@ class NXVideoPlayer
         if (bytes != null && bytes.length > 0)
         {
           var bmd = openfl.display.BitmapData.fromBytes(bytes);
-          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0) return bmd;
+          bytes = null;
+          if (bmd != null && bmd.image != null && bmd.width > 0 && bmd.height > 0)
+          {
+            trace('[NXVideoPlayer] getBitmap loaded Assets getBytes: $path');
+            return bmd;
+          }
         }
       }
     }
@@ -467,6 +520,7 @@ class NXVideoPlayer
 
     var newBmd:Null<openfl.display.BitmapData> = null;
     var newXmlStr:Null<String> = null;
+    var fromPrefetch:Bool = false;
 
     #if sys
     if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
@@ -478,6 +532,7 @@ class NXVideoPlayer
         // EXCLUSIVAMENTE en el hilo principal: conversión Image -> BitmapData
         newBmd = openfl.display.BitmapData.fromImage(prefetchedImage);
         newXmlStr = prefetchedXml;
+        fromPrefetch = true;
       }
       catch (e:Dynamic)
       {
@@ -518,7 +573,7 @@ class NXVideoPlayer
     }
 
     currentSheetFrameCount = newFrames.frames.length;
-    trace('[NXVideoPlayer] Sheet $sheetIndex loaded: ${newBmd.width}x${newBmd.height}, frames: $currentSheetFrameCount ($pngPath)');
+    trace('[NXVideoPlayer] Sheet $sheetIndex loaded (source: ${fromPrefetch ? "PREFETCH" : "FALLBACK"}): ${newBmd.width}x${newBmd.height}, frames: $currentSheetFrameCount ($pngPath)');
 
     var oldGraphic = activeGraphic;
     var oldFrames = currentSprite.frames;
@@ -560,24 +615,61 @@ class NXVideoPlayer
     currentSprite.alpha = 1.0;
     currentSprite.dirty = true;
 
-    // 1. OBLIGATORIO: Destruye por completo la hoja anterior y ejecuta GC ANTES de lanzar prefetch
+    // 1. OBLIGATORIO: Destruye por completo los buffers de la hoja anterior ANTES de destruir el graphic
+    if (oldBmd != null && oldBmd != newBmd)
+    {
+      if (oldGraphic != null)
+      {
+        oldGraphic.bitmap = null;
+      }
+      if (oldBmd.image != null)
+      {
+        if (oldBmd.image.buffer != null)
+        {
+          if (oldBmd.image.buffer.data != null)
+          {
+            oldBmd.image.buffer.data.buffer = null;
+          }
+          oldBmd.image.buffer.data = null;
+        }
+        oldBmd.image.data = null;
+        oldBmd.image.buffer = null;
+      }
+      oldBmd.disposeImage();
+      oldBmd.dispose();
+      oldBmd = null;
+    }
     if (oldFrames != null && oldFrames != newFrames)
     {
       oldFrames.destroy();
+      oldFrames = null;
     }
     if (oldGraphic != null && oldGraphic != newGraphic)
     {
       FlxG.bitmap.remove(oldGraphic);
       oldGraphic.destroy();
-    }
-    if (oldBmd != null && oldBmd != newBmd)
-    {
-      oldBmd.disposeImage();
-      oldBmd.dispose();
+      oldGraphic = null;
     }
 
+    #if (openfl && !macro)
+    if (openfl.utils.Assets.cache != null)
+    {
+      openfl.utils.Assets.cache.clear("assets/videos/converted/");
+      openfl.utils.Assets.cache.clear("videos:assets/videos/converted/");
+    }
+    #end
+    #if (lime && !macro)
+    if (lime.utils.Assets.cache != null)
+    {
+      lime.utils.Assets.cache.clear("assets/videos/converted/");
+      lime.utils.Assets.cache.clear("videos:assets/videos/converted/");
+    }
+    #end
+
     #if (cpp || switch)
-    cpp.vm.Gc.run(false);
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
+    trace('[NXVideoPlayer] Memory after sheet $sheetIndex cleanup: GC Heap: ${Math.round(cpp.vm.Gc.memInfo(0) / (1024*1024))} MB (large: ${Math.round(cpp.vm.Gc.memInfo(3) / (1024*1024))} MB)');
     #end
 
     // 2. DESPUÉS: Lanzar prefetch de la siguiente hoja en segundo plano (máximo 2 hojas en RAM)
@@ -716,6 +808,19 @@ class NXVideoPlayer
     if (prefetchMutex != null)
     {
       prefetchMutex.acquire();
+      if (prefetchedImage != null)
+      {
+        if (prefetchedImage.buffer != null)
+        {
+          if (prefetchedImage.buffer.data != null)
+          {
+            prefetchedImage.buffer.data.buffer = null;
+          }
+          prefetchedImage.buffer.data = null;
+        }
+        prefetchedImage.data = null;
+        prefetchedImage.buffer = null;
+      }
       prefetchedImage = null;
       prefetchedXml = null;
       prefetchedSheetIndex = -1;
@@ -739,6 +844,31 @@ class NXVideoPlayer
         currentAudio = null;
       }
 
+      if (activeGraphic != null)
+      {
+        activeGraphic.bitmap = null;
+      }
+
+      if (activeBitmapData != null)
+      {
+        if (activeBitmapData.image != null)
+        {
+          if (activeBitmapData.image.buffer != null)
+          {
+            if (activeBitmapData.image.buffer.data != null)
+            {
+              activeBitmapData.image.buffer.data.buffer = null;
+            }
+            activeBitmapData.image.buffer.data = null;
+          }
+          activeBitmapData.image.data = null;
+          activeBitmapData.image.buffer = null;
+        }
+        activeBitmapData.disposeImage();
+        activeBitmapData.dispose();
+        activeBitmapData = null;
+      }
+
       if (currentSprite != null)
       {
         if (PlayState.instance != null) PlayState.instance.remove(currentSprite);
@@ -757,16 +887,25 @@ class NXVideoPlayer
         activeGraphic = null;
       }
 
-      if (activeBitmapData != null)
+      #if (openfl && !macro)
+      if (openfl.utils.Assets.cache != null)
       {
-        activeBitmapData.disposeImage();
-        activeBitmapData.dispose();
-        activeBitmapData = null;
+        openfl.utils.Assets.cache.clear("assets/videos/converted/");
+        openfl.utils.Assets.cache.clear("videos:assets/videos/converted/");
       }
+      #end
+      #if (lime && !macro)
+      if (lime.utils.Assets.cache != null)
+      {
+        lime.utils.Assets.cache.clear("assets/videos/converted/");
+        lime.utils.Assets.cache.clear("videos:assets/videos/converted/");
+      }
+      #end
 
       #if (cpp || switch)
       cpp.vm.Gc.run(true);
       cpp.vm.Gc.compact();
+      trace('[NXVideoPlayer] Stop completed. Final GC Heap: ${Math.round(cpp.vm.Gc.memInfo(0) / (1024*1024))} MB (large: ${Math.round(cpp.vm.Gc.memInfo(3) / (1024*1024))} MB)');
       #end
 
       if (PlayState.instance != null)
@@ -774,6 +913,9 @@ class NXVideoPlayer
         if (PlayState.instance.camCutscene != null)
         {
           PlayState.instance.camCutscene.bgColor = 0x00000000;
+          #if switch
+          PlayState.instance.camCutscene.visible = false;
+          #end
         }
         PlayState.instance.camHUD.visible = true;
         PlayState.instance.isInCutscene = false;

@@ -81,6 +81,10 @@ class InitState extends FlxState
     #if switch
     nx.NXDeepTrace.initSignals();
     nx.NXPerformance.init();
+    if (FlxG.stage != null)
+    {
+      FlxG.stage.quality = openfl.display.StageQuality.LOW;
+    }
     #end
 
     startGame();

@@ -276,8 +276,11 @@ class NXAutoTest
     FlxG.signals.postUpdate.remove(onPostUpdate);
 
     #if (cpp || switch)
+    cpp.vm.Gc.run(true);
+    cpp.vm.Gc.compact();
     var memMb:Float = (cpp.vm.Gc.memInfo(0) / (1024.0 * 1024.0));
-    trace('[AUTOTEST] Memory info: GC Heap: ${Math.round(memMb * 10) / 10} MB');
+    var largeMb:Float = (cpp.vm.Gc.memInfo(3) / (1024.0 * 1024.0));
+    trace('[AUTOTEST] Memory info: GC Heap: ${Math.round(memMb * 10) / 10} MB (Large allocs pool: ${Math.round(largeMb * 10) / 10} MB)');
     #end
 
     trace('[AUTOTEST] ========================================');

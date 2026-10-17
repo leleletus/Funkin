@@ -369,12 +369,20 @@ class FunkinMemory
     var bmp:Null<FlxGraphic> = FlxG.bitmap.get(graphic.key);
     if (bmp != null && bmp.bitmap != null) var _:Int = bmp.bitmap.width; // Trigger
 
+    #if switch
+    // Direct GPU upload on Nintendo Switch without creating a throwaway FlxSprite or drawing out-of-frame
+    if (graphic.bitmap != null && FlxG.stage != null && FlxG.stage.context3D != null)
+    {
+      graphic.bitmap.getTexture(FlxG.stage.context3D);
+    }
+    #else
     // Draws sprite and actually caches it.
     var sprite = new flixel.FlxSprite();
     sprite.loadGraphic(graphic);
     sprite.draw(); // Draw sprite and load it into game's memory.
     graphic.bitmap?.getTexture(FlxG.stage.context3D); // Just in case that didn't work...
     sprite.destroy();
+    #end
   }
 
   /**
