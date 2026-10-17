@@ -776,10 +776,4 @@ class StoryMenuState extends MusicBeatState
       }
     }
   }
-
-  public override function destroy():Void
-  {
-    super.destroy();
-    FunkinMemory.purgeTextureCache();
-  }
 }

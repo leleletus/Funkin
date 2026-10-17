@@ -2158,6 +2158,20 @@ class PlayState extends MusicBeatSubState
     if (currentStage != null)
     {
       currentStage.revive(); // Stages are killed and props destroyed when the PlayState is destroyed to save memory.
+      currentStage.visible = true;
+
+      if (camGame != null)
+      {
+        camGame.visible = true;
+        camGame.alpha = 1.0;
+        camGame.stopFX();
+      }
+      if (FlxG.camera != null)
+      {
+        FlxG.camera.visible = true;
+        FlxG.camera.alpha = 1.0;
+        FlxG.camera.stopFX();
+      }
 
       // Actually create and position the sprites.
       var event:ScriptEvent = new ScriptEvent(CREATE, false);
@@ -3630,10 +3644,17 @@ class PlayState extends MusicBeatSubState
     else if (VideoCutscene.isPlaying())
     {
       // This is a video cutscene.
+      #if switch
+      if ((controls.CUTSCENE_ADVANCE || controls.ACCEPT || controls.PAUSE_P || controls.BACK) && !justUnpaused)
+      {
+        skipVideoCutscene();
+      }
+      #else
       if ((controls.PAUSE_P || androidPause || pauseButtonCheck) && !justUnpaused)
       {
         pause(Cutscene);
       }
+      #end
     }
   }
 
@@ -4102,18 +4123,7 @@ class PlayState extends MusicBeatSubState
       }
 
     persistentUpdate = false;
-    if (vocals != null)
-    {
-      vocals.stop();
-      vocals.destroy();
-      vocals = null;
-    }
-    if (currentStage != null)
-    {
-      remove(currentStage);
-      currentStage.kill();
-      currentStage = null;
-    }
+    vocals?.stop();
     camHUD.alpha = 1;
 
     var talliesToUse:Tallies = PlayStatePlaylist.isStoryMode ? Highscore.talliesLevel : Highscore.tallies;

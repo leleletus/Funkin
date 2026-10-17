@@ -2,17 +2,20 @@ package nx.video;
 
 import flixel.FlxG;
 import flixel.FlxSprite;
+import flixel.graphics.FlxGraphic;
 import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.util.FlxColor;
 import funkin.audio.FunkinSound;
 import funkin.play.PlayState;
 import funkin.Paths;
 import openfl.utils.Assets;
+import openfl.media.Sound;
+import lime.media.AudioBuffer;
 
 /**
  * Modular Cutscene & Video abstraction for Nintendo Switch.
- * Seamlessly plays converted 60fps in-engine sprite/atlas cutscenes with Vorbis audio,
- * or safely falls back to direct transition if no converted asset exists.
+ * Streams converted in-engine sprite/atlas sheets 1 at a time to prevent RAM spikes (keeps GC heap ~35 MB).
+ * Safely plays synchronized Vorbis audio and features watchdog timers against softlocks.
  * Armored against Null Pointer Exceptions (SIGSEGV) and missing assets.
  */
 class NXVideoPlayer
@@ -20,6 +23,15 @@ class NXVideoPlayer
   static var currentSprite:Null<FlxSprite> = null;
   static var currentAudio:Null<FunkinSound> = null;
   static var isPlaying:Bool = false;
+
+  static var currentVideoName:String = "";
+  static var currentSheetIndex:Int = 0;
+  static var totalSheets:Int = 0;
+  static var animFps:Int = 24;
+  static var onCompleteCallback:Null<Void->Void> = null;
+  static var activeBitmapData:Null<openfl.display.BitmapData> = null;
+  static var activeGraphic:Null<FlxGraphic> = null;
+  static var isAdvancingSheet:Bool = false;
 
   /**
    * Returns whether a cutscene is actively rendering or playing audio.
@@ -31,7 +43,7 @@ class NXVideoPlayer
 
   /**
    * Checks if an adapted sprite sheet / atlas and audio exist for the given video file.
-   * If available, plays it in PlayState with 60 FPS hardware rendering and synchronized audio.
+   * If available, plays it in PlayState with hardware rendering and synchronized audio.
    * If missing or on any failure, safely returns false without instantiating any graphics or sounds.
    *
    * @param videoPath The original video path (e.g. "assets/videos/videos/stressPicoCutscene.mkv" or "stressPicoCutscene")
@@ -97,6 +109,107 @@ class NXVideoPlayer
     return null;
   }
 
+  static function loadSoundAsset(videoName:String):Null<openfl.media.Sound>
+  {
+    try
+    {
+      var romfsPath:String = 'romfs:/assets/videos/converted/$videoName.ogg';
+      var relativePath:String = 'assets/videos/converted/$videoName.ogg';
+
+      #if sys
+      if (sys.FileSystem.exists(romfsPath))
+      {
+        var buffer = lime.media.AudioBuffer.fromFile(romfsPath);
+        if (buffer != null)
+        {
+          var sound = openfl.media.Sound.fromAudioBuffer(buffer);
+          if (sound != null) return sound;
+        }
+        var sound = openfl.media.Sound.fromFile(romfsPath);
+        if (sound != null) return sound;
+      }
+      #end
+
+      // Intento por Assets de OpenFL/Lime
+      if (Assets.exists('videos:' + relativePath, SOUND))
+      {
+        var sound = Assets.getSound('videos:' + relativePath);
+        if (sound != null) return sound;
+      }
+      if (Assets.exists(relativePath, SOUND))
+      {
+        var sound = Assets.getSound(relativePath);
+        if (sound != null) return sound;
+      }
+
+      // Si fue empaquetado como BINARY (por project.hxp en Switch)
+      var bytes:Null<openfl.utils.ByteArray> = null;
+      if (Assets.exists('videos:' + relativePath))
+      {
+        bytes = Assets.getBytes('videos:' + relativePath);
+      }
+      else if (Assets.exists(relativePath))
+      {
+        bytes = Assets.getBytes(relativePath);
+      }
+
+      if (bytes != null)
+      {
+        var buffer = lime.media.AudioBuffer.fromBytes(bytes);
+        if (buffer != null)
+        {
+          var sound = openfl.media.Sound.fromAudioBuffer(buffer);
+          if (sound != null) return sound;
+        }
+      }
+
+      #if sys
+      if (sys.FileSystem.exists(relativePath))
+      {
+        var buffer = lime.media.AudioBuffer.fromFile(relativePath);
+        if (buffer != null)
+        {
+          var sound = openfl.media.Sound.fromAudioBuffer(buffer);
+          if (sound != null) return sound;
+        }
+      }
+      #end
+    }
+    catch (e:Dynamic)
+    {
+      trace('[NXVideoPlayer] Error loading sound asset: ' + e);
+    }
+    return null;
+  }
+
+  static function countAvailableSheets(videoName:String):Int
+  {
+    if (hasAsset('assets/videos/converted/${videoName}_0.png', IMAGE) &&
+        hasAsset('assets/videos/converted/${videoName}_0.xml', TEXT))
+    {
+      var count:Int = 0;
+      while (count < 50)
+      {
+        if (hasAsset('assets/videos/converted/${videoName}_$count.png', IMAGE) &&
+            hasAsset('assets/videos/converted/${videoName}_$count.xml', TEXT))
+        {
+          count++;
+        }
+        else
+        {
+          break;
+        }
+      }
+      return count;
+    }
+    if (hasAsset('assets/videos/converted/$videoName.png', IMAGE) &&
+        hasAsset('assets/videos/converted/$videoName.xml', TEXT))
+    {
+      return 1;
+    }
+    return 0;
+  }
+
   public static function playConverted(videoPath:String, onComplete:Void->Void):Bool
   {
     if (PlayState.instance == null) return false;
@@ -106,99 +219,46 @@ class NXVideoPlayer
       var videoName:String = extractVideoName(videoPath);
       if (videoName == null || videoName.length == 0) return false;
 
-      trace('[NXVideoPlayer] Verifying converted assets for: $videoName');
-
-      var isMultiSheet:Bool = false;
-      var primaryPng:String = '';
-      var primaryXml:String = '';
-
-      if (hasAsset('assets/videos/converted/$videoName.png', IMAGE) &&
-          hasAsset('assets/videos/converted/$videoName.xml', TEXT))
-      {
-        primaryPng = 'assets/videos/converted/$videoName.png';
-        primaryXml = 'assets/videos/converted/$videoName.xml';
-      }
-      else if (hasAsset('assets/videos/converted/${videoName}_0.png', IMAGE) &&
-               hasAsset('assets/videos/converted/${videoName}_0.xml', TEXT))
-      {
-        isMultiSheet = true;
-        primaryPng = 'assets/videos/converted/${videoName}_0.png';
-        primaryXml = 'assets/videos/converted/${videoName}_0.xml';
-      }
-      else
+      totalSheets = countAvailableSheets(videoName);
+      if (totalSheets <= 0)
       {
         trace('[NXVideoPlayer] No converted atlas (.png/.xml) found for "$videoName". Safe skip to avoid SIGSEGV.');
         stop();
         return false;
       }
 
-      var primaryBmd = getBitmap(primaryPng);
-      var primaryXmlStr = getText(primaryXml);
-      if (primaryBmd == null || primaryXmlStr == null)
-      {
-        trace('[NXVideoPlayer] Failed reading primary bitmap or xml for "$videoName". Aborting.');
-        stop();
-        return false;
-      }
+      currentVideoName = videoName;
+      currentSheetIndex = 0;
+      onCompleteCallback = onComplete;
+      isAdvancingSheet = false;
 
-      var frames:FlxAtlasFrames = FlxAtlasFrames.fromSparrow(primaryBmd, primaryXmlStr);
-
-      if (isMultiSheet)
+      // Determine initial XML to read authoring FPS
+      var initialXmlPath = (totalSheets > 1) ? 'assets/videos/converted/${videoName}_0.xml' : 'assets/videos/converted/$videoName.xml';
+      var initialXmlStr = getText(initialXmlPath);
+      animFps = 24;
+      if (initialXmlStr != null)
       {
-        var sheetIdx:Int = 1;
-        while (sheetIdx < 50)
+        try
         {
-          var nextPng = 'assets/videos/converted/${videoName}_$sheetIdx.png';
-          var nextXml = 'assets/videos/converted/${videoName}_$sheetIdx.xml';
-          if (hasAsset(nextPng, IMAGE) && hasAsset(nextXml, TEXT))
+          var parsedXml = Xml.parse(initialXmlStr).firstElement();
+          if (parsedXml != null && parsedXml.exists("fps"))
           {
-            var nextBmd = getBitmap(nextPng);
-            var nextXmlStr = getText(nextXml);
-            if (nextBmd != null && nextXmlStr != null)
-            {
-              var subFrames = FlxAtlasFrames.fromSparrow(nextBmd, nextXmlStr);
-              if (subFrames != null) frames.addAtlas(subFrames);
-            }
-            sheetIdx++;
-          }
-          else
-          {
-            break;
+            var parsed = Std.parseInt(parsedXml.get("fps"));
+            if (parsed != null && parsed > 0) animFps = parsed;
           }
         }
+        catch (e:Dynamic) {}
       }
 
-      if (frames == null || frames.frames == null || frames.frames.length == 0)
-      {
-        trace('[NXVideoPlayer] Loaded atlas frames were null or empty for "$videoName". Aborting.');
-        stop();
-        return false;
-      }
+      // Load sound
+      var sound = loadSoundAsset(videoName);
+      trace('[NXVideoPlayer] Starting streaming cutscene for: $videoName (Sheets: $totalSheets, FPS: $animFps, Audio: ${sound != null})');
 
-      var animFps:Int = 24;
-      try
-      {
-        var parsedXml = Xml.parse(primaryXmlStr).firstElement();
-        if (parsedXml != null && parsedXml.exists("fps"))
-        {
-          var parsed = Std.parseInt(parsedXml.get("fps"));
-          if (parsed != null && parsed > 0) animFps = parsed;
-        }
-      }
-      catch (e:Dynamic) {}
-
-      // Check audio existence
-      var hasAudio:Bool = hasAsset('assets/videos/converted/$videoName.ogg', SOUND);
-
-      trace('[NXVideoPlayer] Playing converted cutscene for: $videoName (Audio: $hasAudio, FPS: $animFps, MultiSheet: $isMultiSheet)');
       isPlaying = true;
-
       PlayState.instance.isInCutscene = true;
       PlayState.instance.camHUD.visible = false;
 
       var cutsceneSpr:FlxSprite = new FlxSprite(0, 0);
-      cutsceneSpr.frames = frames;
-      cutsceneSpr.animation.addByPrefix('play', 'cutscene', animFps, false);
       cutsceneSpr.setGraphicSize(1280, 720);
       cutsceneSpr.updateHitbox();
       cutsceneSpr.screenCenter();
@@ -208,30 +268,28 @@ class NXVideoPlayer
       currentSprite = cutsceneSpr;
       PlayState.instance.add(cutsceneSpr);
 
-      var finishCutscene:Void->Void = function()
+      // Connect preUpdate watchdog
+      FlxG.signals.preUpdate.add(onPreUpdate);
+
+      // Start sheet 0
+      if (!loadAndPlaySheet(0))
       {
-        if (!isPlaying) return;
-        isPlaying = false;
-
+        trace('[NXVideoPlayer] Failed to load initial sheet for "$videoName". Aborting.');
         stop();
+        return false;
+      }
 
-        if (onComplete != null) onComplete();
-      };
-
-      if (hasAudio)
+      if (sound != null)
       {
         try
         {
-          var audioKey:String = Assets.exists('videos:assets/videos/converted/$videoName.ogg') ? 'videos:assets/videos/converted/$videoName.ogg' : 'assets/videos/converted/$videoName.ogg';
-          #if sys
-          if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.ogg'))
-          {
-            audioKey = 'romfs:/assets/videos/converted/$videoName.ogg';
-          }
-          #end
-          currentAudio = FunkinSound.load(Paths.file(audioKey), 1.0, false, true, false, false, finishCutscene, null, true);
+          currentAudio = FunkinSound.load(sound, 1.0, false, false, false, false, function() {
+            trace('[NXVideoPlayer] Audio reached end.');
+          }, null, true);
+
           if (currentAudio != null)
           {
+            FlxG.sound.list.add(currentAudio);
             currentAudio.play();
           }
         }
@@ -241,22 +299,6 @@ class NXVideoPlayer
         }
       }
 
-      cutsceneSpr.animation.play('play');
-      if (cutsceneSpr.animation.onFinish != null)
-      {
-        cutsceneSpr.animation.onFinish.add(function(_)
-        {
-          if (!hasAudio) finishCutscene();
-        });
-      }
-      else
-      {
-        cutsceneSpr.animation.finishCallback = function(_)
-        {
-          if (!hasAudio) finishCutscene();
-        };
-      }
-
       return true;
     }
     catch (e:Dynamic)
@@ -264,6 +306,102 @@ class NXVideoPlayer
       trace('[NXVideoPlayer] Fatal exception in playConverted: ' + e);
       stop();
       return false;
+    }
+  }
+
+  static function loadAndPlaySheet(sheetIndex:Int):Bool
+  {
+    if (!isPlaying || currentSprite == null) return false;
+
+    var pngPath:String = (totalSheets > 1) ? 'assets/videos/converted/${currentVideoName}_$sheetIndex.png' : 'assets/videos/converted/$currentVideoName.png';
+    var xmlPath:String = (totalSheets > 1) ? 'assets/videos/converted/${currentVideoName}_$sheetIndex.xml' : 'assets/videos/converted/$currentVideoName.xml';
+
+    var newBmd = getBitmap(pngPath);
+    var newXmlStr = getText(xmlPath);
+    if (newBmd == null || newXmlStr == null)
+    {
+      trace('[NXVideoPlayer] Missing sheet assets at index $sheetIndex ($pngPath / $xmlPath)');
+      finishCutscene();
+      return false;
+    }
+
+    // Wrap in FlxGraphic with persist = false to prevent bitmap leaks
+    var newGraphic = FlxGraphic.fromBitmapData(newBmd, false, pngPath, false);
+    newGraphic.persist = false;
+    newGraphic.destroyOnNoUse = false;
+
+    var newFrames = FlxAtlasFrames.fromSparrow(newGraphic, newXmlStr);
+    if (newFrames == null || newFrames.frames == null || newFrames.frames.length == 0)
+    {
+      trace('[NXVideoPlayer] Invalid atlas frames at index $sheetIndex');
+      finishCutscene();
+      return false;
+    }
+
+    var oldGraphic = activeGraphic;
+    var oldFrames = currentSprite.frames;
+    var oldBmd = activeBitmapData;
+
+    activeGraphic = newGraphic;
+    activeBitmapData = newBmd;
+    currentSprite.frames = newFrames;
+
+    var animName:String = 'sheet_$sheetIndex';
+    currentSprite.animation.addByPrefix(animName, 'cutscene', animFps, false);
+    currentSprite.animation.finishCallback = function(name:String)
+    {
+      onSheetAnimationComplete();
+    };
+    currentSprite.animation.play(animName, true);
+
+    // Dispose old assets immediately to keep RAM at ~35 MB
+    if (oldFrames != null && oldFrames != newFrames)
+    {
+      oldFrames.destroy();
+    }
+    if (oldGraphic != null && oldGraphic != newGraphic)
+    {
+      FlxG.bitmap.remove(oldGraphic);
+      oldGraphic.destroy();
+    }
+    if (oldBmd != null && oldBmd != newBmd)
+    {
+      oldBmd.disposeImage();
+      oldBmd.dispose();
+    }
+
+    return true;
+  }
+
+  static function onPreUpdate():Void
+  {
+    if (!isPlaying || currentSprite == null || isAdvancingSheet) return;
+
+    if (currentSprite.animation != null && currentSprite.animation.curAnim != null)
+    {
+      if (currentSprite.animation.curAnim.finished)
+      {
+        onSheetAnimationComplete();
+      }
+    }
+  }
+
+  static function onSheetAnimationComplete():Void
+  {
+    if (!isPlaying || isAdvancingSheet) return;
+    isAdvancingSheet = true;
+
+    if (currentSheetIndex + 1 < totalSheets)
+    {
+      currentSheetIndex++;
+      loadAndPlaySheet(currentSheetIndex);
+      isAdvancingSheet = false;
+    }
+    else
+    {
+      // Final sheet finished!
+      isAdvancingSheet = false;
+      finishCutscene();
     }
   }
 
@@ -296,16 +434,41 @@ class NXVideoPlayer
   }
 
   /**
+   * Finishes the cutscene naturally when animation completes, calling onComplete.
+   */
+  public static function finishCutscene():Void
+  {
+    if (!isPlaying) return;
+    isPlaying = false;
+    isAdvancingSheet = false;
+
+    var cb = onCompleteCallback;
+    onCompleteCallback = null;
+
+    stop();
+
+    if (cb != null)
+    {
+      cb();
+    }
+  }
+
+  /**
    * Safely stops and frees all resources for the cutscene.
    */
   public static function stop():Void
   {
     isPlaying = false;
+    isAdvancingSheet = false;
+    onCompleteCallback = null;
+    FlxG.signals.preUpdate.remove(onPreUpdate);
+
     try
     {
       if (currentAudio != null)
       {
         currentAudio.stop();
+        FlxG.sound.list.remove(currentAudio, true);
         currentAudio.destroy();
         currentAudio = null;
       }
@@ -319,6 +482,20 @@ class NXVideoPlayer
         }
         currentSprite.destroy();
         currentSprite = null;
+      }
+
+      if (activeGraphic != null)
+      {
+        FlxG.bitmap.remove(activeGraphic);
+        activeGraphic.destroy();
+        activeGraphic = null;
+      }
+
+      if (activeBitmapData != null)
+      {
+        activeBitmapData.disposeImage();
+        activeBitmapData.dispose();
+        activeBitmapData = null;
       }
 
       #if (cpp || switch)

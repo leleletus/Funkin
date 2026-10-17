@@ -100,6 +100,7 @@ class VideoCutscene
 
       if (nx.video.NXVideoPlayer.playConverted(filePath, onFinish))
       {
+        onVideoStarted.dispatch();
         return;
       }
 

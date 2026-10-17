@@ -2813,7 +2813,6 @@ class FreeplayState extends MusicBeatSubState
       #end
       funnyCam.fade(FlxColor.BLACK, 0.2, false, function() {
         Paths.setCurrentLevel(cap?.freeplayData?.levelId);
-        FunkinMemory.clearFreeplay();
         LoadingState.loadPlayState(
           {
             targetSong: targetSong,

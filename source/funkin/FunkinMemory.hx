@@ -136,6 +136,9 @@ class FunkinMemory
     // Resguardar scripts de Polymod, backing cards y elementos de Freeplay
     if (key.contains("scripts/") || key.contains("backcards/") || key.contains("sortedLetters")) return true;
 
+    // Resguardar atlas de FlxAnimate (spritemap) y elementos de Freeplay
+    if (key.indexOf("spritemap") != -1 || key.indexOf("backing-text") != -1 || key.indexOf("freeplay/") != -1) return true;
+
     return false;
   }
 
@@ -564,6 +567,10 @@ class FunkinMemory
     {
       if (!key.contains("freeplay")) continue;
       if (permanentCachedTextures.exists(key) || key.contains("fonts")) continue;
+      if (key.indexOf("spritemap") != -1 || key.indexOf("backing-text") != -1) continue;
+
+      var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
+      if (obj != null && isProtectedGraphic(key, obj)) continue;
 
       keysToRemove.push(key);
     }
@@ -573,8 +580,11 @@ class FunkinMemory
     {
       log('Cleaning asset $key');
       var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
-      if (obj != null)
+      if (obj != null && !obj.isDestroyed)
       {
+        if (obj.useCount > 0) continue;
+        FlxG.bitmap.remove(obj);
+        obj.persist = false;
         obj.destroy();
       }
       FlxG.bitmap.removeKey(key);
