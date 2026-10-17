@@ -668,7 +668,6 @@ class NXVideoPlayer
 
     #if (cpp || switch)
     cpp.vm.Gc.run(true);
-    cpp.vm.Gc.compact();
     trace('[NXVideoPlayer] Memory after sheet $sheetIndex cleanup: GC Heap: ${Math.round(cpp.vm.Gc.memInfo(0) / (1024*1024))} MB (large: ${Math.round(cpp.vm.Gc.memInfo(3) / (1024*1024))} MB)');
     #end
 

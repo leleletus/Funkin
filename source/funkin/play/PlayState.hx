@@ -528,6 +528,13 @@ class PlayState extends MusicBeatSubState
    */
   var soundsPausedBySubState:List<FlxSound> = new List<FlxSound>();
 
+  #if switch
+  var lastObservedMusicTime:Float = -1.0;
+  var musicStallTimer:Float = 0.0;
+  var audioRecoveryCooldown:Float = 0.0;
+  var focusLostDuringCutsceneOrCountdown:Bool = false;
+  #end
+
   /**
    * False until `create()` has completed.
    */
@@ -1080,6 +1087,13 @@ class PlayState extends MusicBeatSubState
       startingSong = true;
       isPlayerDying = false;
 
+      #if switch
+      lastObservedMusicTime = -1.0;
+      musicStallTimer = 0.0;
+      audioRecoveryCooldown = 0.0;
+      focusLostDuringCutsceneOrCountdown = false;
+      #end
+
       // Reset music properly.
       if (FlxG.sound.music != null)
       {
@@ -1182,6 +1196,45 @@ class PlayState extends MusicBeatSubState
       #if switch
       nx.NXAudioDiagnostics.update(elapsed);
       nx.NXAudioDiagnostics.checkWatchdog(Conductor.instance.songPosition, isGamePaused, isInCutscene, vocals);
+
+      if (camSubtitles != null)
+      {
+        camSubtitles.visible = (Preferences.subtitles && subtitles != null && subtitles.members.length > 0);
+      }
+
+      if (audioRecoveryCooldown > 0) audioRecoveryCooldown -= elapsed;
+
+      var isClockStalled:Bool = false;
+      if (!isGamePaused && !isInCutscene && !isPlayerDying && !isSongEnd && FlxG.sound.music != null)
+      {
+        if (FlxG.sound.music.playing)
+        {
+          var curMusicTime:Float = FlxG.sound.music.time;
+          if (lastObservedMusicTime >= 0 && Math.abs(curMusicTime - lastObservedMusicTime) < 0.01)
+          {
+            musicStallTimer += elapsed;
+          }
+          else
+          {
+            musicStallTimer = 0.0;
+            lastObservedMusicTime = curMusicTime;
+          }
+        }
+        else
+        {
+          musicStallTimer += elapsed;
+        }
+
+        if (musicStallTimer >= 0.05)
+        {
+          isClockStalled = true;
+        }
+      }
+      else
+      {
+        musicStallTimer = 0.0;
+        lastObservedMusicTime = -1.0;
+      }
       #end
 
       // Lime has some precision loss when getting the sound current position
@@ -1190,7 +1243,7 @@ class PlayState extends MusicBeatSubState
       // The previous method where it "guessed" the song position based on the elapsed time had some flaws
       // Somtimes the songPosition would exceed the music length causing issues in other places
       // And it was frame dependant which we don't like!!
-      if (FlxG.sound.music != null && FlxG.sound.music.playing)
+      if (FlxG.sound.music != null && FlxG.sound.music.playing #if switch && !isClockStalled #end)
       {
         final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
         if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
@@ -1215,15 +1268,26 @@ class PlayState extends MusicBeatSubState
           var expectedTime:Float = Conductor.instance.songPosition - Conductor.instance.combinedOffset;
           if (expectedTime < (FlxG.sound.music.length - 500))
           {
-            // Ocurrio un corte anomalo de canal en OpenAL a mitad de cancion (por micro-tiron o por Sleep/Wake)
-            Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000 * playbackRate, false);
+            // OpenAL clock stall (> 50ms) o caída de stream a mitad de canción:
+            // Avanzar el Conductor con delta de tiempo real para que las notas sigan fluidas
+            Conductor.instance.update(Conductor.instance.songPosition + elapsed * 1000.0 * playbackRate, false);
 
-            var recoverTime:Float = Math.max(0, Math.min(expectedTime, FlxG.sound.music.length - 200));
-            trace('[NXAudioRecovery] Mid-song stream drop detected at ${recoverTime}ms! Re-igniting OpenAL stream...');
-            FlxG.sound.music.play(false, recoverTime);
-            FlxG.sound.music.pitch = playbackRate;
-            FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
-            resyncVocals();
+            // Si el estancamiento supera los 180ms confirmados, forzar reconstrucción completa de OpenAL
+            if (musicStallTimer >= 0.18 && audioRecoveryCooldown <= 0)
+            {
+              var recoverTime:Float = Math.max(0, Math.min(expectedTime, FlxG.sound.music.length - 200));
+              trace('[NXAudioRecovery] OpenAL clock stall/drop detected at ${recoverTime}ms (stalled for ${musicStallTimer}s)! Re-igniting OpenAL stream...');
+              FlxG.sound.music.pause();
+              FlxG.sound.music.time = recoverTime;
+              FlxG.sound.music.play(true, recoverTime);
+              FlxG.sound.music.pitch = playbackRate;
+              FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
+              resyncVocals();
+
+              musicStallTimer = 0.0;
+              lastObservedMusicTime = FlxG.sound.music.time;
+              audioRecoveryCooldown = 1.0;
+            }
           }
           else
           {
@@ -1775,7 +1839,36 @@ class PlayState extends MusicBeatSubState
 
       // The logic here is that if this sound doesn't auto-destroy
       // then it's gonna be reused somewhere, so we just stop it instead.
+      #if switch
+      forEachPausedSound(function(s:FlxSound) {
+        if (s != null)
+        {
+          if (needsReset)
+          {
+            if (s.autoDestroy) s.destroy(); else s.stop();
+          }
+          else
+          {
+            var savedComplete = s.onComplete;
+            var t:Float = s.time;
+            if (s.length > 0 && t >= s.length - 100)
+            {
+              s.stop();
+              if (savedComplete != null) savedComplete();
+            }
+            else
+            {
+              s.pause();
+              s.time = t;
+              s.play(true, t);
+              s.onComplete = savedComplete;
+            }
+          }
+        }
+      });
+      #else
       forEachPausedSound(s -> needsReset ? (s.autoDestroy ? s.destroy() : s.stop()) : s.resume());
+      #end
 
       // Resume camera tweens if we paused any.
       for (camTween in cameraTweensPausedBySubState)
@@ -1886,6 +1979,42 @@ class PlayState extends MusicBeatSubState
       nx.video.NXVideoPlayer.resume();
     }
 
+    FlxTimer.globalManager.active = true;
+    FlxTween.globalManager.active = true;
+
+    if (focusLostDuringCutsceneOrCountdown)
+    {
+      focusLostDuringCutsceneOrCountdown = false;
+      if (musicPausedBySubState)
+      {
+        if (FlxG.sound.music != null) FlxG.sound.music.play();
+        musicPausedBySubState = false;
+      }
+      forEachPausedSound(function(s:FlxSound) {
+        if (s != null)
+        {
+          var savedComplete = s.onComplete;
+          var t:Float = s.time;
+          if (s.length > 0 && t >= s.length - 100)
+          {
+            s.stop();
+            if (savedComplete != null) savedComplete();
+          }
+          else
+          {
+            s.pause();
+            s.time = t;
+            s.play(true, t);
+            s.onComplete = savedComplete;
+          }
+        }
+      });
+      if (vocals != null && FlxG.sound.music != null && FlxG.sound.music.playing)
+      {
+        resyncVocals();
+      }
+    }
+
     if (startingSong && isInCountdown)
     {
       if (Countdown.countdownStep != BEFORE && Countdown.countdownStep != AFTER)
@@ -1920,6 +2049,34 @@ class PlayState extends MusicBeatSubState
     {
       nx.video.NXVideoPlayer.pause();
     }
+
+    if (isInCutscene || startingSong)
+    {
+      focusLostDuringCutsceneOrCountdown = true;
+      Countdown.pauseCountdown();
+      FlxTimer.globalManager.active = false;
+      FlxTween.globalManager.active = false;
+
+      if (FlxG.sound.music != null && FlxG.sound.music.playing)
+      {
+        FlxG.sound.music.pause();
+        musicPausedBySubState = true;
+      }
+
+      FlxG.sound.list.forEachAlive(function(sound:FlxSound) {
+        if (!sound.active || sound == FlxG.sound.music) return;
+        if (Std.isOfType(sound, FunkinSound))
+        {
+          var funkinSound:FunkinSound = cast sound;
+          if (funkinSound != null && !funkinSound.isPlaying) return;
+        }
+        if (!sound.playing && sound.time >= 0) return;
+        sound.pause();
+        soundsPausedBySubState.add(sound);
+      });
+
+      vocals?.pause();
+    }
     #end
 
     #if html5
@@ -1953,7 +2110,14 @@ class PlayState extends MusicBeatSubState
       }
       else
       {
+        #if switch
+        if (!isInCutscene && !startingSong)
+        {
+          pause(Standard, true);
+        }
+        #else
         pause(Standard, true);
+        #end
       }
     }
     super.onFocusLost();
@@ -2127,6 +2291,7 @@ class PlayState extends MusicBeatSubState
     FlxG.cameras.add(camPause, false);
 
     #if switch
+    camCutouts.visible = false;
     camCutscene.visible = false;
     camPause.visible = false;
     if (camSubtitles != null) camSubtitles.visible = false;
@@ -2935,9 +3100,15 @@ class PlayState extends MusicBeatSubState
     if (vocalTargetTime >= 0 && vocalTargetTime < FlxG.sound.music.length)
     {
       trace('Resyncing vocals to ${vocalTargetTime}');
+      #if switch
+      vocals.pause();
+      vocals.time = vocalTargetTime;
+      vocals.play();
+      #else
       vocals.pause();
       vocals.time = vocalTargetTime;
       vocals.play(false, vocalTargetTime);
+      #end
     }
   }
 
