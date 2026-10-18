@@ -8,6 +8,9 @@ import nx.NXMain;
 #if cpp
 @:cppInclude("switch.h")
 @:cppInclude("malloc.h")
+@:cppFileCode('
+extern "C" { extern char* fake_heap_start; extern char* fake_heap_end; }
+')
 #end
 #end
 
@@ -32,6 +35,15 @@ class NXPerformance
     applyResolutionMode(Preferences.switchResolutionMode);
     updatePerfHud();
     NXTextureMemory.init();
+    #if NX_DEV_TOOLS
+    // Test builds: log touchscreen events to learn whether they reach the game (touch controls are mobile-only upstream).
+    lime.ui.Touch.onStart.add(function(touch:lime.ui.Touch) {
+      NXDeepTrace.writeEntry('TOUCH', 'start id ${touch.id} at ${Math.round(touch.x * 1280)},${Math.round(touch.y * 720)} (${NXMain.IS_DOCKED ? "docked" : "handheld"})');
+    });
+    lime.ui.Touch.onEnd.add(function(touch:lime.ui.Touch) {
+      NXDeepTrace.writeEntry('TOUCH', 'end id ${touch.id} at ${Math.round(touch.x * 1280)},${Math.round(touch.y * 720)}');
+    });
+    #end
     #end
   }
 
@@ -61,6 +73,8 @@ class NXPerformance
     #if NX_DEV_TOOLS
     updatePerfTelemetry();
     logGamepadInput();
+    NXDevOverlay.update();
+    checkAutoPlayCombo();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
@@ -138,6 +152,47 @@ class NXPerformance
     #end // NX_DEV_TOOLS
     #end
   }
+
+  #if NX_DEV_TOOLS
+  static var autoPlayHold:Float = 0.0;
+  static var autoPlayTriggered:Bool = false;
+
+  /**
+   * Test builds: holding L+R for 3 s starts the PLAYTHROUGH run (Weekend 1, Week 7 and LE SSERAFIM in Story
+   * Mode, then Freeplay: Pico -> 2Hot, Boyfriend -> Spaghetti), all played to the end with botplay.
+   */
+  static function checkAutoPlayCombo():Void
+  {
+    var held:Bool = false;
+    try
+    {
+      if (NXMain.nxController != null)
+        held = NXMain.nxController.isPressed(nx.controls.NXControlButton.L) && NXMain.nxController.isPressed(nx.controls.NXControlButton.R);
+      else if (FlxG.gamepads != null)
+        held = FlxG.gamepads.anyPressed(LEFT_SHOULDER) && FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+    }
+    catch (e:Dynamic) {}
+
+    if (!held)
+    {
+      autoPlayHold = 0.0;
+      autoPlayTriggered = false;
+      return;
+    }
+    autoPlayHold += FlxG.elapsed;
+    if (autoPlayHold >= 3.0 && !autoPlayTriggered)
+    {
+      autoPlayTriggered = true;
+      if (NXAutoTest.isActive())
+      {
+        NXDevOverlay.show('AUTO: a run is already active', 3.0);
+        return;
+      }
+      NXDeepTrace.logButtonEvent('L+R', 'held 3s: starting PLAYTHROUGH');
+      NXAutoTest.startRuntime('PLAYTHROUGH');
+    }
+  }
+  #end
 
   /**
    * Handle Dock insertion/removal.
@@ -255,7 +310,7 @@ class NXPerformance
       var res:String = (window != null) ? '${window.width}x${window.height}' : '?';
       NXDeepTrace.writeEntry('PERF', '[${ps.currentSong?.id}@${Math.round(funkin.Conductor.instance.songPosition / 1000)}s] avg ${Math.round(perfFrames / elapsed * 10) / 10} FPS'
         + ' | worst frame ${Math.round(perfWorstFrameMs * 10) / 10} ms | slow frames (>20 ms): $perfSlowFrames/$perfFrames'
-        + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | native ${Math.round(getNativeHeapUsed())} MB');
+        + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | ${describeHeap()}');
       perfWindowStart = now;
       perfFrames = 0;
       perfWorstFrameMs = 0.0;
@@ -368,6 +423,37 @@ class NXPerformance
     return usedBytes / (1024.0 * 1024.0);
     #else
     return 0.0;
+    #end
+  }
+
+  /**
+   * Real state of the newlib heap (the only memory pool of the process: textures, audio, Mesa...):
+   * total heap given by Horizon, bytes in use, free bytes inside the arena (holes) and memory never
+   * touched yet above the arena. A large-allocation crash with plenty of "free" but little "untouched"
+   * memory means fragmentation; little of both means memory really ran out.
+   */
+  public static function describeHeap():String
+  {
+    #if (switch && cpp)
+    var total:Float = 0;
+    var arena:Float = 0;
+    var used:Float = 0;
+    var holes:Float = 0;
+    var untouched:Float = 0;
+    untyped __cpp__('
+      struct mallinfo mi = mallinfo();
+      // newlib grows its arena contiguously from fake_heap_start with sbrk, so whatever lies above the
+      // arena has never been handed out yet.
+      {0} = (double)(fake_heap_end - fake_heap_start);
+      {1} = (double)mi.arena;
+      {2} = (double)mi.uordblks;
+      {3} = (double)mi.fordblks;
+      {4} = (double)(fake_heap_end - fake_heap_start) - (double)mi.arena;
+    ', total, arena, used, holes, untouched);
+    var mb = (v:Float) -> Math.round(v / 104857.6) / 10;
+    return 'heap ${mb(total)} MB | in use ${mb(used)} MB | free holes ${mb(holes)} MB | untouched ${mb(untouched)} MB | arena ${mb(arena)} MB';
+    #else
+    return 'heap n/a';
     #end
   }
 

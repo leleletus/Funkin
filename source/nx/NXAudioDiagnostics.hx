@@ -500,7 +500,10 @@ class NXAudioDiagnostics
     if (music == null || music.length <= 0) return false;
 
     var ps = funkin.play.PlayState.instance;
-    var songPosition:Float = (lastPlayingSongPosition >= 0) ? lastPlayingSongPosition : funkin.Conductor.instance.songPosition;
+    // The larger of both: at the natural end the Conductor reads 0 for a frame (lastPlayingSongPosition is
+    // right), while during an OpenAL stall the notes keep advancing with real time and the instrumental must
+    // resume where the notes are, not jump the chart back to where the source froze.
+    var songPosition:Float = (lastPlayingSongPosition >= 0) ? Math.max(lastPlayingSongPosition, funkin.Conductor.instance.songPosition) : funkin.Conductor.instance.songPosition;
     var musicTime:Float = songPosition - funkin.Conductor.instance.combinedOffset;
 
     // Genuine end: the instrumental was within the last 1.5 s, or every note of the chart was already played.

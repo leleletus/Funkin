@@ -80,6 +80,7 @@ class NXDevTools
   public static function isBotplayOn():Bool
   {
     init();
+    if (NXAutoTest.isActive()) return true;
     if (botplayOverride != null) return botplayOverride;
     return cfgBotplayStart || NXAutoTest.isActive();
   }

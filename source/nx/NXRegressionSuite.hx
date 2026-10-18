@@ -292,6 +292,601 @@ class NXRegressionSuite
     nextStep();
   }
 
+  /**
+   * Songs and cutscenes run to their natural end (PLAYTHROUGH) instead of 2-3 s each.
+   */
+  static var fullLength:Bool = false;
+
+  /**
+   * PLAYTHROUGH (L+R held 3 s on a test build, or autotest.cfg): a real session played to the end with
+   * botplay: Story Mode Weekend 1, Week 7 and LE SSERAFIM, then Freeplay with Pico (2Hot) and with
+   * Boyfriend (Spaghetti). Logs memory and heap state after each part, to reproduce long-session crashes.
+   */
+  public static function startPlaythrough():Void
+  {
+    fullLength = true;
+    steps = [];
+    for (week in ["weekend1", "week7", "sserafim"])
+    {
+      steps.push(
+        {
+          name: 'Story Mode $week played to the end',
+          covers: "Playthrough",
+          timeout: 1800,
+          enter: () -> launchStory(week),
+          poll: () -> playStoryWeek(week, 1)
+        });
+      steps.push(
+        {
+          name: 'Memory after $week',
+          covers: "Memory",
+          timeout: 20,
+          enter: () -> {},
+          poll: () -> logCheckpoint('after $week')
+        });
+    }
+    steps.push(
+      {
+        name: "Freeplay -> Character Select -> Pico",
+        covers: "Playthrough",
+        timeout: 120,
+        enter: () -> {},
+        poll: () -> menusToCharSelectToFreeplay()
+      });
+    steps.push(
+      {
+        name: "Freeplay (Pico): 2Hot played to the end",
+        covers: "Playthrough",
+        timeout: 600,
+        enter: () -> {},
+        poll: () -> freeplayPlaySong("2hot")
+      });
+    steps.push(
+      {
+        name: "Memory after 2Hot (Pico)",
+        covers: "Memory",
+        timeout: 20,
+        enter: () -> {},
+        poll: () -> logCheckpoint('after 2hot')
+      });
+    steps.push(
+      {
+        name: "Character Select -> Boyfriend",
+        covers: "Playthrough",
+        timeout: 120,
+        enter: () -> {},
+        poll: () -> freeplayCharSelect("bf")
+      });
+    steps.push(
+      {
+        name: "Freeplay (Boyfriend): Spaghetti played to the end",
+        covers: "Playthrough",
+        timeout: 600,
+        enter: () -> {},
+        poll: () -> freeplayPlaySong("spaghetti")
+      });
+    steps.push(
+      {
+        name: "Memory at the end",
+        covers: "Memory",
+        timeout: 20,
+        enter: () -> {},
+        poll: () -> logCheckpoint('end')
+      });
+    results = [];
+    index = -1;
+    running = true;
+    trace('[AUTOTEST] PLAYTHROUGH: ${steps.length} steps');
+    NXDeepTrace.logMemorySnapshot('PLAYTHROUGH BASELINE', false);
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] start: ${NXPerformance.describeHeap()}');
+    nextStep();
+  }
+
+  /**
+   * CUTSCENE_SKIP: every kind of cutscene handled exactly like upstream, with real SDL button presses:
+   * - Video cutscenes (Weekend 1, Week 7): A does nothing; + opens the pause menu, "Restart Cutscene" plays it
+   *   again from the start, "Skip Cutscene" skips it.
+   * - Spaghetti's in-engine cutscene: the first A shows "Skip [ A ]", the second A skips it.
+   * - Week 6 dialogue: A completes the line, A again shows the next one; + opens "Skip Dialogue".
+   */
+  public static function startCutsceneSkip():Void
+  {
+    fullLength = false;
+    steps = [];
+    for (entry in [["weekend1", "darnell"], ["week7", "ugh"]])
+    {
+      var week:String = entry[0];
+      var song:String = entry[1];
+      steps.push(
+        {
+          name: 'Story Mode $week: video cutscene (A ignored, + -> Restart Cutscene -> Skip Cutscene)',
+          covers: "Cutscene skip",
+          timeout: 150,
+          enter: () -> launchStory(week),
+          poll: () -> videoCutscenePauseMenu(song)
+        });
+      steps.push(
+        {
+          name: 'Pause -> exit to the Story menu',
+          covers: "Setup",
+          timeout: 40,
+          enter: () -> {},
+          poll: () -> pauseAndQuitToMenu(StoryMenuState)
+        });
+    }
+    steps.push(
+      {
+        name: "Story Mode Week 6: dialogue (A completes / advances, + -> Skip Dialogue)",
+        covers: "Cutscene skip",
+        timeout: 150,
+        enter: () -> launchStory("week6"),
+        poll: () -> dialogueWithButtons()
+      });
+    steps.push(
+      {
+        name: 'Pause -> exit to the Story menu',
+        covers: "Setup",
+        timeout: 40,
+        enter: () -> {},
+        poll: () -> pauseAndQuitToMenu(StoryMenuState)
+      });
+    steps.push(
+      {
+        name: "Story Mode LE SSERAFIM: Spaghetti cutscene shows \"Skip [ A ]\" and A skips it",
+        covers: "Cutscene skip",
+        timeout: 120,
+        enter: () -> launchStory("sserafim"),
+        poll: () -> skipSpaghettiCutsceneWithA()
+      });
+    results = [];
+    index = -1;
+    running = true;
+    trace('[AUTOTEST] CUTSCENE_SKIP: ${steps.length} steps');
+    nextStep();
+  }
+
+  /**
+   * Moves the pause menu cursor onto `text` with the D-pad and presses A. Returns true once A was pressed.
+   */
+  static function choosePauseEntry(text:String):Null<Bool>
+  {
+    var pause = findPauseSubState();
+    if (pause == null) return null;
+    if (now() - mark < 0.4) return null;
+    var entries:Array<Dynamic> = @:privateAccess pause.currentMenuEntries;
+    var target:Int = -1;
+    for (i in 0...entries.length)
+      if (entries[i].text == text) target = i;
+    if (target < 0)
+    {
+      failReason = 'pause menu has no "$text" entry (${[for (e in entries) e.text].join(", ")})';
+      return false;
+    }
+    var current:Int = @:privateAccess pause.currentEntry;
+    mark = now();
+    if (current != target)
+    {
+      NXInputInject.tap(current < target ? NXInputInject.SWITCH_DPAD_DOWN : NXInputInject.SWITCH_DPAD_UP);
+      return null;
+    }
+    trace('[AUTOTEST] Pause menu: A on "$text"');
+    NXInputInject.tap(NXInputInject.SWITCH_A);
+    return true;
+  }
+
+  static var videoSheetAtPause:Int = -1;
+
+  static function videoCutscenePauseMenu(songId:String):Null<Bool>
+  {
+    switch (phase)
+    {
+      case 0:
+        if (songIs(songId) && NXVideoPlayer.isCutscenePlaying())
+        {
+          phase = 1;
+          mark = now();
+        }
+        failReason = 'waiting for the $songId video cutscene (${describeState()})';
+      case 1:
+        // Upstream: A does nothing during a video cutscene.
+        if (now() - mark >= 2.0)
+        {
+          if (!NXInputInject.tap(NXInputInject.SWITCH_A))
+          {
+            failReason = 'no controller connected';
+            return false;
+          }
+          phase = 2;
+          mark = now();
+        }
+      case 2:
+        if (now() - mark >= 1.0)
+        {
+          if (!NXVideoPlayer.isCutscenePlaying() || findPauseSubState() != null)
+          {
+            failReason = 'A changed the video cutscene (upstream ignores A there)';
+            return false;
+          }
+          trace('[AUTOTEST] A ignored during the $songId video, as upstream. Pressing +');
+          NXInputInject.tap(NXInputInject.SWITCH_PLUS);
+          phase = 3;
+          mark = now();
+        }
+      case 3:
+        var pause = findPauseSubState();
+        if (pause != null && now() - mark >= 1.5)
+        {
+          var mode:String = Std.string(@:privateAccess pause.currentMode);
+          var audioTime:Float = @:privateAccess NXVideoPlayer.currentAudio?.time ?? -1;
+          videoSheetAtPause = Math.round(audioTime);
+          trace('[AUTOTEST] Pause menu open (mode $mode), video audio at ${Math.round(audioTime)}ms');
+          if (mode != "Cutscene")
+          {
+            failReason = 'pause menu opened in mode $mode instead of Cutscene';
+            return false;
+          }
+          phase = 4;
+          mark = now();
+        }
+        else if (pause == null && now() - mark > 2.0)
+        {
+          failReason = '+ did not open the pause menu during the video';
+          return false;
+        }
+      case 4:
+        // Frozen while paused.
+        if (now() - mark >= 1.0)
+        {
+          var audioTime:Float = @:privateAccess NXVideoPlayer.currentAudio?.time ?? -1;
+          if (Math.abs(audioTime - videoSheetAtPause) > 50 || !@:privateAccess NXVideoPlayer.isPaused)
+          {
+            failReason = 'the video kept running behind the pause menu (${videoSheetAtPause}ms -> ${Math.round(audioTime)}ms)';
+            return false;
+          }
+          phase = 5;
+          mark = now();
+        }
+      case 5:
+        var chosen = choosePauseEntry("Restart Cutscene");
+        if (chosen == false) return false;
+        if (chosen == true)
+        {
+          phase = 6;
+          mark = now();
+        }
+      case 6:
+        if (now() - mark >= 1.5)
+        {
+          var audioTime:Float = @:privateAccess NXVideoPlayer.currentAudio?.time ?? -1;
+          trace('[AUTOTEST] After Restart Cutscene: playing=${NXVideoPlayer.isCutscenePlaying()} audio=${Math.round(audioTime)}ms pause=${findPauseSubState() != null}');
+          if (!NXVideoPlayer.isCutscenePlaying() || findPauseSubState() != null || audioTime < 0 || audioTime > 2500)
+          {
+            failReason = 'Restart Cutscene did not restart the video from the beginning (audio ${Math.round(audioTime)}ms)';
+            return false;
+          }
+          NXInputInject.tap(NXInputInject.SWITCH_PLUS);
+          phase = 7;
+          mark = now();
+        }
+      case 7:
+        if (findPauseSubState() != null && now() - mark >= 1.0)
+        {
+          phase = 8;
+          mark = now();
+        }
+      case 8:
+        var chosen = choosePauseEntry("Skip Cutscene");
+        if (chosen == false) return false;
+        if (chosen == true)
+        {
+          phase = 9;
+          mark = now();
+        }
+      case 9:
+        if (songPlaying())
+        {
+          trace('[AUTOTEST] Skip Cutscene: $songId playing ${Math.round((now() - mark) * 10) / 10}s later');
+          return true;
+        }
+        if (now() - mark > 15.0)
+        {
+          failReason = 'Skip Cutscene did not start $songId (${describeState()})';
+          return false;
+        }
+    }
+    return null;
+  }
+
+  static var dialogueLineSeen:String = "";
+
+  static function dialogueWithButtons():Null<Bool>
+  {
+    var ps = PlayState.instance;
+    var conv = (ps != null) ? ps.currentConversation : null;
+    switch (phase)
+    {
+      case 0:
+        if (conv != null && Std.string(@:privateAccess conv.state) == "Speaking")
+        {
+          phase = 1;
+          mark = now();
+        }
+        failReason = 'waiting for the Week 6 dialogue (${describeState()})';
+      case 1:
+        if (now() - mark >= 2.0)
+        {
+          dialogueLineSeen = '${@:privateAccess conv.currentDialogueEntry}:${@:privateAccess conv.currentDialogueLine}';
+          NXInputInject.tap(NXInputInject.SWITCH_A);
+          trace('[AUTOTEST] Dialogue: A at entry $dialogueLineSeen (state ${@:privateAccess conv.state})');
+          phase = 2;
+          mark = now();
+        }
+      case 2:
+        if (now() - mark >= 0.8)
+        {
+          NXInputInject.tap(NXInputInject.SWITCH_A);
+          phase = 3;
+          mark = now();
+        }
+      case 3:
+        if (now() - mark >= 1.0)
+        {
+          var nowAt:String = '${@:privateAccess conv.currentDialogueEntry}:${@:privateAccess conv.currentDialogueLine}';
+          trace('[AUTOTEST] Dialogue: after two A presses entry $dialogueLineSeen -> $nowAt (state ${@:privateAccess conv.state})');
+          if (nowAt == dialogueLineSeen)
+          {
+            failReason = 'A did not advance the dialogue (still at $nowAt)';
+            return false;
+          }
+          NXInputInject.tap(NXInputInject.SWITCH_PLUS);
+          phase = 4;
+          mark = now();
+        }
+      case 4:
+        var pause = findPauseSubState();
+        if (pause != null && now() - mark >= 1.0)
+        {
+          var mode:String = Std.string(@:privateAccess pause.currentMode);
+          if (mode != "Conversation")
+          {
+            failReason = 'pause menu opened in mode $mode instead of Conversation';
+            return false;
+          }
+          phase = 5;
+          mark = now();
+        }
+        else if (pause == null && now() - mark > 2.0)
+        {
+          failReason = '+ did not open the pause menu during the dialogue';
+          return false;
+        }
+      case 5:
+        var chosen = choosePauseEntry("Skip Dialogue");
+        if (chosen == false) return false;
+        if (chosen == true)
+        {
+          phase = 6;
+          mark = now();
+        }
+      case 6:
+        if (songPlaying()) return true;
+        if (now() - mark > 15.0)
+        {
+          failReason = 'Skip Dialogue did not start the song (${describeState()})';
+          return false;
+        }
+    }
+    return null;
+  }
+
+  /**
+   * Logs memory and heap state (PLAYTHROUGH checkpoints never fail, they leave evidence in the log).
+   */
+  static function logCheckpoint(label:String):Null<Bool>
+  {
+    if (now() - mark < 2.0) return null;
+    NXDeepTrace.logMemorySnapshot('PLAYTHROUGH $label', false);
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] $label: ${NXPerformance.describeHeap()}');
+    return true;
+  }
+
+  static function findSkipText():Null<flixel.text.FlxText>
+  {
+    var ps = PlayState.instance;
+    if (ps == null || ps.currentStage == null) return null;
+    var found:Null<flixel.text.FlxText> = null;
+    ps.currentStage.forEach(function(obj) {
+      if (found == null && Std.isOfType(obj, flixel.text.FlxText))
+      {
+        var t:flixel.text.FlxText = cast obj;
+        if (t.text != null && StringTools.startsWith(t.text, 'Skip')) found = t;
+      }
+    }, true);
+    return found;
+  }
+
+  static function skipSpaghettiCutsceneWithA():Null<Bool>
+  {
+    var ps = PlayState.instance;
+    switch (phase)
+    {
+      case 0:
+        if (songIs("spaghetti") && ps.isInCutscene && findSkipText() != null)
+        {
+          phase = 1;
+          mark = now();
+        }
+        failReason = 'waiting for the Spaghetti cutscene (${describeState()})';
+      case 1:
+        if (now() - mark >= 3.0)
+        {
+          if (!NXInputInject.tap(NXInputInject.SWITCH_A))
+          {
+            failReason = 'no gamepad connected to press A';
+            return false;
+          }
+          trace('[AUTOTEST] First A in the Spaghetti cutscene');
+          phase = 2;
+          mark = now();
+        }
+      case 2:
+        if (now() - mark >= 1.2)
+        {
+          var t = findSkipText();
+          var cam = (t != null && t.cameras != null && t.cameras.length > 0) ? t.cameras[0] : null;
+          var shown:Bool = t != null && t.visible && t.alpha > 0.9 && cam != null && cam.visible && cam.alpha > 0.9;
+          trace('[AUTOTEST] Skip prompt: text="${t?.text}" alpha=${t?.alpha} visible=${t?.visible} camera visible=${cam?.visible}');
+          if (!shown)
+          {
+            failReason = 'the skip prompt is not visible (text=${t?.text} alpha=${t?.alpha} camera visible=${cam?.visible})';
+            return false;
+          }
+          if (t.text.indexOf('A') == -1)
+          {
+            failReason = 'the skip prompt does not name the A button: "${t.text}"';
+            return false;
+          }
+          @:privateAccess NXAutoTest.requestFrameCapture('cutscene_skip_prompt');
+          NXInputInject.tap(NXInputInject.SWITCH_A);
+          trace('[AUTOTEST] Second A in the Spaghetti cutscene');
+          phase = 3;
+          mark = now();
+        }
+      case 3:
+        if (songPlaying()) return true;
+        if (now() - mark > 15.0)
+        {
+          failReason = 'the second A did not skip the Spaghetti cutscene (${describeState()})';
+          return false;
+        }
+        failReason = 'waiting for Spaghetti to start after the skip';
+    }
+    return null;
+  }
+
+  /**
+   * From Freeplay: plays `songId` (hard) with the current character to the end, accepts Results and waits
+   * to be back in Freeplay.
+   */
+  static function freeplayPlaySong(songId:String):Null<Bool>
+  {
+    switch (phase)
+    {
+      case 0:
+        var freeplay = findFreeplay();
+        if (freeplay == null || @:privateAccess freeplay.grpCapsules.countLiving() == 0)
+        {
+          failReason = 'waiting for Freeplay (${describeSubStates()})';
+          return null;
+        }
+        if (now() - mark < 2.0) return null;
+        var target = null;
+        @:privateAccess for (cap in freeplay.grpCapsules.members)
+        {
+          if (cap != null && cap.alive && cap.freeplayData != null && cap.freeplayData.data.id == songId) target = cap;
+        }
+        if (target == null)
+        {
+          trace('[AUTOTEST] WARN: $songId not listed in Freeplay, launching it directly.');
+          PlayStatePlaylist.isStoryMode = false;
+          var song:Song = SongRegistry.instance.fetchEntry(songId, {variation: Constants.DEFAULT_VARIATION});
+          LoadingState.loadPlayState({targetSong: song, targetDifficulty: "hard", targetVariation: song.getFirstValidVariation("hard")}, true);
+        }
+        else
+        {
+          @:privateAccess freeplay.currentDifficulty = "hard";
+          @:privateAccess freeplay.capsuleOnConfirmDefault(target);
+        }
+        phase = 1;
+        mark = now();
+      case 1:
+        if (songIs(songId) && songPlaying())
+        {
+          trace('[AUTOTEST] Freeplay: $songId playing');
+          phase = 2;
+          mark = now();
+        }
+        failReason = 'waiting for $songId to play (${describeState()})';
+      case 2:
+        var results = findResults();
+        if (results != null)
+        {
+          if (now() - mark > 1.5)
+          {
+            tapAccept();
+            mark = now();
+          }
+          failReason = 'Results open, accepting';
+          return null;
+        }
+        var freeplay = findFreeplay();
+        var inSong:Bool = Std.isOfType(FlxG.state, PlayState);
+        if (freeplay != null && !inSong && now() - mark > 3.0) return true;
+        if (inSong) failReason = 'playing $songId to the end (${Math.round(Conductor.instance.songPosition / 1000)}s)';
+    }
+    return null;
+  }
+
+  /**
+   * From Freeplay: R3 to Character Select, cursor onto `charId`, A, back in Freeplay with that character.
+   */
+  static function freeplayCharSelect(charId:String):Null<Bool>
+  {
+    var stateName:String = Type.getClassName(Type.getClass(FlxG.state));
+    switch (phase)
+    {
+      case 0:
+        var freeplay = findFreeplay();
+        if (freeplay != null && @:privateAccess freeplay.grpCapsules.countLiving() > 0 && now() - mark > 3.0)
+        {
+          trace('[AUTOTEST] Freeplay: opening Character Select (R3)');
+          @:privateAccess freeplay.tryOpenCharSelect();
+          phase = 1;
+          mark = now();
+        }
+      case 1:
+        if (stateName == "funkin.ui.charSelect.CharSelectSubState" && now() - mark > 4.0)
+        {
+          var charSelect:funkin.ui.charSelect.CharSelectSubState = cast FlxG.state;
+          var charIndex:Int = -1;
+          @:privateAccess for (pos => id in charSelect.availableChars)
+            if (id == charId) charIndex = pos;
+          if (charIndex < 0)
+          {
+            failReason = '$charId is not available in Character Select';
+            return false;
+          }
+          @:privateAccess charSelect.cursorX = (charIndex % 3) - 1;
+          @:privateAccess charSelect.cursorY = Std.int(charIndex / 3) - 1;
+          trace('[AUTOTEST] Character Select: cursor moved to $charId (grid $charIndex)');
+          phase = 2;
+          mark = now();
+        }
+      case 2:
+        if (now() - mark > 1.0)
+        {
+          tapAccept();
+          trace('[AUTOTEST] Character Select: pressing Accept on $charId');
+          phase = 3;
+          mark = now();
+        }
+      case 3:
+        var freeplay = findFreeplay();
+        if (freeplay != null && @:privateAccess freeplay.grpCapsules.countLiving() > 0 && now() - mark > 3.0)
+        {
+          var current:String = @:privateAccess freeplay.currentCharacterId;
+          if (current != charId)
+          {
+            failReason = 'Freeplay opened with "$current" instead of $charId';
+            return false;
+          }
+          return true;
+        }
+    }
+    failReason = 'phase $phase, ${describeSubStates()}';
+    return null;
+  }
+
   static var peakNativeMb:Float = 0.0;
 
   public static function update():Void
@@ -357,6 +952,7 @@ class NXRegressionSuite
     counter = 0;
     failReason = "";
     trace('[AUTOTEST] [STEP ${index + 1}/${steps.length}] ${step.name} [${step.covers}]');
+    if (NXAutoTest.startedOnConsole) NXDevOverlay.show('AUTO [${index + 1}/${steps.length}] ${step.name}');
     try
     {
       step.enter();
@@ -1153,6 +1749,11 @@ class NXRegressionSuite
     if (NXVideoPlayer.isCutscenePlaying())
     {
       if (cutsceneMark < 0) cutsceneMark = now();
+      if (fullLength)
+      {
+        failReason = 'cutscene in ${ps.currentSong.id} (full length)';
+        return null;
+      }
       if (now() - cutsceneMark > 2.0)
       {
         NXVideoPlayer.finishCutscene();
@@ -1184,6 +1785,12 @@ class NXRegressionSuite
           pendingVisualCheck = 'soak_r${round}_${ps.currentSong.id}';
           NXAutoTest.lastCaptureName = "";
           @:privateAccess NXAutoTest.requestFrameCapture(pendingVisualCheck);
+        }
+        if (fullLength)
+        {
+          // Real playthrough: botplay plays the song to its natural end.
+          failReason = 'playing ${ps.currentSong.id} to the end (${Math.round(Conductor.instance.songPosition / 1000)}s)';
+          return null;
         }
         if (now() - songMark >= 3.0 && songVisualRequested && pendingVisualCheck == "")
         {

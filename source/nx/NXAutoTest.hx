@@ -39,6 +39,35 @@ class NXAutoTest
     return isRunning;
   }
 
+  /**
+   * True when the run was started on the console with L+R (shows progress on screen).
+   */
+  public static var startedOnConsole(default, null):Bool = false;
+
+  /**
+   * Starts a scenario while the game is running (L+R held 3 s on the console, see NXPerformance).
+   * @return false if another automated run is already active or test tools are compiled out.
+   */
+  public static function startRuntime(scenario:String):Bool
+  {
+    if (isRunning || !NXDevTools.autotestsAllowed()) return false;
+    currentScenario = scenario.toUpperCase();
+    isRunning = true;
+    startedOnConsole = true;
+    testTimer = 0.0;
+    stepState = 0;
+    hasTriggeredEndSong = false;
+    trace('[AUTOTEST] ========================================');
+    trace('[AUTOTEST] ACTIVATED on the console (L+R): ' + currentScenario);
+    trace('[AUTOTEST] ========================================');
+    NXDevOverlay.show('AUTO $currentScenario: starting...');
+    FlxG.signals.postUpdate.add(onPostUpdate);
+    new FlxTimer().start(0.5, function(tmr:FlxTimer) {
+      startScenario(currentScenario);
+    });
+    return true;
+  }
+
   public static function checkAndRun():Bool
   {
     NXDevTools.init();
@@ -118,6 +147,14 @@ class NXAutoTest
       if (scenario.indexOf("HAPTICS") != -1)
       {
         startHapticsProbe();
+      }
+      else if (scenario.indexOf("PLAYTHROUGH") != -1)
+      {
+        NXRegressionSuite.startPlaythrough();
+      }
+      else if (scenario.indexOf("CUTSCENE_SKIP") != -1)
+      {
+        NXRegressionSuite.startCutsceneSkip();
       }
       else if (scenario.indexOf("AUDIO_DRIVER_STALL") != -1)
       {
@@ -240,7 +277,7 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
       || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {
@@ -249,7 +286,7 @@ class NXAutoTest
     }
 
     if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1
-      || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1)
+      || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1 || currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("CUTSCENE_SKIP") != -1)
     {
       NXRegressionSuite.update();
     }
@@ -809,6 +846,8 @@ class NXAutoTest
     trace('[AUTOTEST] ========================================');
     trace('[AUTOTEST] COMPLETED SUCCESSFULLY');
     trace('[AUTOTEST] ========================================');
+    if (startedOnConsole) NXDevOverlay.show('AUTO $currentScenario: COMPLETED OK (${Math.round(testTimer / 60)} min)', 30.0);
+    startedOnConsole = false;
   }
 
   static function failTest(reason:String):Void
@@ -819,6 +858,8 @@ class NXAutoTest
     trace('[AUTOTEST] ========================================');
     trace('[AUTOTEST] [FAIL] TEST FAILED: ' + reason);
     trace('[AUTOTEST] ========================================');
+    if (startedOnConsole) NXDevOverlay.show('AUTO $currentScenario: FAILED - $reason', 60.0);
+    startedOnConsole = false;
   }
 
   static function unhookW1Signals():Void

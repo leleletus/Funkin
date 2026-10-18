@@ -172,7 +172,7 @@ class NXTextureMemory
     var after:Float = NXPerformance.getNativeHeapUsed();
     NXDeepTrace.writeEntry('MEMORY', '[NXTextureMemory] Before PlayState.create: native malloc ${Math.round(before * 10) / 10} MB'
       + ' -> ${Math.round(afterGc * 10) / 10} MB after full GC -> ${Math.round(after * 10) / 10} MB after presenting $FLUSH_FRAMES frames'
-      + ' | largest free block ${Math.round(NXPerformance.getLargestAllocatableMB())} MB');
+      + ' | ${NXPerformance.describeHeap()}');
   }
 
   static function onPostStateSwitch():Void

@@ -23,6 +23,10 @@ class NXVideoPlayer
   static var currentSprite:Null<FlxSprite> = null;
   static var currentAudio:Null<FunkinSound> = null;
   static var isPlaying:Bool = false;
+  /**
+   * True while the pause menu is open over the cutscene: frames and audio stay frozen.
+   */
+  static var isPaused:Bool = false;
 
   static var currentVideoName:String = "";
   static var currentSheetIndex:Int = 0;
@@ -682,7 +686,12 @@ class NXVideoPlayer
 
   static function onPostUpdate():Void
   {
-    if (!isPlaying || currentSprite == null || isAdvancingSheet) return;
+    if (!isPlaying || isPaused || currentSprite == null || isAdvancingSheet) return;
+    if (restartPending)
+    {
+      updateRestart();
+      return;
+    }
 
     var elapsedSec:Float = 0.0;
     if (currentAudio != null && currentAudio.playing)
@@ -751,6 +760,7 @@ class NXVideoPlayer
   public static function pause():Void
   {
     if (!isPlaying) return;
+    isPaused = true;
     try
     {
       if (currentAudio != null && currentAudio.playing) currentAudio.pause();
@@ -765,12 +775,89 @@ class NXVideoPlayer
   public static function resume():Void
   {
     if (!isPlaying) return;
+    isPaused = false;
+    // The wall-clock fallback must not count the time spent in the pause menu.
+    lastWallTimestamp = haxe.Timer.stamp();
     try
     {
       if (currentAudio != null && !currentAudio.playing) currentAudio.resume();
       if (currentSprite != null && currentSprite.animation != null) currentSprite.animation.resume();
     }
     catch (e:Dynamic) {}
+  }
+
+  /**
+   * True while "Restart Cutscene" waits for sheet 0 to come back from the prefetch thread.
+   */
+  static var restartPending:Bool = false;
+
+  /**
+   * Plays the active cutscene again from the beginning ("Restart Cutscene" in the pause menu) and resumes
+   * it, like upstream's restartVideo(). Never blocks the main thread: on sheet 0 it only rewinds the audio;
+   * on a later sheet, sheet 0 is decoded by the prefetch thread and playback restarts once it is ready.
+   */
+  public static function restart():Bool
+  {
+    if (!isPlaying) return false;
+    isPaused = false;
+    if (currentSheetIndex == 0)
+    {
+      restartFromBeginning();
+      trace('[NXVideoPlayer] Restart: rewound sheet 0 of $currentVideoName');
+      return true;
+    }
+    try
+    {
+      if (currentAudio != null) currentAudio.pause();
+    }
+    catch (e:Dynamic) {}
+    restartPending = true;
+    trace('[NXVideoPlayer] Restart: waiting for sheet 0 of $currentVideoName from the prefetch thread');
+    return true;
+  }
+
+  static function restartFromBeginning():Void
+  {
+    sheetStartGlobalFrame = 0;
+    lastValidAudioSec = 0.0;
+    lastWallTimestamp = haxe.Timer.stamp();
+    try
+    {
+      if (currentSprite != null && currentSprite.animation != null && currentSprite.animation.curAnim != null)
+      {
+        currentSprite.animation.resume();
+        currentSprite.animation.curAnim.curFrame = 0;
+      }
+      if (currentAudio != null) currentAudio.play(true, 0);
+    }
+    catch (e:Dynamic) {}
+  }
+
+  /**
+   * Restart in progress: schedule sheet 0 and switch to it as soon as the prefetch thread has it.
+   */
+  static function updateRestart():Void
+  {
+    #if sys
+    if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
+    prefetchMutex.acquire();
+    var ready:Bool = prefetchedSheetIndex == 0 && prefetchedImage != null && prefetchedXml != null;
+    var busy:Bool = isPrefetching;
+    prefetchMutex.release();
+    if (!ready)
+    {
+      if (!busy) prefetchNextSheet(0);
+      return;
+    }
+    #end
+    currentSheetIndex = 0;
+    sheetStartGlobalFrame = 0;
+    isAdvancingSheet = true;
+    var loaded:Bool = loadAndPlaySheet(0);
+    isAdvancingSheet = false;
+    restartPending = false;
+    if (loaded) restartFromBeginning();
+    trace('[NXVideoPlayer] Restart: sheet 0 back (${loaded ? "playing from the start" : "load failed"})');
   }
 
   /**
@@ -799,6 +886,8 @@ class NXVideoPlayer
   public static function stop():Void
   {
     isPlaying = false;
+    isPaused = false;
+    restartPending = false;
     isAdvancingSheet = false;
     onCompleteCallback = null;
     FlxG.signals.postUpdate.remove(onPostUpdate);
@@ -912,9 +1001,6 @@ class NXVideoPlayer
         if (PlayState.instance.camCutscene != null)
         {
           PlayState.instance.camCutscene.bgColor = 0x00000000;
-          #if switch
-          PlayState.instance.camCutscene.visible = false;
-          #end
         }
         PlayState.instance.camHUD.visible = true;
         PlayState.instance.isInCutscene = false;

@@ -806,7 +806,7 @@ class PlayState extends MusicBeatSubState
     // Cameras
     camGame = new FunkinCamera('playStateCamGame');
     camHUD = new FlxCamera();
-    camCutscene = new FlxCamera();
+    camCutscene = #if switch new nx.NXOverlayCamera() #else new FlxCamera() #end; // Switch: stays visible, skips the transparent fill
     camCutouts = new FlxCamera();
     camSubtitles = new FlxCamera();
     camPause = new FlxCamera();
@@ -2293,7 +2293,6 @@ class PlayState extends MusicBeatSubState
 
     #if switch
     camCutouts.visible = false;
-    camCutscene.visible = false;
     camPause.visible = false;
     if (camSubtitles != null) camSubtitles.visible = false;
     #end
@@ -2937,9 +2936,6 @@ class PlayState extends MusicBeatSubState
   public function startConversation(conversationId:String):Void
   {
     isInCutscene = true;
-    #if switch
-    camCutscene.visible = true;
-    #end
 
     currentConversation = ConversationRegistry.instance.fetchEntry(conversationId);
     if (currentConversation == null) return;
@@ -2961,9 +2957,6 @@ class PlayState extends MusicBeatSubState
   function onConversationComplete():Void
   {
     isInCutscene = false;
-    #if switch
-    camCutscene.visible = false;
-    #end
 
     if (currentConversation != null)
     {
@@ -3905,17 +3898,10 @@ class PlayState extends MusicBeatSubState
     else if (VideoCutscene.isPlaying())
     {
       // This is a video cutscene.
-      #if switch
-      if ((controls.CUTSCENE_ADVANCE || controls.ACCEPT || controls.PAUSE_P || controls.BACK) && !justUnpaused)
-      {
-        skipVideoCutscene();
-      }
-      #else
       if ((controls.PAUSE_P || androidPause || pauseButtonCheck) && !justUnpaused)
       {
         pause(Cutscene);
       }
-      #end
     }
   }
 

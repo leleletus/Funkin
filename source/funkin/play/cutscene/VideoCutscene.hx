@@ -271,6 +271,10 @@ class VideoCutscene
 
   public static function restartVideo():Void
   {
+    #if switch
+    if (nx.video.NXVideoPlayer.restart()) onVideoRestarted.dispatch();
+    #end
+
     #if html5
     if (vid != null)
     {
@@ -415,12 +419,6 @@ class VideoCutscene
     if (PlayState.instance != null && PlayState.instance.camHUD != null)
     {
       PlayState.instance.camHUD.visible = true;
-      #if switch
-      if (PlayState.instance.camCutscene != null)
-      {
-        PlayState.instance.camCutscene.visible = false;
-      }
-      #end
     }
 
     if (blackScreen != null)
