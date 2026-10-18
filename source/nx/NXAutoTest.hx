@@ -91,7 +91,7 @@ class NXAutoTest
   {
     try
     {
-      if (scenario.indexOf("WEEKEND1_PLAYLIST") != -1)
+      if (scenario.indexOf("WEEKEND1_PLAYLIST") != -1 || scenario.indexOf("WEEKEND1_FULL") != -1)
       {
         startWeekend1Playlist();
       }
@@ -195,14 +195,14 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("PLAYLIST") != -1) ? 600.0 : 180.0;
+    var globalTimeout:Float = (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1) ? 600.0 : 180.0);
     if (testTimer > globalTimeout)
     {
       failTest('Global test timeout reached (${globalTimeout}s)');
       return;
     }
 
-    if (currentScenario.indexOf("WEEKEND1_PLAYLIST") != -1)
+    if (currentScenario.indexOf("WEEKEND1_PLAYLIST") != -1 || currentScenario.indexOf("WEEKEND1_FULL") != -1)
     {
       handleWeekend1PlaylistScenario();
     }
@@ -389,12 +389,16 @@ class NXAutoTest
   // ---------------------------------------------------------------------------
   // WEEKEND1_PLAYLIST: full Weekend 1 Story Mode (Hard) chain
   // darnellCutscene -> darnell -> lit-up -> 2hot -> 2hotCutscene -> blazin -> blazinCutscene -> Results
+  // WEEKEND1_PLAYLIST cuts every cutscene at 2s and every song at 3s (fast transition check).
+  // WEEKEND1_FULL lets cutscenes and songs (botplay) run to their natural end, like a real playthrough.
   // ---------------------------------------------------------------------------
 
   static final W1_EXPECTED_SONGS:Array<String> = ["darnell", "lit-up", "2hot", "blazin"];
   static final W1_CUTSCENE_SECONDS:Float = 2.0;
   static final W1_SONG_SECONDS:Float = 3.0;
   static final W1_PHASE_TIMEOUT:Float = 90.0;
+  static final W1_FULL_PHASE_TIMEOUT:Float = 400.0;
+  static var w1Full:Bool = false;
 
   static inline var W1_WAIT_START:Int = 0;
   static inline var W1_PLAYING:Int = 1;
@@ -415,7 +419,7 @@ class NXAutoTest
 
   static function startWeekend1Playlist():Void
   {
-    trace('[AUTOTEST] Launching WEEKEND1_PLAYLIST (Weekend 1 Story Mode, Hard, full chain)...');
+    trace('[AUTOTEST] Launching $currentScenario (Weekend 1 Story Mode, Hard, full chain)...');
 
     w1Instance = null;
     w1SongId = "";
@@ -426,6 +430,7 @@ class NXAutoTest
     w1CutscenesPlayed = [];
     w1TransitionIndex = 0;
     w1PeakNativeMb = 0.0;
+    w1Full = currentScenario.indexOf("WEEKEND1_FULL") != -1;
 
     // Snapshot every state transition: before the old state is destroyed, after it has been destroyed
     // and purged (but before the new state is built), and once the new state has been created.
@@ -546,7 +551,7 @@ class NXAutoTest
     var ps:Null<PlayState> = PlayState.instance;
     // Telemetry: sample native malloc twice per second (shows when GPU memory is actually returned).
     #if switch
-    if (Timer.stamp() - w1LastSample >= 0.5)
+    if (Timer.stamp() - w1LastSample >= (w1Full ? 2.0 : 0.5))
     {
       w1LastSample = Timer.stamp();
       var ctx:String = (ps == null) ? 'no-playstate' : 'song=${ps.currentSong?.id} phase=$w1Phase starting=${@:privateAccess ps.startingSong} cutscene=${ps.isInCutscene} pos=${Math.round(Conductor.instance.songPosition)}';
@@ -572,7 +577,7 @@ class NXAutoTest
     }
 
     var phaseElapsed:Float = Timer.stamp() - w1PhaseStamp;
-    if (phaseElapsed > W1_PHASE_TIMEOUT)
+    if (phaseElapsed > (w1Full ? W1_FULL_PHASE_TIMEOUT : W1_PHASE_TIMEOUT))
     {
       failTest('Stuck in phase $w1Phase of song "$w1SongId" for ${Math.round(phaseElapsed)}s'
         + ' (startingSong=${@:privateAccess ps.startingSong}, isInCutscene=${ps.isInCutscene}, video=${NXVideoPlayer.isCutscenePlaying()})');
@@ -602,7 +607,20 @@ class NXAutoTest
           w1CaptureRequested = true;
           requestFrameCapture('w1_${w1SongId}');
         }
-        if (phaseElapsed >= W1_SONG_SECONDS)
+        if (w1Full)
+        {
+          // Natural playthrough: the song ends by itself and may start an ending cutscene.
+          if (NXVideoPlayer.isCutscenePlaying())
+          {
+            var videoName:String = @:privateAccess NXVideoPlayer.currentVideoName;
+            w1CutscenesPlayed.push(videoName);
+            w1EndRequested = true;
+            snapshotW1('W1 END OF $w1SongId (natural)', false);
+            trace('[AUTOTEST] Song "$w1SongId" ended naturally, ending cutscene "$videoName" started.');
+            setW1Phase(W1_CUTSCENE);
+          }
+        }
+        else if (phaseElapsed >= W1_SONG_SECONDS)
         {
           trace('[AUTOTEST] Song "$w1SongId" ran ${W1_SONG_SECONDS}s (songPosition=${Math.round(Conductor.instance.songPosition)}ms). Calling endSong(true)...');
           snapshotW1('W1 END OF $w1SongId', false);
@@ -617,7 +635,7 @@ class NXAutoTest
           trace('[AUTOTEST] Cutscene in song "$w1SongId" ended on its own.');
           setW1Phase(w1EndRequested ? W1_WAIT_END : W1_WAIT_START);
         }
-        else if (phaseElapsed >= W1_CUTSCENE_SECONDS)
+        else if (!w1Full && phaseElapsed >= W1_CUTSCENE_SECONDS)
         {
           trace('[AUTOTEST] Finishing cutscene in song "$w1SongId" through the natural completion path...');
           setW1Phase(w1EndRequested ? W1_WAIT_END : W1_WAIT_START);
