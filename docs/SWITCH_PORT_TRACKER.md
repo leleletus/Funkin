@@ -315,3 +315,35 @@ Criterio de audio sano (pasos 10-16): dos muestras separadas 0.8 s con el source
 - Carpeta del juego: `/switch/Friday-Night-Funkin/` (`Funkin.nro`, `saves/`, `logs/`, `mods/`).
 - Antes de desplegar: descargar `logs/` (evidencia de hardware) y `saves/` como respaldo local en `~/switch-backups/`.
 - Borrar todo el contenido de la carpeta (saves o configuraciones antiguas pueden romper una build nueva) y subir el `Funkin.nro` nuevo.
+
+---
+
+## 7. Protocolo de Sesión y Bitácora
+
+Este tracker es la guía del proyecto. Cada sesión de trabajo empieza leyéndolo y termina actualizándolo. La guía de arranque de sesión está en `docs/SWITCH_SESSION_GUIDE.md`.
+
+### Al empezar una sesión
+1. Leer este tracker completo (tabla de builds, componentes validados, lista negra, incidencias y flujo de trabajo).
+2. `git status -s` y `git log -n 6 --oneline`: el árbol debe estar limpio y sincronizado con `personal`.
+3. Comprobar que no quede ningún Citron abierto: `ps -eo pid,comm | awk '$2=="citron"'`.
+4. Revisar las incidencias **ABIERTAS** de la sección 4 y la última entrada de la bitácora (abajo).
+
+### Durante la sesión
+- Reproducir antes de corregir: escenario de autotest existente o uno nuevo en `NXAutoTest` / `NXRegressionSuite`, con la salida literal del log como evidencia.
+- Logs de hardware real: pedir que se active el FTP de la consola (normalmente apagado) y descargar `/switch/Friday-Night-Funkin/logs/` antes de tocar nada.
+- Toda corrección se valida con, como mínimo, `REGRESSION_SUITE` y el escenario afectado. Si toca memoria o transiciones, también `SOAK` y `WEEKEND1_FULL`.
+- No recompilar mientras Citron ejecuta el `.nro`.
+
+### Al terminar una sesión
+1. Tabla de compilaciones: fila de la build nueva (tag, commit, estado de validación, cambios clave numerados).
+2. Incidencias: una fila `INC-XX` por cada bug encontrado, con síntoma, causa raíz demostrada y estado (`RESUELTO (Build N)` o `ABIERTO` con el siguiente paso concreto).
+3. Si cambia una regla o un componente validado: actualizar las secciones 2, 3 o 6.
+4. Una entrada en la bitácora (abajo).
+5. Commit sin trailers de atribución, push a `personal`, tag anotado `v0.8.1-nx-preview-N` y push del tag.
+6. Despliegue en consola por FTP (si está activo): respaldo de `saves/` y `logs/`, limpiar la carpeta y subir el `.nro`.
+
+### Bitácora de sesiones
+
+| Fecha | Build | Trabajo realizado | Pendiente al cierre |
+| :--- | :--- | :--- | :--- |
+| 2026-10-17/18 | 17-18 (`preview-15`, `preview-16`) | Crash de Weekend 1 (Lit Up -> 2Hot) reproducido en Citron y en el log de hardware y corregido (INC-32/33). Audio tras HOME/Sleep y finales prematuros (INC-35/36). Crash de Week 7 por desbordamiento del decodificador OGG (INC-37). OOM Freeplay -> Pico -> 2Hot (INC-38). Fugas entre semanas (INC-40/41). Cinemáticas generadas al compilar desde los vídeos oficiales; submódulo `assets` de vuelta al commit oficial. Suites `WEEKEND1_PLAYLIST`, `WEEKEND1_FULL`, `REGRESSION_SUITE`, `SOAK`; telemetría `[PERF]`; decodificador de crashes; runner que ya no deja Citron abierto (INC-34). Tags históricos `preview-8` a `preview-14` creados. | INC-42 (reentrada a Weekend 1 en sesión larga), INC-39 (resolución interna real), evaluar ASTC con A/B en hardware, decidir política de releases con `.nro` (licencia de assets), desplegar Build 18 en consola. |
