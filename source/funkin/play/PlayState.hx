@@ -2906,6 +2906,9 @@ class PlayState extends MusicBeatSubState
         FlxG.sound.music.pitch = playbackRate;
         FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
         FlxG.sound.music.onComplete = function() {
+          #if switch
+          if (nx.NXAudioDiagnostics.interceptPrematureSongCompletion()) return;
+          #end
           if (mayPauseGame) endSong(skipEndingTransition);
         };
       }
@@ -3003,6 +3006,9 @@ class PlayState extends MusicBeatSubState
     if (FlxG.sound.music.onComplete == null)
     {
       FlxG.sound.music.onComplete = function() {
+        #if switch
+        if (nx.NXAudioDiagnostics.interceptPrematureSongCompletion()) return;
+        #end
         if (mayPauseGame) endSong(skipEndingTransition);
       };
     }

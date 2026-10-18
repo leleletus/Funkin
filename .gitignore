@@ -36,3 +36,6 @@ node_modules/
 package.json
 package-lock.json
 
+
+# Python bytecode (tools/nx-tools)
+__pycache__/

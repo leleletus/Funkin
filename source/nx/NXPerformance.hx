@@ -55,6 +55,8 @@ class NXPerformance
       onDockStateChanged(currentDocked);
     }
 
+    updatePerfTelemetry();
+
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
     try
@@ -145,6 +147,11 @@ class NXPerformance
    * - "720p" (default): Forces 1280x720 fixed framebuffer to avoid GPU fillrate bottleneck.
    * - "Docked": Allows 1080p (1920x1080) when docked, 720p when handheld.
    * - "540p": Lowers resolution to 960x540 for maximum performance.
+   *
+   * NOTE: resizing the SDL window (`window.resize`) does NOT resize the EGL surface on Horizon: the
+   * backbuffer stays at the display size while OpenFL assumes the new size, rendering the game shifted
+   * and cropped (verified in Citron, Build 18 development). A real internal resolution needs an
+   * offscreen render target; until then this only reports the requested size.
    */
   public static function applyResolutionMode(mode:String):Void
   {
@@ -178,6 +185,57 @@ class NXPerformance
       trace('Switch resolution set to: ${targetWidth}x${targetHeight} (Mode: $mode)');
     }
     #end
+  }
+
+  static var perfWindowStart:Float = -1.0;
+  static var perfLastFrame:Float = -1.0;
+  static var perfFrames:Int = 0;
+  static var perfWorstFrameMs:Float = 0.0;
+  static var perfSlowFrames:Int = 0;
+  static final PERF_WINDOW_SECONDS:Float = 5.0;
+
+  /**
+   * Gameplay performance telemetry written to deep_engine_trace.log every 5 s while a song is running:
+   * average FPS, worst frame and frames slower than 20 ms (below ~50 FPS), with the active resolution.
+   */
+  static function updatePerfTelemetry():Void
+  {
+    var ps = funkin.play.PlayState.instance;
+    var now:Float = haxe.Timer.stamp();
+    if (ps == null || ps.subState != null || @:privateAccess ps.startingSong || ps.isInCutscene)
+    {
+      perfWindowStart = -1.0;
+      perfLastFrame = -1.0;
+      return;
+    }
+    if (perfWindowStart < 0)
+    {
+      perfWindowStart = now;
+      perfLastFrame = now;
+      perfFrames = 0;
+      perfWorstFrameMs = 0.0;
+      perfSlowFrames = 0;
+      return;
+    }
+    var frameMs:Float = (now - perfLastFrame) * 1000.0;
+    perfLastFrame = now;
+    perfFrames++;
+    if (frameMs > perfWorstFrameMs) perfWorstFrameMs = frameMs;
+    if (frameMs > 20.0) perfSlowFrames++;
+
+    var elapsed:Float = now - perfWindowStart;
+    if (elapsed >= PERF_WINDOW_SECONDS)
+    {
+      var window = lime.app.Application.current?.window;
+      var res:String = (window != null) ? '${window.width}x${window.height}' : '?';
+      NXDeepTrace.writeEntry('PERF', '[${ps.currentSong?.id}@${Math.round(funkin.Conductor.instance.songPosition / 1000)}s] avg ${Math.round(perfFrames / elapsed * 10) / 10} FPS'
+        + ' | worst frame ${Math.round(perfWorstFrameMs * 10) / 10} ms | slow frames (>20 ms): $perfSlowFrames/$perfFrames'
+        + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | native ${Math.round(getNativeHeapUsed())} MB');
+      perfWindowStart = now;
+      perfFrames = 0;
+      perfWorstFrameMs = 0.0;
+      perfSlowFrames = 0;
+    }
   }
 
   /**
@@ -283,6 +341,48 @@ class NXPerformance
       {0} = (double)mi.uordblks;
     ', usedBytes);
     return usedBytes / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Largest single block malloc can currently return, in MB (binary search with malloc/free).
+   * Compared with free memory it shows heap fragmentation: decoding a 4096x4096 texture needs one
+   * contiguous 64 MB block even when much more memory is free in smaller holes.
+   */
+  public static function getLargestAllocatableMB():Float
+  {
+    #if (switch && cpp)
+    var largest:Float = 0;
+    untyped __cpp__('
+      size_t lo = 0, hi = (size_t)3072 * 1024 * 1024;
+      while (hi - lo > (size_t)1024 * 1024)
+      {
+        size_t mid = lo + (hi - lo) / 2;
+        void *p = malloc(mid);
+        if (p) { free(p); lo = mid; } else { hi = mid; }
+      }
+      {0} = (double)lo;
+    ', largest);
+    return largest / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Free bytes inside the malloc arena (mallinfo().fordblks), in MB.
+   */
+  public static function getNativeHeapFree():Float
+  {
+    #if (switch && cpp)
+    var freeBytes:Float = 0;
+    untyped __cpp__('
+      struct mallinfo mi = mallinfo();
+      {0} = (double)mi.fordblks;
+    ', freeBytes);
+    return freeBytes / (1024.0 * 1024.0);
     #else
     return 0.0;
     #end

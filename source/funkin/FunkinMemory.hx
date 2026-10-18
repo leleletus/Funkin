@@ -144,6 +144,12 @@ class FunkinMemory
     // Resguardar atlas de FlxAnimate exclusivos de UI, Freeplay y selector de personajes
     if (key.indexOf("backing-text") != -1 || key.indexOf("freeplay/") != -1 || key.indexOf("charSelect") != -1) return true;
 
+    #if switch
+    // Las animaciones de muerte / game over son enormes (bfHoldingGF-DEAD: 128 MB) y solo se usan durante
+    // una cancion: nunca se protegen aunque su ruta empiece por un personaje base.
+    if (keyLower.contains("dead") || keyLower.contains("death") || keyLower.contains("fakeout")) return false;
+    #end
+
     // Resguardar personajes base reutilizados globalmente (evita Use-After-Free en GF/BF/Pico/Nene)
     if (key.indexOf("characters/gf") != -1 || key.indexOf("characters/bf") != -1
         || key.indexOf("characters/pico/") != -1 || key.indexOf("characters/picoCheer") != -1
@@ -373,7 +379,7 @@ class FunkinMemory
     // Direct GPU upload on Nintendo Switch without creating a throwaway FlxSprite or drawing out-of-frame
     if (graphic.bitmap != null && FlxG.stage != null && FlxG.stage.context3D != null)
     {
-      graphic.bitmap.getTexture(FlxG.stage.context3D);
+      if (!nx.NXTextureMemory.releaseAfterUpload(graphic)) graphic.bitmap.getTexture(FlxG.stage.context3D);
     }
     #else
     // Draws sprite and actually caches it.

@@ -157,6 +157,13 @@ class NXDeepTrace
     var drift:Float = Math.round(NXAudioDiagnostics.getSyncDriftMs() * 10.0) / 10.0;
 
     writeEntry('AUDIO', '[$context] Time: ${Math.round(musicTime)}/${Math.round(musicLen)}ms | OpenAL: $alState | Channels: $activeChannels | Drift: ${drift}ms | RAM: ${memMb}MB');
+    if (context == 'END_SONG')
+    {
+      // Record who ended the song: natural onComplete, end-of-song watchdog, cutscene or script.
+      var stack:String = haxe.CallStack.toString(haxe.CallStack.callStack());
+      var lines:Array<String> = [for (l in stack.split('\n')) if (StringTools.trim(l).length > 0) StringTools.trim(l)];
+      writeEntry('AUDIO', '[END_SONG] Caller: ' + lines.slice(0, 8).join(' <- '));
+    }
   }
 
   /**
@@ -247,6 +254,109 @@ class NXDeepTrace
     {
       writeEntry('ERROR', '[$label] Memory snapshot failed: $e');
     }
+  }
+
+  /**
+   * Groups every graphic in FlxG.bitmap by its asset folder (count and decoded MB) to find what survives
+   * a state change. Example group: "shared:images/resultScreen".
+   */
+  public static function logGraphicsByFolder(label:String):Void
+  {
+    try
+    {
+      var groups:Map<String, {n:Int, mb:Float}> = new Map();
+      @:privateAccess
+      for (key => g in FlxG.bitmap._cache)
+      {
+        if (g == null) continue;
+        var lib:String = (key.indexOf(":") != -1) ? key.substr(0, key.indexOf(":")) : "";
+        var path:String = (key.indexOf("images/") != -1) ? key.substr(key.indexOf("images/")) : key;
+        var parts:Array<String> = path.split("/");
+        var folder:String = (parts.length > 2) ? parts[0] + "/" + parts[1] : (parts.length > 1 ? parts[0] : "(generated)");
+        if (key.indexOf("assets/") == -1) folder = "(generated)";
+        var id:String = (lib != "" ? lib + ":" : "") + folder;
+        var e = groups.get(id);
+        if (e == null) e = {n: 0, mb: 0.0};
+        e.n++;
+        e.mb += (g.width * g.height * 4) / 1048576.0;
+        groups.set(id, e);
+      }
+      var list = [for (k => v in groups) {k: k, n: v.n, mb: v.mb}];
+      list.sort((a, b) -> (b.mb > a.mb) ? 1 : ((b.mb < a.mb) ? -1 : 0));
+      writeEntry('MEMORY', '[$label] Graphics by folder: ' + [for (e in list) '${e.k}=${e.n}/${Math.round(e.mb * 10) / 10}MB'].join(' | '));
+      var generated:Array<String> = [];
+      @:privateAccess
+      for (key => g in FlxG.bitmap._cache)
+        if (g != null && key.indexOf("assets/") == -1 && generated.length < 12) generated.push('$key(uses=${g.useCount},persist=${g.persist})');
+      writeEntry('MEMORY', '[$label] Generated graphics sample: ' + generated.join(', '));
+    }
+    catch (e:Dynamic) {}
+  }
+
+  /**
+   * Logs the largest graphics in FlxG.bitmap (decoded size, CPU copy present, use count, protection).
+   */
+  public static function logTopGraphics(label:String, count:Int = 20):Void
+  {
+    try
+    {
+      var list:Array<{key:String, mb:Float, cpu:Bool, uses:Int, prot:Bool}> = [];
+      @:privateAccess
+      for (key => g in FlxG.bitmap._cache)
+      {
+        if (g == null || g.bitmap == null) continue;
+        list.push(
+          {
+            key: key,
+            mb: (g.width * g.height * 4) / (1024.0 * 1024.0),
+            cpu: g.bitmap.image != null,
+            uses: g.useCount,
+            prot: funkin.FunkinMemory.isProtectedGraphic(key, g)
+          });
+      }
+      list.sort((a, b) -> (b.mb > a.mb) ? 1 : ((b.mb < a.mb) ? -1 : 0));
+      var lines:Array<String> = [];
+      for (i in 0...Std.int(Math.min(count, list.length)))
+      {
+        var e = list[i];
+        lines.push('${Math.round(e.mb * 10) / 10}MB${e.cpu ? "+cpu" : ""}${e.prot ? " [protected]" : ""} uses=${e.uses} ${e.key}');
+      }
+      writeEntry('MEMORY', '[$label] Top graphics: ' + lines.join(' || '));
+
+      // OpenFL asset cache (FlxAnimate spritemaps are loaded here, outside FlxG.bitmap).
+      var ofl:Array<String> = [];
+      @:privateAccess
+      if (Std.isOfType(openfl.utils.Assets.cache, openfl.utils.AssetCache))
+      {
+        var cache:openfl.utils.AssetCache = cast openfl.utils.Assets.cache;
+        for (key => bmp in cache.bitmapData)
+        {
+          if (bmp == null) continue;
+          ofl.push('${Math.round(bmp.width * bmp.height * 4 / 104857.6) / 10}MB${bmp.image != null ? "+cpu" : ""} ${key}');
+        }
+      }
+      writeEntry('MEMORY', '[$label] OpenFL Assets.cache bitmaps: ' + ofl.join(' || '));
+
+      // FlxAnimate atlas cache: every spritemap of every cached atlas.
+      var atl:Array<String> = [];
+      @:privateAccess
+      for (key => frames in animate.FlxAnimateFrames._cachedAtlases)
+      {
+        if (frames == null || frames.parent == null) continue;
+        var total:Float = 0.0;
+        var n:Int = 0;
+        var spritemaps:Array<flixel.graphics.FlxGraphic> = cast(frames.parent, animate.FlxAnimateFrames.FlxAnimateSpritemapCollection).spritemaps;
+        for (sm in spritemaps)
+        {
+          if (sm == null || sm.isDestroyed) continue;
+          total += sm.width * sm.height * 4 / 1048576.0;
+          n++;
+        }
+        atl.push('${Math.round(total * 10) / 10}MB/${n}sm uses=${frames.parent.useCount} ${key}');
+      }
+      writeEntry('MEMORY', '[$label] FlxAnimate cached atlases: ' + atl.join(' || '));
+    }
+    catch (e:Dynamic) {}
   }
 
   /**

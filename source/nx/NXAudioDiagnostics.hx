@@ -199,11 +199,126 @@ class NXAudioDiagnostics
   }
 
   /**
+   * Margin before the real end of the instrumental under which an onComplete is considered premature.
+   */
+  static final PREMATURE_COMPLETION_MARGIN_MS:Float = 1500.0;
+
+  static var pendingRebuildMusicTime:Float = -1.0;
+
+  /**
+   * Last Conductor position observed while the instrumental's OpenAL source was really PLAYING.
+   * At the natural end of a song OpenAL reports the source as STOPPED with a 0 ms offset for one frame
+   * before lime dispatches onComplete, so the live Conductor value cannot be trusted at that moment.
+   */
+  static var lastPlayingSongPosition:Float = -1.0;
+  static var trackedPlayState:Null<funkin.play.PlayState> = null;
+
+  /**
+   * Called every frame from PlayState.update (through checkWatchdog) to remember the last valid position.
+   */
+  static function trackPlayingPosition(songPosition:Float):Void
+  {
+    var ps = funkin.play.PlayState.instance;
+    if (ps != trackedPlayState)
+    {
+      trackedPlayState = ps;
+      lastPlayingSongPosition = -1.0;
+    }
+    var music = FlxG.sound.music;
+    if (music != null && music.playing && songPosition > 0 && getOpenALSourceState(music) == "Playing")
+    {
+      lastPlayingSongPosition = songPosition;
+    }
+  }
+
+  /**
+   * lime-nx's NativeAudioSource.checkPlay() reports ANY OpenAL state other than PLAYING as "finished":
+   * if Horizon stops or pauses the source (Sleep, audio renderer reset, buffer underrun) the instrumental
+   * dispatches onComplete and PlayState ends the song in the middle (seen at 7-9 s of a 120 s song).
+   * Called from the music onComplete handler: returns true when the completion is premature, in which
+   * case the song must NOT end and the instrumental and vocals are rebuilt at the current position.
+   */
+  public static function interceptPrematureSongCompletion():Bool
+  {
+    var music = FlxG.sound.music;
+    if (music == null || music.length <= 0) return false;
+
+    var ps = funkin.play.PlayState.instance;
+    var songPosition:Float = (lastPlayingSongPosition >= 0) ? lastPlayingSongPosition : funkin.Conductor.instance.songPosition;
+    var musicTime:Float = songPosition - funkin.Conductor.instance.combinedOffset;
+
+    // Genuine end: the instrumental was within the last 1.5 s, or every note of the chart was already played.
+    if (musicTime >= music.length - PREMATURE_COMPLETION_MARGIN_MS) return false;
+    var lastNote:Float = (ps != null) ? @:privateAccess ps.lastChartNoteTime : 0.0;
+    if (lastNote > 0 && songPosition >= lastNote) return false;
+
+    nx.NXDeepTrace.writeEntry('AUDIO', '[NXAudioRecovery] Premature onComplete at ${Math.round(musicTime)}/${Math.round(music.length)}ms'
+      + ' (OpenAL source left PLAYING outside the engine). Rebuilding instead of ending the song.');
+
+    // FlxSound.stopped() runs cleanup() (channel = null, time = 0) right after this callback returns,
+    // so the rebuild happens at the start of the next frame.
+    if (pendingRebuildMusicTime < 0) FlxG.signals.preUpdate.addOnce(rebuildAfterPrematureCompletion);
+    pendingRebuildMusicTime = musicTime;
+    return true;
+  }
+
+  static function rebuildAfterPrematureCompletion():Void
+  {
+    var musicTime:Float = pendingRebuildMusicTime;
+    pendingRebuildMusicTime = -1.0;
+
+    var ps = funkin.play.PlayState.instance;
+    var music = FlxG.sound.music;
+    if (ps == null || music == null || musicTime < 0) return;
+
+    try
+    {
+      // Keep the pause menu (HOME / Sleep) paused: PlayState resumes the music itself on Resume.
+      var paused:Bool = (ps.subState != null || @:privateAccess ps._requestSubStateReset);
+
+      music.play(true, musicTime);
+      if (paused) music.pause();
+
+      if (ps.vocals != null)
+      {
+        @:privateAccess
+        {
+          var playerOffset:Float = ps.vocals.playerVoicesOffset;
+          var opponentOffset:Float = ps.vocals.opponentVoicesOffset;
+          ps.vocals.playerVoices?.forEachAlive(function(v:FunkinSound) {
+            v.play(true, Math.max(0, musicTime - playerOffset));
+            if (paused) v.pause();
+          });
+          ps.vocals.opponentVoices?.forEachAlive(function(v:FunkinSound) {
+            v.play(true, Math.max(0, musicTime - opponentOffset));
+            if (paused) v.pause();
+          });
+        }
+      }
+
+      recoveryAttempts++;
+      nx.NXDeepTrace.writeEntry('AUDIO', '[NXAudioRecovery] Instrumental and vocals rebuilt at ${Math.round(musicTime)}ms'
+        + ' (paused: $paused, OpenAL: ${getOpenALSourceState(music)})');
+    }
+    catch (e:Dynamic)
+    {
+      nx.NXDeepTrace.logError('[NXAudioRecovery] Rebuild after premature onComplete failed: $e');
+    }
+  }
+
+  /**
    * Watchdog: inspects whether instrumental music stopped anomalously and forces auto-recovery.
    */
   public static function checkWatchdog(targetSongPosition:Float, isGamePaused:Bool, isInCutscene:Bool, vocals:Null<funkin.audio.VoicesGroup> = null):Void
   {
+    trackPlayingPosition(targetSongPosition);
     if (isGamePaused || isInCutscene || FlxG.sound.music == null) return;
+
+    // A pause requested outside of PlayState.update (HOME / Sleep focus loss) is only applied by
+    // FlxState.tryUpdate() after the next update() call. In that frame subState is still null but the
+    // music was paused on purpose: "recovering" it here would keep the song playing under the pause menu.
+    var ps = funkin.play.PlayState.instance;
+    if (ps != null && (@:privateAccess ps._requestSubStateReset || @:privateAccess ps.musicPausedBySubState)) return;
 
     var musicLen:Float = (FlxG.sound.music != null) ? FlxG.sound.music.length : 0.0;
     if (musicLen > 0 && targetSongPosition >= (musicLen - 250)) return;

@@ -38,21 +38,31 @@ def check_ffmpeg():
 
 
 def extract_audio(input_file: str, output_audio: str, quality: int = 5):
+    """
+    Extrae el audio como Vorbis pasando por un WAV intermedio.
+
+    Transcodificar directamente un video con audio Vorbis (.mkv) conserva el recorte de samples del
+    stream original: el .ogg resultante declara menos samples (ov_pcm_total) de los que entrega ov_read.
+    El decodificador OGG de lime-nx reserva el buffer segun ov_pcm_total y escribe sin comprobar el
+    limite, asi que esos bytes extra desbordan el heap y crashean el juego (INC-37, Week 7).
+    """
     print(f"[*] Extrayendo audio Vorbis a: {output_audio}")
     os.makedirs(os.path.dirname(os.path.abspath(output_audio)), exist_ok=True)
-    cmd = [
-        "ffmpeg", "-y",
-        "-i", input_file,
-        "-vn",
-        "-acodec", "libvorbis",
-        "-aq", str(quality),
-        output_audio
+    temp_wav = os.path.splitext(os.path.abspath(output_audio))[0] + ".tmp.wav"
+    steps = [
+        ["ffmpeg", "-y", "-i", input_file, "-vn", "-f", "wav", temp_wav],
+        ["ffmpeg", "-y", "-i", temp_wav, "-acodec", "libvorbis", "-aq", str(quality), output_audio],
     ]
-    res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    if res.returncode != 0:
-        print(f"[!] Advertencia al extraer audio: {res.stderr}")
+    for cmd in steps:
+        res = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+        if res.returncode != 0:
+            print(f"[!] Advertencia al extraer audio: {res.stderr}")
+            break
     else:
         print("[✓] Audio extraído con éxito.")
+    if os.path.exists(temp_wav):
+        os.remove(temp_wav)
+    print("[i] Verifica el resultado con tools/nx-tools/check_ogg_overflow.sh antes de empaquetar.")
 
 
 def extract_frames(input_file: str, temp_dir: str, fps: int = 24, width: int = 1280, height: int = 720):

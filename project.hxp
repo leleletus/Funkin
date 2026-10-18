@@ -1521,8 +1521,9 @@ class Project extends HXProject
     {
       var shouldEmbedVideos = false;
       addAssetLibrary("videos", shouldEmbedVideos, false);
-      var videoExclude = isSwitch() ? exclude.concat(["*.mp4", "*.mkv", "*.webm"]) : exclude;
+      var videoExclude = isSwitch() ? exclude.concat(["*.mp4", "*.mkv", "*.webm", "converted"]) : exclude;
       addAssetPath("assets/videos", "assets/videos", "videos", ["*"], videoExclude, shouldEmbedVideos, "assets");
+      if (isSwitch()) addSwitchCutscenes(shouldEmbedVideos, exclude);
     }
 
     // Level asset libraries
@@ -2051,6 +2052,30 @@ class Project extends HXProject
           addAsset('${path}/${file}', '${targetPath}${file}', library, embed, padName);
         }
       }
+    }
+  }
+
+  /**
+   * Nintendo Switch has no video decoder: cutscenes are played by NXVideoPlayer from Sparrow sheets and
+   * a Vorbis track. They are generated locally from the original videos of the official assets
+   * (tools/nx-tools/prepare_switch_assets.py, cached in export/nx-generated) so no derived content needs
+   * to be committed, and packaged at assets/videos/converted in RomFS.
+   */
+  function addSwitchCutscenes(embed:Bool, exclude:Array<String>):Void
+  {
+    var generated:String = "export/nx-generated/videos/converted";
+    if (!(isDisplay() || isClean()))
+    {
+      info('Preparing Switch cutscenes (tools/nx-tools/prepare_switch_assets.py)...');
+      var code:Int = Sys.command("python3", ["tools/nx-tools/prepare_switch_assets.py"]);
+      if (code != 0)
+      {
+        error('prepare_switch_assets.py failed (exit $code). Cutscenes need ffmpeg, Pillow and libvorbis; see docs/SWITCH_PORT_TRACKER.md.');
+      }
+    }
+    if (sys.FileSystem.exists(generated))
+    {
+      addAssetPath(generated, "assets/videos/converted", "videos", ["*.png", "*.xml", "*.ogg"], exclude, embed, "assets");
     }
   }
 

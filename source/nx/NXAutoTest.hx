@@ -61,6 +61,9 @@ class NXAutoTest
       if (rawContent == null || rawContent.length == 0) return false;
 
       currentScenario = StringTools.trim(rawContent).toUpperCase();
+      if (currentScenario.indexOf("NOTEXMEM") != -1) NXTextureMemory.enabled = false;
+      if (currentScenario.indexOf("NOUPLOADREL") != -1) NXTextureMemory.releaseOnUpload = false;
+      if (currentScenario.indexOf("NOPOSTREL") != -1) NXTextureMemory.releaseAfterCreate = false;
       isRunning = true;
       testTimer = 0.0;
       stepState = 0;
@@ -91,7 +94,16 @@ class NXAutoTest
   {
     try
     {
-      if (scenario.indexOf("WEEKEND1_PLAYLIST") != -1 || scenario.indexOf("WEEKEND1_FULL") != -1)
+      if (scenario.indexOf("SOAK") != -1)
+      {
+        NXRegressionSuite.startSoak();
+      }
+      else if (scenario.indexOf("REGRESSION") != -1)
+      {
+        var fromIdx:Int = scenario.indexOf("REGRESSION_FROM_");
+        NXRegressionSuite.start(fromIdx != -1 ? Std.parseInt(scenario.substr(fromIdx + "REGRESSION_FROM_".length)) : 1);
+      }
+      else if (scenario.indexOf("WEEKEND1_PLAYLIST") != -1 || scenario.indexOf("WEEKEND1_FULL") != -1)
       {
         startWeekend1Playlist();
       }
@@ -195,14 +207,19 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1) ? 600.0 : 180.0);
+    var globalTimeout:Float = (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+      || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {
       failTest('Global test timeout reached (${globalTimeout}s)');
       return;
     }
 
-    if (currentScenario.indexOf("WEEKEND1_PLAYLIST") != -1 || currentScenario.indexOf("WEEKEND1_FULL") != -1)
+    if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1)
+    {
+      NXRegressionSuite.update();
+    }
+    else if (currentScenario.indexOf("WEEKEND1_PLAYLIST") != -1 || currentScenario.indexOf("WEEKEND1_FULL") != -1)
     {
       handleWeekend1PlaylistScenario();
     }
@@ -652,6 +669,8 @@ class NXAutoTest
   // ---------------------------------------------------------------------------
 
   static var pendingCaptureName:Null<String> = null;
+  public static var lastCaptureName:String = "";
+  public static var lastCaptureCoverage:Float = -1.0;
   static var captureHooked:Bool = false;
 
   static function requestFrameCapture(name:String):Void
@@ -706,6 +725,8 @@ class NXAutoTest
       #end
       sys.io.File.saveBytes(path, png);
       var coverage:Float = Math.round(nonBlack / ((w * h) / 16) * 1000) / 10;
+      lastCaptureName = name;
+      lastCaptureCoverage = coverage;
       trace('[AUTOTEST] Frame captured: $path (${w}x${h}, non-black coverage: $coverage%)');
     }
     catch (e:Dynamic)
