@@ -148,7 +148,7 @@ class Preferences
     return DebugDisplayMode.Off;
     #end
 
-    return Save?.instance?.options?.debugDisplay ?? #if switch DebugDisplayMode.Advanced #else 'Off' #end;
+    return Save?.instance?.options?.debugDisplay ?? #if (switch && NX_DEV_TOOLS) DebugDisplayMode.Advanced #else 'Off' #end;
   }
 
   static function set_debugDisplay(value:DebugDisplayMode):DebugDisplayMode
@@ -481,11 +481,13 @@ class Preferences
   public static function init():Void
   {
     #if switch
-    // Defaults for test builds: Advanced Debug Display, Direct loading (botplay lives in nx.NXDevTools)
+    // Direct loading by default; test builds (NX_DEV_TOOLS) also show the Advanced debug display (botplay lives in nx.NXDevTools)
     if (Save.instance != null && Save.instance.options != null)
     {
+      #if NX_DEV_TOOLS
       if (Save.instance.options.debugDisplay == null)
         Save.instance.options.debugDisplay = DebugDisplayMode.Advanced;
+      #end
       if (Save.instance.options.switchShowLoadingScreen == null)
         Save.instance.options.switchShowLoadingScreen = false;
     }
@@ -729,7 +731,7 @@ class Preferences
 
   static function get_switchShowPerfHud():Bool
   {
-    return Save?.instance?.options?.switchShowPerfHud ?? true;
+    return Save?.instance?.options?.switchShowPerfHud ?? #if NX_DEV_TOOLS true #else false #end;
   }
 
   static function set_switchShowPerfHud(value:Bool):Bool

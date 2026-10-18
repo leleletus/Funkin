@@ -55,9 +55,11 @@ class NXPerformance
       onDockStateChanged(currentDocked);
     }
 
-    updatePerfTelemetry();
     NXAudioDiagnostics.checkSystemSuspension();
     NXHaptics.update();
+
+    #if NX_DEV_TOOLS
+    updatePerfTelemetry();
     logGamepadInput();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
@@ -133,6 +135,7 @@ class NXPerformance
       comboHoldTimer = 0.0;
       comboTriggered = false;
     }
+    #end // NX_DEV_TOOLS
     #end
   }
 

@@ -36,6 +36,9 @@ class NXDeepTrace
    */
   public static function init():Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     if (isInitialized) return;
     isInitialized = true;
 
@@ -89,6 +92,9 @@ class NXDeepTrace
    */
   public static function initSignals():Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     if (signalsHooked) return;
     signalsHooked = true;
 
@@ -123,6 +129,9 @@ class NXDeepTrace
    */
   public static function logStateTransition(phase:String, stateName:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     writeEntry('STATE', '[$phase] State -> $stateName');
   }
 
@@ -131,6 +140,9 @@ class NXDeepTrace
    */
   public static function logSongInit(songId:String, difficulty:String, variation:String, ?extra:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var extraStr:String = (extra != null) ? ' | Info: $extra' : '';
     writeEntry('SONG', 'Loading: "$songId" [Diff: $difficulty, Variation: $variation]$extraStr');
   }
@@ -140,6 +152,9 @@ class NXDeepTrace
    */
   public static function logButtonEvent(button:String, ?details:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var detStr:String = (details != null && details.length > 0) ? ' -> $details' : '';
     writeEntry('INPUT', 'Button [$button]$detStr');
   }
@@ -149,6 +164,9 @@ class NXDeepTrace
    */
   public static function logAudioMetrics(context:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var alState:String = (FlxG.sound.music != null) ? NXAudioDiagnostics.getOpenALSourceState(FlxG.sound.music) : "Null";
     var activeChannels:Int = NXAudioDiagnostics.getActiveSoundsCount();
     var musicTime:Float = (FlxG.sound.music != null) ? FlxG.sound.music.time : -1.0;
@@ -175,6 +193,9 @@ class NXDeepTrace
    */
   public static function logMemorySnapshot(label:String, listSounds:Bool = false):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     try
     {
       var gcMb:Float = 0.0;
@@ -262,6 +283,9 @@ class NXDeepTrace
    */
   public static function logGraphicsByFolder(label:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     try
     {
       var groups:Map<String, {n:Int, mb:Float}> = new Map();
@@ -298,6 +322,9 @@ class NXDeepTrace
    */
   public static function logTopGraphics(label:String, count:Int = 20):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     try
     {
       var list:Array<{key:String, mb:Float, cpu:Bool, uses:Int, prot:Bool}> = [];
@@ -364,6 +391,9 @@ class NXDeepTrace
    */
   public static function logWarning(message:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     writeEntry('WARN', message);
   }
 
@@ -372,6 +402,9 @@ class NXDeepTrace
    */
   public static function logError(error:String, ?stack:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var stackStr:String = (stack != null && stack.length > 0) ? '\nStack:\n$stack' : '';
     writeEntry('ERROR', error + stackStr);
   }
@@ -381,6 +414,9 @@ class NXDeepTrace
    */
   public static function writeEntry(tag:String, message:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     #if sys
     try
     {

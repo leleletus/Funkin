@@ -1113,6 +1113,8 @@ class Project extends HXProject
       this.defines.set("LIME_CAIRO", "0");
       this.defines.set("LIME_OPENGL", "1");
       setHaxedef("native_audio_buffers", "8");
+      // Public builds (no -DNX_DEV_TOOLS): strip every trace() call, nothing is logged.
+      if (!hasDefine("NX_DEV_TOOLS") && !this.haxedefs.exists("NX_DEV_TOOLS")) setHaxedef("no-traces");
       this.defines.set("APP_ID", SWITCH_APP_ID);
       config.set("switch.ip", SWITCH_IP);
     }

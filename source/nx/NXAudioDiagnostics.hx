@@ -231,6 +231,9 @@ class NXAudioDiagnostics
    */
   public static function record(event:String, ?sound:FlxSound, value:Float = 0.0):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var now:Float = Sys.time();
     if (blackBoxStart < 0) blackBoxStart = now;
     var label:String = '';
@@ -246,6 +249,9 @@ class NXAudioDiagnostics
 
   public static function dumpBlackBox(reason:String):Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     nx.NXDeepTrace.writeEntry('AUDIO', '[BLACKBOX] $reason. Last ${blackBox.length} audio events:\n    ' + blackBox.join('\n    '));
   }
 
@@ -263,6 +269,9 @@ class NXAudioDiagnostics
    */
   public static function monitorMixer():Void
   {
+    #if !NX_DEV_TOOLS
+    return;
+    #end
     var wall:Float = Sys.time();
     if (mixerLastWall >= 0 && wall - mixerLastWall < 0.1) return;
     var clock:Float = NXAudioNative.deviceClockMs();
