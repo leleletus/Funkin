@@ -38,65 +38,6 @@ class NXVideoPlayer
    * @param onComplete Callback invoked when the cutscene finishes or is skipped.
    * @return `true` if a converted cutscene was found and started, `false` otherwise.
    */
-  static function hasAsset(path:String, ?type:openfl.utils.AssetType):Bool
-  {
-    try
-    {
-      #if sys
-      if (sys.FileSystem.exists('romfs:/' + path) || sys.FileSystem.exists(path)) return true;
-      #end
-      if (type != null)
-      {
-        if (Assets.exists('videos:' + path, type) || Assets.exists(path, type)) return true;
-      }
-      if (Assets.exists('videos:' + path) || Assets.exists(path)) return true;
-    }
-    catch (e:Dynamic) {}
-    return false;
-  }
-
-  static function getBitmap(path:String):Null<openfl.display.BitmapData>
-  {
-    try
-    {
-      #if sys
-      if (sys.FileSystem.exists('romfs:/' + path)) return openfl.display.BitmapData.fromFile('romfs:/' + path);
-      if (sys.FileSystem.exists(path)) return openfl.display.BitmapData.fromFile(path);
-      #end
-      if (Assets.exists('videos:' + path, IMAGE)) return Assets.getBitmapData('videos:' + path);
-      if (Assets.exists(path, IMAGE)) return Assets.getBitmapData(path);
-      if (Assets.exists('videos:' + path))
-      {
-        var bytes = Assets.getBytes('videos:' + path);
-        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
-      }
-      if (Assets.exists(path))
-      {
-        var bytes = Assets.getBytes(path);
-        if (bytes != null) return openfl.display.BitmapData.fromBytes(bytes);
-      }
-    }
-    catch (e:Dynamic) {}
-    return null;
-  }
-
-  static function getText(path:String):Null<String>
-  {
-    try
-    {
-      #if sys
-      if (sys.FileSystem.exists('romfs:/' + path)) return sys.io.File.getContent('romfs:/' + path);
-      if (sys.FileSystem.exists(path)) return sys.io.File.getContent(path);
-      #end
-      if (Assets.exists('videos:' + path, TEXT)) return Assets.getText('videos:' + path);
-      if (Assets.exists(path, TEXT)) return Assets.getText(path);
-      if (Assets.exists('videos:' + path)) return Assets.getText('videos:' + path);
-      if (Assets.exists(path)) return Assets.getText(path);
-    }
-    catch (e:Dynamic) {}
-    return null;
-  }
-
   public static function playConverted(videoPath:String, onComplete:Void->Void):Bool
   {
     if (PlayState.instance == null) return false;
@@ -108,64 +49,98 @@ class NXVideoPlayer
 
       trace('[NXVideoPlayer] Verifying converted assets for: $videoName');
 
-      var isMultiSheet:Bool = false;
-      var primaryPng:String = '';
-      var primaryXml:String = '';
+      var pngExists:Bool = false;
+      var xmlExists:Bool = false;
 
-      if (hasAsset('assets/videos/converted/$videoName.png', IMAGE) &&
-          hasAsset('assets/videos/converted/$videoName.xml', TEXT))
+      // 1. Check OpenFL / Lime Assets Library
+      try
       {
-        primaryPng = 'assets/videos/converted/$videoName.png';
-        primaryXml = 'assets/videos/converted/$videoName.xml';
+        if (Assets.exists('videos:assets/videos/converted/$videoName.png', IMAGE) &&
+            Assets.exists('videos:assets/videos/converted/$videoName.xml', TEXT))
+        {
+          pngExists = true;
+          xmlExists = true;
+        }
+        else if (Assets.exists('assets/videos/converted/$videoName.png', IMAGE) &&
+                 Assets.exists('assets/videos/converted/$videoName.xml', TEXT))
+        {
+          pngExists = true;
+          xmlExists = true;
+        }
+        #if sys
+        // 2. Check RomFS / SDMC direct filesystem
+        else if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.xml'))
+        {
+          pngExists = true;
+          xmlExists = true;
+        }
+        else if (sys.FileSystem.exists('assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('assets/videos/converted/$videoName.xml'))
+        {
+          pngExists = true;
+          xmlExists = true;
+        }
+        #end
       }
-      else if (hasAsset('assets/videos/converted/${videoName}_0.png', IMAGE) &&
-               hasAsset('assets/videos/converted/${videoName}_0.xml', TEXT))
+      catch (e:Dynamic)
       {
-        isMultiSheet = true;
-        primaryPng = 'assets/videos/converted/${videoName}_0.png';
-        primaryXml = 'assets/videos/converted/${videoName}_0.xml';
+        trace('[NXVideoPlayer] Asset existence check threw: ' + e);
+        return false;
       }
-      else
+
+      // If either .png or .xml does not exist, do NOT instantiate ANY graphics
+      if (!pngExists || !xmlExists)
       {
         trace('[NXVideoPlayer] No converted atlas (.png/.xml) found for "$videoName". Safe skip to avoid SIGSEGV.');
         stop();
         return false;
       }
 
-      var primaryBmd = getBitmap(primaryPng);
-      var primaryXmlStr = getText(primaryXml);
-      if (primaryBmd == null || primaryXmlStr == null)
+      // Load atlas frames safely
+      var frames:FlxAtlasFrames = null;
+      try
       {
-        trace('[NXVideoPlayer] Failed reading primary bitmap or xml for "$videoName". Aborting.');
+        if (Assets.exists('videos:assets/videos/converted/$videoName.png', IMAGE) &&
+            Assets.exists('videos:assets/videos/converted/$videoName.xml', TEXT))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            Assets.getBitmapData('videos:assets/videos/converted/$videoName.png'),
+            Assets.getText('videos:assets/videos/converted/$videoName.xml')
+          );
+        }
+        else if (Assets.exists('assets/videos/converted/$videoName.png', IMAGE) &&
+                 Assets.exists('assets/videos/converted/$videoName.xml', TEXT))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            Assets.getBitmapData('assets/videos/converted/$videoName.png'),
+            Assets.getText('assets/videos/converted/$videoName.xml')
+          );
+        }
+        #if sys
+        else if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.xml'))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            openfl.display.BitmapData.fromFile('romfs:/assets/videos/converted/$videoName.png'),
+            sys.io.File.getContent('romfs:/assets/videos/converted/$videoName.xml')
+          );
+        }
+        else if (sys.FileSystem.exists('assets/videos/converted/$videoName.png') &&
+                 sys.FileSystem.exists('assets/videos/converted/$videoName.xml'))
+        {
+          frames = FlxAtlasFrames.fromSparrow(
+            openfl.display.BitmapData.fromFile('assets/videos/converted/$videoName.png'),
+            sys.io.File.getContent('assets/videos/converted/$videoName.xml')
+          );
+        }
+        #end
+      }
+      catch (e:Dynamic)
+      {
+        trace('[NXVideoPlayer] Exception loading sparrow atlas: ' + e);
         stop();
         return false;
-      }
-
-      var frames:FlxAtlasFrames = FlxAtlasFrames.fromSparrow(primaryBmd, primaryXmlStr);
-
-      if (isMultiSheet)
-      {
-        var sheetIdx:Int = 1;
-        while (true)
-        {
-          var nextPng = 'assets/videos/converted/${videoName}_$sheetIdx.png';
-          var nextXml = 'assets/videos/converted/${videoName}_$sheetIdx.xml';
-          if (hasAsset(nextPng, IMAGE) && hasAsset(nextXml, TEXT))
-          {
-            var nextBmd = getBitmap(nextPng);
-            var nextXmlStr = getText(nextXml);
-            if (nextBmd != null && nextXmlStr != null)
-            {
-              var subFrames = FlxAtlasFrames.fromSparrow(nextBmd, nextXmlStr);
-              if (subFrames != null) frames.addAtlas(subFrames);
-            }
-            sheetIdx++;
-          }
-          else
-          {
-            break;
-          }
-        }
       }
 
       if (frames == null || frames.frames == null || frames.frames.length == 0)
@@ -175,22 +150,30 @@ class NXVideoPlayer
         return false;
       }
 
-      var animFps:Int = 24;
+      // Check audio existence
+      var hasAudio:Bool = false;
+      var audioPath:String = 'videos/converted/$videoName.ogg';
       try
       {
-        var parsedXml = Xml.parse(primaryXmlStr).firstElement();
-        if (parsedXml != null && parsedXml.exists("fps"))
+        if (Assets.exists('videos:assets/videos/converted/$videoName.ogg', SOUND) ||
+            Assets.exists('assets/videos/converted/$videoName.ogg', SOUND))
         {
-          var parsed = Std.parseInt(parsedXml.get("fps"));
-          if (parsed != null && parsed > 0) animFps = parsed;
+          hasAudio = true;
         }
+        #if sys
+        else if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.ogg') ||
+                 sys.FileSystem.exists('assets/videos/converted/$videoName.ogg'))
+        {
+          hasAudio = true;
+        }
+        #end
       }
-      catch (e:Dynamic) {}
+      catch (e:Dynamic)
+      {
+        hasAudio = false;
+      }
 
-      // Check audio existence
-      var hasAudio:Bool = hasAsset('assets/videos/converted/$videoName.ogg', SOUND);
-
-      trace('[NXVideoPlayer] Playing converted cutscene for: $videoName (Audio: $hasAudio, FPS: $animFps, MultiSheet: $isMultiSheet)');
+      trace('[NXVideoPlayer] Playing converted cutscene for: $videoName (Audio: $hasAudio)');
       isPlaying = true;
 
       PlayState.instance.isInCutscene = true;
@@ -198,9 +181,7 @@ class NXVideoPlayer
 
       var cutsceneSpr:FlxSprite = new FlxSprite(0, 0);
       cutsceneSpr.frames = frames;
-      cutsceneSpr.animation.addByPrefix('play', 'cutscene', animFps, false);
-      cutsceneSpr.setGraphicSize(1280, 720);
-      cutsceneSpr.updateHitbox();
+      cutsceneSpr.animation.addByPrefix('play', 'cutscene', 24, false);
       cutsceneSpr.screenCenter();
       cutsceneSpr.cameras = [PlayState.instance.camCutscene];
       cutsceneSpr.scrollFactor.set(0, 0);
@@ -222,14 +203,7 @@ class NXVideoPlayer
       {
         try
         {
-          var audioKey:String = Assets.exists('videos:assets/videos/converted/$videoName.ogg') ? 'videos:assets/videos/converted/$videoName.ogg' : 'assets/videos/converted/$videoName.ogg';
-          #if sys
-          if (sys.FileSystem.exists('romfs:/assets/videos/converted/$videoName.ogg'))
-          {
-            audioKey = 'romfs:/assets/videos/converted/$videoName.ogg';
-          }
-          #end
-          currentAudio = FunkinSound.load(Paths.file(audioKey), 1.0, false, true, false, false, finishCutscene, null, true);
+          currentAudio = FunkinSound.load(Paths.file(audioPath), 1.0, false, true, false, false, finishCutscene, null, true);
           if (currentAudio != null)
           {
             currentAudio.play();
@@ -242,20 +216,10 @@ class NXVideoPlayer
       }
 
       cutsceneSpr.animation.play('play');
-      if (cutsceneSpr.animation.onFinish != null)
+      cutsceneSpr.animation.finishCallback = function(_)
       {
-        cutsceneSpr.animation.onFinish.add(function(_)
-        {
-          if (!hasAudio) finishCutscene();
-        });
-      }
-      else
-      {
-        cutsceneSpr.animation.finishCallback = function(_)
-        {
-          if (!hasAudio) finishCutscene();
-        };
-      }
+        if (!hasAudio) finishCutscene();
+      };
 
       return true;
     }
@@ -313,19 +277,9 @@ class NXVideoPlayer
       if (currentSprite != null)
       {
         if (PlayState.instance != null) PlayState.instance.remove(currentSprite);
-        if (currentSprite.frames != null)
-        {
-          currentSprite.frames.destroy();
-        }
         currentSprite.destroy();
         currentSprite = null;
       }
-
-      #if switch
-      funkin.FunkinMemory.purgeCache(true);
-      cpp.vm.Gc.run(true);
-      cpp.vm.Gc.compact();
-      #end
 
       if (PlayState.instance != null)
       {

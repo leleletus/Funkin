@@ -1517,12 +1517,11 @@ class Project extends HXProject
     addAssetLibrary("shared", shouldEmbed, shouldPreload);
     addAssetPath("assets/shared", "assets/shared", "shared", ["*"], exclude, shouldEmbed, "assets");
 
-    if (FEATURE_VIDEO_PLAYBACK.isEnabled(this) || isSwitch())
+    if (FEATURE_VIDEO_PLAYBACK.isEnabled(this))
     {
       var shouldEmbedVideos = false;
-      addAssetLibrary("videos", shouldEmbedVideos, false);
-      var videoExclude = isSwitch() ? exclude.concat(["*.mp4", "*.mkv", "*.webm"]) : exclude;
-      addAssetPath("assets/videos", "assets/videos", "videos", ["*"], videoExclude, shouldEmbedVideos, "assets");
+      addAssetLibrary("videos", shouldEmbedVideos, shouldPreload);
+      addAssetPath("assets/videos", "assets/videos", "videos", ["*"], exclude, shouldEmbedVideos, "assets");
     }
 
     // Level asset libraries
@@ -1961,10 +1960,6 @@ class Project extends HXProject
     }
 
     var asset = new Asset(path, rename, null, embed, true);
-    if (isSwitch() && library == "videos")
-    {
-      asset.type = BINARY;
-    }
     @:nullSafety(Off)
     {
       asset.library = library ?? "default";
