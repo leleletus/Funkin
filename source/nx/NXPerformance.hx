@@ -7,6 +7,7 @@ import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 import nx.NXMain;
 #if cpp
 @:cppInclude("switch.h")
+@:cppInclude("malloc.h")
 #end
 #end
 
@@ -30,6 +31,7 @@ class NXPerformance
     lastDockedState = NXMain.IS_DOCKED;
     applyResolutionMode(Preferences.switchResolutionMode);
     updatePerfHud();
+    NXTextureMemory.init();
     #end
   }
 
@@ -262,6 +264,25 @@ class NXPerformance
       {0} = (double)totalMemory;
     ', totalBytes);
     return totalBytes / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Returns bytes currently allocated through newlib malloc (`mallinfo().uordblks`), in megabytes (MB).
+   * Unlike `getPhysicalMemoryUsed()` (which reports the heap mapped by `svcSetHeapSize`), this tracks real
+   * native allocations: decoded image pixel buffers, PCM audio buffers, and Mesa/nouveau driver allocations.
+   */
+  public static function getNativeHeapUsed():Float
+  {
+    #if (switch && cpp)
+    var usedBytes:Float = 0;
+    untyped __cpp__('
+      struct mallinfo mi = mallinfo();
+      {0} = (double)mi.uordblks;
+    ', usedBytes);
+    return usedBytes / (1024.0 * 1024.0);
     #else
     return 0.0;
     #end

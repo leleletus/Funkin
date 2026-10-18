@@ -160,6 +160,96 @@ class NXDeepTrace
   }
 
   /**
+   * Logs a full memory snapshot: Haxe GC heap, native malloc heap, kernel-reported RAM,
+   * FlxG.bitmap cache (count + decoded pixel MB), OpenFL asset cache, FlxAnimate atlas cache
+   * and FunkinMemory tracked entries. Used at every state transition by NXAutoTest.
+   * @param label Context label for the snapshot (e.g. `PRE-SWITCH lit-up`).
+   * @param listSounds If true, also dumps every key in `openfl.Assets.cache.sound`.
+   */
+  public static function logMemorySnapshot(label:String, listSounds:Bool = false):Void
+  {
+    try
+    {
+      var gcMb:Float = 0.0;
+      var gcLargeMb:Float = 0.0;
+      var gcReservedMb:Float = 0.0;
+      #if cpp
+      gcMb = cpp.vm.Gc.memInfo(0) / (1024.0 * 1024.0);
+      gcReservedMb = cpp.vm.Gc.memInfo(1) / (1024.0 * 1024.0);
+      gcLargeMb = cpp.vm.Gc.memInfo(3) / (1024.0 * 1024.0);
+      #end
+      var nativeMb:Float = #if switch NXPerformance.getNativeHeapUsed() #else 0.0 #end;
+      var sysMb:Float = #if switch NXPerformance.getPhysicalMemoryUsed() #else 0.0 #end;
+
+      var bitmapCount:Int = 0;
+      var bitmapPixelMb:Float = 0.0;
+      @:privateAccess
+      if (FlxG.bitmap != null && FlxG.bitmap._cache != null)
+      {
+        for (graphic in FlxG.bitmap._cache)
+        {
+          if (graphic == null) continue;
+          bitmapCount++;
+          if (graphic.bitmap != null) bitmapPixelMb += (graphic.width * graphic.height * 4) / (1024.0 * 1024.0);
+        }
+      }
+
+      var oflBitmaps:Int = 0;
+      var oflSounds:Int = 0;
+      var soundKeys:Array<String> = [];
+      @:privateAccess
+      if (openfl.utils.Assets.cache != null && Std.isOfType(openfl.utils.Assets.cache, openfl.utils.AssetCache))
+      {
+        var cache:openfl.utils.AssetCache = cast openfl.utils.Assets.cache;
+        for (_ in cache.bitmapData.keys())
+          oflBitmaps++;
+        for (key in cache.sound.keys())
+        {
+          oflSounds++;
+          soundKeys.push(key);
+        }
+      }
+
+      var atlasCount:Int = 0;
+      @:privateAccess
+      if (animate.FlxAnimateFrames._cachedAtlases != null)
+      {
+        for (_ in animate.FlxAnimateFrames._cachedAtlases.keys())
+          atlasCount++;
+      }
+
+      var fmCurTex:Int = 0;
+      var fmPrevTex:Int = 0;
+      var fmCurSnd:Int = 0;
+      @:privateAccess
+      {
+        for (_ in funkin.FunkinMemory.currentCachedTextures.keys())
+          fmCurTex++;
+        for (_ in funkin.FunkinMemory.previousCachedTextures.keys())
+          fmPrevTex++;
+        for (_ in funkin.FunkinMemory.currentCachedSounds.keys())
+          fmCurSnd++;
+      }
+
+      var r = function(v:Float):Float return Math.round(v * 10.0) / 10.0;
+      writeEntry('MEMORY',
+        '[$label] GC Heap: ${r(gcMb)} MB (Large: ${r(gcLargeMb)} MB, Reserved: ${r(gcReservedMb)} MB) | Native malloc: ${r(nativeMb)} MB | SYS RAM: ${r(sysMb)} MB'
+        + ' | FlxG.bitmap: $bitmapCount (${r(bitmapPixelMb)} MB px) | Assets.cache: $oflBitmaps bmp / $oflSounds snd'
+        + ' | FlxAnimate atlases: $atlasCount | FunkinMemory tex: $fmCurTex cur / $fmPrevTex prev, snd: $fmCurSnd'
+        + ' | FlxG.sound.list: ${FlxG.sound != null ? FlxG.sound.list.length : -1}');
+
+      if (listSounds && soundKeys.length > 0)
+      {
+        writeEntry('MEMORY', '[$label] Assets.cache.sound keys: ' + soundKeys.join(', '));
+      }
+    }
+    catch (e:Dynamic)
+    {
+      writeEntry('ERROR', '[$label] Memory snapshot failed: $e');
+    }
+  }
+
+  /**
    * Logs warnings.
    */
   public static function logWarning(message:String):Void

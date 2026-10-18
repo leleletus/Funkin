@@ -40,19 +40,42 @@ echo "$SCENARIO" > "$CFG_FILE"
 echo "$SCENARIO" > "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
 echo "[AUTOTEST-RUNNER] Prepared autotest scenario '$SCENARIO' at $CFG_FILE (Start line: $START_LINE)"
 
+# Citron se lanza a traves del wrapper binfmt de AppImageLauncher: el emulador real es un proceso
+# nieto (/tmp/.mount_citro*/bin/citron, ~10 GB RSS). Matar solo $! lo dejaba huerfano, por eso se
+# lanza en su propio grupo de procesos (setsid) y se elimina el grupo completo.
+kill_citron() {
+    if [ -n "$CITRON_PID" ]; then
+        kill -TERM -- "-$CITRON_PID" 2>/dev/null || true
+        sleep 2
+        kill -KILL -- "-$CITRON_PID" 2>/dev/null || true
+    fi
+    # Red de seguridad: cualquier instancia que siga ejecutando este NRO.
+    pkill -KILL -f "bin/citron -g $NRO_PATH" 2>/dev/null || true
+    pkill -KILL -f "citron.*AppImage -g $NRO_PATH" 2>/dev/null || true
+}
+
 cleanup() {
     echo "[AUTOTEST-RUNNER] Cleaning up autotest configuration and processes..."
     rm -f "$CFG_FILE"
     rm -f "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
-    if [ -n "$CITRON_PID" ]; then
-        kill -9 "$CITRON_PID" 2>/dev/null || true
+    kill_citron
+    if pgrep -f "bin/citron -g $NRO_PATH" > /dev/null 2>&1; then
+        echo "[AUTOTEST-RUNNER] WARNING: a Citron process is still alive, kill it manually!"
     fi
 }
-trap cleanup EXIT INT TERM
+trap cleanup EXIT INT TERM HUP
 
-# 3. Lanzar Citron con Funkin.nro usando flag -g
+# 2b. No arrancar si ya hay un Citron vivo con este NRO (instancias huerfanas agotan la RAM del host).
+if pgrep -f "bin/citron -g $NRO_PATH" > /dev/null 2>&1; then
+    echo "[AUTOTEST-RUNNER] Found a running Citron instance for this NRO, terminating it first..."
+    pkill -KILL -f "bin/citron -g $NRO_PATH" 2>/dev/null || true
+    sleep 1
+fi
+
+# 3. Lanzar Citron con Funkin.nro usando flag -g, en un grupo de procesos propio
 echo "[AUTOTEST-RUNNER] Launching Citron with Funkin.nro (Timeout: ${TIMEOUT_SEC}s)..."
-"$CITRON_BIN" -g "$NRO_PATH" > /dev/null 2>&1 &
+CITRON_LOG_FILE="$HOME/.local/share/citron/log/citron_log.txt"
+setsid "$CITRON_BIN" -g "$NRO_PATH" > /dev/null 2>&1 &
 CITRON_PID=$!
 
 echo "[AUTOTEST-RUNNER] Citron running with PID $CITRON_PID. Monitoring $LOG_FILE..."
@@ -88,6 +111,13 @@ while [ "$ELAPSED" -lt "$TIMEOUT_SEC" ]; do
             break
         fi
     fi
+
+    # Crash nativo del guest (abort/BRK, Unmapped access): el juego queda congelado sin escribir mas trazas.
+    if [ "$ELAPSED" -ge 6 ] && [ -f "$CITRON_LOG_FILE" ] && grep -q -E "ExceptionRaised|Unmapped (Read|Write)" "$CITRON_LOG_FILE" 2>/dev/null; then
+        STATUS="NATIVE_CRASH"
+        cp "$CITRON_LOG_FILE" "$SDMC_DIR/logs/citron-native-crash-$(date +%Y%m%d-%H%M%S).log" 2>/dev/null || true
+        break
+    fi
 done
 
 echo "[AUTOTEST-RUNNER] Test run finished with status: $STATUS (Elapsed: ${ELAPSED}s)"
@@ -98,6 +128,11 @@ if [ -f "$LOG_FILE" ]; then
     tail -n +"$START_LINE" "$LOG_FILE" | grep -E "AUTOTEST|NXVideoPlayer|Sheet|AUDIO|STAGE|MEMORY" || true
 fi
 echo "--------------------------------------------------"
+if [ "$STATUS" = "NATIVE_CRASH" ]; then
+    echo "NATIVE CRASH BACKTRACE (decoded):"
+    python3 "$(dirname "$0")/decode_switch_crash.py" "$CITRON_LOG_FILE" 2>&1 | tail -n 60 || true
+    echo "--------------------------------------------------"
+fi
 
 if [ "$STATUS" = "SUCCESS" ]; then
     echo "[AUTOTEST-RUNNER] TEST PASSED SUCCESSFULLY!"

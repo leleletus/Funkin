@@ -5,6 +5,8 @@ import flixel.util.FlxTimer;
 import funkin.play.PlayState;
 import funkin.play.PlayStatePlaylist;
 import funkin.play.song.Song;
+import funkin.data.story.level.LevelRegistry;
+import funkin.Highscore;
 import funkin.data.song.SongRegistry;
 import funkin.ui.transition.LoadingState;
 import funkin.util.Constants;
@@ -89,7 +91,11 @@ class NXAutoTest
   {
     try
     {
-      if (scenario.indexOf("DARNELL") != -1 || scenario.indexOf("WEEKEND1") != -1)
+      if (scenario.indexOf("WEEKEND1_PLAYLIST") != -1)
+      {
+        startWeekend1Playlist();
+      }
+      else if (scenario.indexOf("DARNELL") != -1 || scenario.indexOf("WEEKEND1") != -1)
       {
         trace('[AUTOTEST] Launching Weekend 1 Story Mode (Darnell Cutscene)...');
         Paths.setCurrentLevel('weekend1');
@@ -189,13 +195,18 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    if (testTimer > 180.0)
+    var globalTimeout:Float = (currentScenario.indexOf("PLAYLIST") != -1) ? 600.0 : 180.0;
+    if (testTimer > globalTimeout)
     {
-      failTest("Global test timeout reached (180s)");
+      failTest('Global test timeout reached (${globalTimeout}s)');
       return;
     }
 
-    if (currentScenario.indexOf("AUDIO_TORTURE") != -1)
+    if (currentScenario.indexOf("WEEKEND1_PLAYLIST") != -1)
+    {
+      handleWeekend1PlaylistScenario();
+    }
+    else if (currentScenario.indexOf("AUDIO_TORTURE") != -1)
     {
       handleAudioTortureScenario();
     }
@@ -375,10 +386,322 @@ class NXAutoTest
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // WEEKEND1_PLAYLIST: full Weekend 1 Story Mode (Hard) chain
+  // darnellCutscene -> darnell -> lit-up -> 2hot -> 2hotCutscene -> blazin -> blazinCutscene -> Results
+  // ---------------------------------------------------------------------------
+
+  static final W1_EXPECTED_SONGS:Array<String> = ["darnell", "lit-up", "2hot", "blazin"];
+  static final W1_CUTSCENE_SECONDS:Float = 2.0;
+  static final W1_SONG_SECONDS:Float = 3.0;
+  static final W1_PHASE_TIMEOUT:Float = 90.0;
+
+  static inline var W1_WAIT_START:Int = 0;
+  static inline var W1_PLAYING:Int = 1;
+  static inline var W1_WAIT_END:Int = 2;
+  static inline var W1_CUTSCENE:Int = 3;
+
+  static var w1Instance:Null<PlayState> = null;
+  static var w1SongId:String = "";
+  static var w1Phase:Int = 0;
+  static var w1PhaseStamp:Float = 0.0;
+  static var w1EndRequested:Bool = false;
+  static var w1SongsEntered:Array<String> = [];
+  static var w1CutscenesPlayed:Array<String> = [];
+  static var w1TransitionIndex:Int = 0;
+  static var w1PeakNativeMb:Float = 0.0;
+  static var w1LastSample:Float = 0.0;
+  static var w1CaptureRequested:Bool = false;
+
+  static function startWeekend1Playlist():Void
+  {
+    trace('[AUTOTEST] Launching WEEKEND1_PLAYLIST (Weekend 1 Story Mode, Hard, full chain)...');
+
+    w1Instance = null;
+    w1SongId = "";
+    w1Phase = W1_WAIT_START;
+    w1PhaseStamp = Timer.stamp();
+    w1EndRequested = false;
+    w1SongsEntered = [];
+    w1CutscenesPlayed = [];
+    w1TransitionIndex = 0;
+    w1PeakNativeMb = 0.0;
+
+    // Snapshot every state transition: before the old state is destroyed, after it has been destroyed
+    // and purged (but before the new state is built), and once the new state has been created.
+    FlxG.signals.preStateSwitch.add(onW1PreStateSwitch);
+    FlxG.signals.preStateCreate.add(onW1PreStateCreate);
+    FlxG.signals.postStateSwitch.add(onW1PostStateSwitch);
+    funkin.util.logging.CrashHandler.errorSignal.add(onW1Error);
+    funkin.util.logging.CrashHandler.criticalErrorSignal.add(onW1Error);
+
+    // Mirror StoryMenuState.selectLevel() exactly.
+    var level = LevelRegistry.instance.fetchEntry("weekend1");
+    if (level == null)
+    {
+      failTest("Level weekend1 not found in LevelRegistry");
+      return;
+    }
+
+    Paths.setCurrentLevel(level.id);
+    PlayStatePlaylist.playlistSongIds = level.getSongs();
+    trace('[AUTOTEST] Weekend 1 playlist: ' + PlayStatePlaylist.playlistSongIds.join(' -> '));
+    if (PlayStatePlaylist.playlistSongIds.join(',') != W1_EXPECTED_SONGS.join(','))
+    {
+      trace('[AUTOTEST] WARNING: playlist differs from expected ' + W1_EXPECTED_SONGS.join(' -> '));
+    }
+    PlayStatePlaylist.isStoryMode = true;
+    PlayStatePlaylist.campaignScore = 0;
+
+    var targetSongId:String = PlayStatePlaylist.playlistSongIds.shift();
+    var targetSong:Song = SongRegistry.instance.fetchEntry(targetSongId, {variation: Constants.DEFAULT_VARIATION});
+
+    PlayStatePlaylist.campaignId = level.id;
+    PlayStatePlaylist.campaignTitle = level.getTitle();
+    PlayStatePlaylist.campaignDifficulty = "hard";
+    Highscore.talliesLevel = new funkin.Highscore.Tallies();
+
+    NXDeepTrace.logMemorySnapshot('W1 BASELINE (before darnell)', true);
+
+    LoadingState.loadPlayState(
+      {
+        targetSong: targetSong,
+        targetDifficulty: PlayStatePlaylist.campaignDifficulty,
+        targetVariation: targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty)
+      }, true);
+  }
+
+  static function onW1PreStateSwitch():Void
+  {
+    if (!isRunning) return;
+    w1TransitionIndex++;
+    var from:String = (PlayState.instance != null && PlayState.instance.currentSong != null) ? PlayState.instance.currentSong.id : Type.getClassName(Type.getClass(FlxG.state));
+    snapshotW1('T$w1TransitionIndex PRE-SWITCH (leaving $from)', false);
+  }
+
+  static function onW1PreStateCreate(state:flixel.FlxState):Void
+  {
+    if (!isRunning) return;
+    snapshotW1('T$w1TransitionIndex POST-DESTROY/PURGE (before ${Type.getClassName(Type.getClass(state))}.create)', true);
+  }
+
+  static function onW1PostStateSwitch():Void
+  {
+    if (!isRunning) return;
+    var into:String = (PlayState.instance != null && PlayState.instance.currentSong != null) ? PlayState.instance.currentSong.id : Type.getClassName(Type.getClass(FlxG.state));
+    snapshotW1('T$w1TransitionIndex POST-CREATE (entered $into)', false);
+  }
+
+  static function onW1Error(message:String):Void
+  {
+    trace('[AUTOTEST] [EXCEPTION] Captured engine error during WEEKEND1_PLAYLIST: $message');
+  }
+
+  static function snapshotW1(label:String, listSounds:Bool):Void
+  {
+    NXDeepTrace.logMemorySnapshot(label, listSounds);
+    #if switch
+    var nativeMb:Float = NXPerformance.getNativeHeapUsed();
+    if (nativeMb > w1PeakNativeMb) w1PeakNativeMb = nativeMb;
+    #end
+  }
+
+  static function setW1Phase(phase:Int):Void
+  {
+    w1Phase = phase;
+    w1PhaseStamp = Timer.stamp();
+  }
+
+  static function isW1ResultsOpen():Bool
+  {
+    if (FlxG.state == null) return false;
+    if (Std.isOfType(FlxG.state, funkin.play.ResultState)) return true;
+    var sub = FlxG.state.subState;
+    while (sub != null)
+    {
+      if (Std.isOfType(sub, funkin.play.ResultState)) return true;
+      sub = sub.subState;
+    }
+    return false;
+  }
+
+  static function handleWeekend1PlaylistScenario():Void
+  {
+    if (isW1ResultsOpen())
+    {
+      snapshotW1('W1 RESULTS SCREEN', true);
+      trace('[AUTOTEST] [PASS] Reached ResultState after the full Weekend 1 chain.');
+      trace('[AUTOTEST] Songs entered: ' + w1SongsEntered.join(' -> '));
+      trace('[AUTOTEST] Cutscenes played: ' + w1CutscenesPlayed.join(' -> '));
+      trace('[AUTOTEST] Peak native malloc observed at transitions: ${Math.round(w1PeakNativeMb * 10) / 10} MB');
+      if (w1SongsEntered.join(',') != W1_EXPECTED_SONGS.join(','))
+      {
+        failTest('Unexpected song order: ' + w1SongsEntered.join(' -> '));
+        return;
+      }
+      passTest();
+      return;
+    }
+
+    var ps:Null<PlayState> = PlayState.instance;
+    // Telemetry: sample native malloc twice per second (shows when GPU memory is actually returned).
+    #if switch
+    if (Timer.stamp() - w1LastSample >= 0.5)
+    {
+      w1LastSample = Timer.stamp();
+      var ctx:String = (ps == null) ? 'no-playstate' : 'song=${ps.currentSong?.id} phase=$w1Phase starting=${@:privateAccess ps.startingSong} cutscene=${ps.isInCutscene} pos=${Math.round(Conductor.instance.songPosition)}';
+      #if cpp
+      var gcMb:Float = Math.round(cpp.vm.Gc.memInfo(0) / 104857.6) / 10.0;
+      #else
+      var gcMb:Float = 0.0;
+      #end
+      NXDeepTrace.writeEntry('MEMSAMPLE', 'native=${Math.round(NXPerformance.getNativeHeapUsed() * 10) / 10} gc=$gcMb $ctx');
+    }
+    #end
+    if (ps == null || ps.currentSong == null) return; // Mid-transition.
+
+    if (ps != w1Instance)
+    {
+      w1Instance = ps;
+      w1SongId = ps.currentSong.id;
+      w1EndRequested = false;
+      w1CaptureRequested = false;
+      w1SongsEntered.push(w1SongId);
+      setW1Phase(W1_WAIT_START);
+      trace('[AUTOTEST] Entered song "$w1SongId" (${w1SongsEntered.length}/${W1_EXPECTED_SONGS.length}) on stage "${ps.currentStageId}" [diff=${ps.currentDifficulty}, story=${PlayStatePlaylist.isStoryMode}]');
+    }
+
+    var phaseElapsed:Float = Timer.stamp() - w1PhaseStamp;
+    if (phaseElapsed > W1_PHASE_TIMEOUT)
+    {
+      failTest('Stuck in phase $w1Phase of song "$w1SongId" for ${Math.round(phaseElapsed)}s'
+        + ' (startingSong=${@:privateAccess ps.startingSong}, isInCutscene=${ps.isInCutscene}, video=${NXVideoPlayer.isCutscenePlaying()})');
+      return;
+    }
+
+    switch (w1Phase)
+    {
+      case W1_WAIT_START | W1_WAIT_END:
+        if (NXVideoPlayer.isCutscenePlaying())
+        {
+          var videoName:String = @:privateAccess NXVideoPlayer.currentVideoName;
+          w1CutscenesPlayed.push(videoName);
+          trace('[AUTOTEST] Cutscene "$videoName" started in song "$w1SongId". Letting it run ${W1_CUTSCENE_SECONDS}s...');
+          setW1Phase(W1_CUTSCENE);
+        }
+        else if (w1Phase == W1_WAIT_START && !w1EndRequested && !(@:privateAccess ps.startingSong) && !ps.isInCutscene
+          && FlxG.sound.music != null && FlxG.sound.music.playing && Conductor.instance.songPosition > 0)
+        {
+          trace('[AUTOTEST] Song "$w1SongId" is playing (songPosition=${Math.round(Conductor.instance.songPosition)}ms). Letting it run ${W1_SONG_SECONDS}s...');
+          setW1Phase(W1_PLAYING);
+        }
+
+      case W1_PLAYING:
+        if (!w1CaptureRequested && phaseElapsed >= W1_SONG_SECONDS - 0.5)
+        {
+          w1CaptureRequested = true;
+          requestFrameCapture('w1_${w1SongId}');
+        }
+        if (phaseElapsed >= W1_SONG_SECONDS)
+        {
+          trace('[AUTOTEST] Song "$w1SongId" ran ${W1_SONG_SECONDS}s (songPosition=${Math.round(Conductor.instance.songPosition)}ms). Calling endSong(true)...');
+          snapshotW1('W1 END OF $w1SongId', false);
+          w1EndRequested = true;
+          setW1Phase(W1_WAIT_END);
+          ps.endSong(true);
+        }
+
+      case W1_CUTSCENE:
+        if (!NXVideoPlayer.isCutscenePlaying())
+        {
+          trace('[AUTOTEST] Cutscene in song "$w1SongId" ended on its own.');
+          setW1Phase(w1EndRequested ? W1_WAIT_END : W1_WAIT_START);
+        }
+        else if (phaseElapsed >= W1_CUTSCENE_SECONDS)
+        {
+          trace('[AUTOTEST] Finishing cutscene in song "$w1SongId" through the natural completion path...');
+          setW1Phase(w1EndRequested ? W1_WAIT_END : W1_WAIT_START);
+          NXVideoPlayer.finishCutscene();
+        }
+
+      default:
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Frame capture: reads the rendered backbuffer (after OpenFL draws, before the swap)
+  // and saves it as PNG next to the trace log, as visual evidence for headless runs.
+  // ---------------------------------------------------------------------------
+
+  static var pendingCaptureName:Null<String> = null;
+  static var captureHooked:Bool = false;
+
+  static function requestFrameCapture(name:String):Void
+  {
+    pendingCaptureName = name;
+    if (!captureHooked)
+    {
+      captureHooked = true;
+      // Lower priority than OpenFL's stage render (0), so the frame is already drawn.
+      lime.app.Application.current.window.onRender.add(onRenderCapture, false, -1000);
+    }
+  }
+
+  static function onRenderCapture(_):Void
+  {
+    if (pendingCaptureName == null) return;
+    var name:String = pendingCaptureName;
+    pendingCaptureName = null;
+
+    #if sys
+    try
+    {
+      var w:Int = FlxG.stage.stageWidth;
+      var h:Int = FlxG.stage.stageHeight;
+      var gl = lime.graphics.opengl.GL;
+      var pixels = new lime.utils.UInt8Array(w * h * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+
+      // GL origin is bottom-left: flip rows.
+      var rowBytes:Int = w * 4;
+      var flipped = haxe.io.Bytes.alloc(w * h * 4);
+      var src = pixels.toBytes();
+      var nonBlack:Int = 0;
+      for (y in 0...h)
+      {
+        flipped.blit((h - 1 - y) * rowBytes, src, y * rowBytes, rowBytes);
+      }
+      var i:Int = 0;
+      while (i < flipped.length)
+      {
+        if (flipped.get(i) > 16 || flipped.get(i + 1) > 16 || flipped.get(i + 2) > 16) nonBlack++;
+        i += 4 * 16;
+      }
+
+      var image = new lime.graphics.Image(new lime.graphics.ImageBuffer(lime.utils.UInt8Array.fromBytes(flipped), w, h));
+      var png = image.encode(PNG);
+      #if switch
+      var path:String = nx.NXMain.getSafeAppSubPath('logs/autotest_$name.png');
+      #else
+      var path:String = 'logs/autotest_$name.png';
+      #end
+      sys.io.File.saveBytes(path, png);
+      var coverage:Float = Math.round(nonBlack / ((w * h) / 16) * 1000) / 10;
+      trace('[AUTOTEST] Frame captured: $path (${w}x${h}, non-black coverage: $coverage%)');
+    }
+    catch (e:Dynamic)
+    {
+      trace('[AUTOTEST] Frame capture failed for $name: $e');
+    }
+    #end
+  }
+
   static function passTest():Void
   {
     isRunning = false;
     FlxG.signals.postUpdate.remove(onPostUpdate);
+    unhookW1Signals();
 
     #if (cpp || switch)
     cpp.vm.Gc.run(true);
@@ -397,8 +720,18 @@ class NXAutoTest
   {
     isRunning = false;
     FlxG.signals.postUpdate.remove(onPostUpdate);
+    unhookW1Signals();
     trace('[AUTOTEST] ========================================');
     trace('[AUTOTEST] [FAIL] TEST FAILED: ' + reason);
     trace('[AUTOTEST] ========================================');
+  }
+
+  static function unhookW1Signals():Void
+  {
+    FlxG.signals.preStateSwitch.remove(onW1PreStateSwitch);
+    FlxG.signals.preStateCreate.remove(onW1PreStateCreate);
+    FlxG.signals.postStateSwitch.remove(onW1PostStateSwitch);
+    funkin.util.logging.CrashHandler.errorSignal.remove(onW1Error);
+    funkin.util.logging.CrashHandler.criticalErrorSignal.remove(onW1Error);
   }
 }
