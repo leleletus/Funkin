@@ -4,6 +4,8 @@ import flixel.tweens.FlxTween;
 import flixel.math.FlxMath;
 #if FEATURE_HAPTICS
 import extension.haptics.Haptic;
+#elseif switch
+import nx.NXHaptics as Haptic;
 #end
 
 /**
@@ -38,7 +40,7 @@ class HapticUtil
       amplitude:Float = Constants.DEFAULT_VIBRATION_AMPLITUDE, sharpness:Float = Constants.DEFAULT_VIBRATION_SHARPNESS,
       ?targetHapticsModes:Array<HapticsMode>):Void
   {
-    #if FEATURE_HAPTICS
+    #if (FEATURE_HAPTICS || switch)
     if (!HapticUtil.hapticsAvailable) return;
 
     final hapticsModes:Array<HapticsMode> = targetHapticsModes ?? [HapticsMode.ALL];
@@ -121,7 +123,7 @@ class HapticUtil
 
   static function get_hapticsAvailable():Bool
   {
-    #if FEATURE_HAPTICS
+    #if (FEATURE_HAPTICS || switch)
     if (Preferences.hapticsMode != HapticsMode.NONE) return true;
     #end
 

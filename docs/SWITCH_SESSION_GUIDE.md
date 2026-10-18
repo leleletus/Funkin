@@ -43,7 +43,7 @@ Actúa como **Lead C++/Haxe Engine Architect** del port de **Friday Night Funkin
 | :--- | :--- |
 | `haxelib run lime build switch -release -DHXCPP_COMPILE_THREADS=4` | Compilación incremental (~45 s). No borrar `export/release/switch/obj/` salvo necesidad. |
 | `./tools/nx-tools/run_citron_autotest.sh <ESCENARIO> <TIMEOUT>` | Prueba en Citron. Cierra el emulador al terminar y detecta crashes nativos. |
-| Escenarios | `WEEKEND1_PLAYLIST`, `WEEKEND1_FULL`, `REGRESSION_SUITE`, `REGRESSION_FROM_<n>`, `SOAK`, `CUTSCENE_DARNELL`, `CUTSCENE_2HOT`, `CUTSCENE_UGH`, `BLAZIN`, `AUDIO_TORTURE` (detalle en la sección 6 del tracker). Sufijos de diagnóstico: `NOTEXMEM`, `NOUPLOADREL`, `NOPOSTREL`. |
+| Escenarios | `WEEKEND1_PLAYLIST`, `WEEKEND1_FULL`, `REGRESSION_SUITE`, `REGRESSION_FROM_<n>`, `SOAK`, `CUTSCENE_DARNELL`, `CUTSCENE_2HOT`, `CUTSCENE_UGH`, `BLAZIN`, `AUDIO_TORTURE`, `AUDIO_STARVE`, `HAPTICS` (detalle en la sección 6 del tracker). Sufijos de diagnóstico: `NOTEXMEM`, `NOUPLOADREL`, `NOPOSTREL`. |
 | `python3 tools/nx-tools/decode_switch_crash.py [log]` | Traduce backtraces nativos (Citron o Atmosphère) a funciones con `aarch64-none-elf-addr2line`. |
 | `./tools/nx-tools/check_ogg_overflow.sh` | Verifica que ningún `.ogg` desborde el decodificador de lime-nx (INC-37). |
 | `python3 tools/nx-tools/prepare_switch_assets.py` | Genera las cinemáticas de Switch desde los vídeos oficiales (lo ejecuta `project.hxp` automáticamente). |

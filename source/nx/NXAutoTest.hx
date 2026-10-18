@@ -105,7 +105,11 @@ class NXAutoTest
   {
     try
     {
-      if (scenario.indexOf("AUDIO_STARVE") != -1)
+      if (scenario.indexOf("HAPTICS") != -1)
+      {
+        startHapticsProbe();
+      }
+      else if (scenario.indexOf("AUDIO_STARVE") != -1)
       {
         NXRegressionSuite.startAudioStarve();
       }
@@ -749,6 +753,28 @@ class NXAutoTest
       trace('[AUTOTEST] Frame capture failed for $name: $e');
     }
     #end
+  }
+
+  /**
+   * HAPTICS: drives HapticUtil exactly like the game does (one-shot and pattern) and checks that the
+   * native HD Rumble path found a controller, sent every pulse and stopped the motors on time.
+   */
+  static function startHapticsProbe():Void
+  {
+    trace('[AUTOTEST] Haptics probe: ' + NXHaptics.describeStatus());
+    funkin.util.HapticUtil.vibrate(0, 0.01, 0.5);
+    new FlxTimer().start(0.5, function(_) {
+      trace('[AUTOTEST] Haptics after one-shot: ' + NXHaptics.describeStatus());
+      funkin.util.HapticUtil.vibrate(0.1, 0.5, 0.5);
+      new FlxTimer().start(1.0, function(_) {
+        var status:String = NXHaptics.describeStatus();
+        trace('[AUTOTEST] Haptics after pattern: ' + status);
+        if (NXHaptics.lastResult != 0) failTest('Vibration not sent: ' + status);
+        else if (NXHaptics.sentCount < 6) failTest('Expected at least 6 pulses, got ' + NXHaptics.sentCount);
+        else if (NXHaptics.isActive()) failTest('Motors still running after the pattern ended');
+        else passTest();
+      });
+    });
   }
 
   static function passTest():Void

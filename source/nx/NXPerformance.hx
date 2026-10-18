@@ -57,6 +57,7 @@ class NXPerformance
 
     updatePerfTelemetry();
     NXAudioDiagnostics.checkSystemSuspension();
+    NXHaptics.update();
     logGamepadInput();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
@@ -205,6 +206,7 @@ class NXPerformance
     var ps = funkin.play.PlayState.instance;
     var where:String = (ps != null && ps.currentSong != null) ? '${ps.currentSong.id}@${Math.round(funkin.Conductor.instance.songPosition)}ms' : Type.getClassName(Type.getClass(FlxG.state));
     NXDeepTrace.writeEntry('INPUT', '[PAD] ${pressed.join("+")} ($where)');
+    NXAudioDiagnostics.record('pad ${pressed.join("+")} $where');
   }
 
   static var perfWindowStart:Float = -1.0;
