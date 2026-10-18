@@ -292,7 +292,7 @@ class NXAudioDiagnostics
       if (wall - mixerLastSummary >= 10.0)
       {
         mixerLastSummary = wall;
-        nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] ${mixerStalled ? "STOPPED" : "ok"} clock ${Math.round(clock)}ms, min ratio last 10s ${Math.round(mixerMinRatio * 100) / 100}, sdl ${NXAudioNative.sdlAudioStatus()}');
+        nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] ${mixerStalled ? "STOPPED" : "ok"} clock ${Math.round(clock)}ms, min ratio last 10s ${Math.round(mixerMinRatio * 100) / 100}, sdl ${NXAudioNative.sdlAudioStatus()} | ${NXAudioDriver.stats()}');
         mixerMinRatio = 99.0;
       }
     }
@@ -426,7 +426,7 @@ class NXAudioDiagnostics
       {
         var connected = ALC.getIntegerv(device, 0x313, 1); // ALC_CONNECTED
         parts.push('alcConnected=${connected != null && connected.length > 0 ? Std.string(connected[0]) : "?"} alcError=${ALC.getError(device)}');
-        parts.push('deviceClock=${Math.round(NXAudioNative.deviceClockMs())}ms mixer=${mixerStalled ? "STOPPED" : "running"} sdl=${NXAudioNative.sdlAudioStatus()}');
+        parts.push('deviceClock=${Math.round(NXAudioNative.deviceClockMs())}ms mixer=${mixerStalled ? "STOPPED" : "running"} sdl=${NXAudioNative.sdlAudioStatus()} ${NXAudioDriver.stats()}');
       }
       else
         parts.push('alcDevice=null');

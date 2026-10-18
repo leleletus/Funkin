@@ -4,6 +4,7 @@
 #
 #   ./tools/nx-tools/deploy_switch.sh [path/to/Funkin.nro]      # backup + wipe + upload
 #   ./tools/nx-tools/deploy_switch.sh --logs-only                # only download logs/saves
+#   ./tools/nx-tools/deploy_switch.sh --release [path/to/Funkin.nro]  # public build: no nx_devtools.cfg
 #
 # Transport order: FTP (192.168.18.198:5000, e.g. sys-ftpd) -> MTP (DBI MTP Responder through KDE KIO).
 # If neither is available it stops and asks to connect the console.
@@ -11,15 +12,21 @@
 # Steps: 1) download logs/ and saves/ to ~/switch-backups/<date>_<label>
 #        2) delete everything inside /switch/Friday-Night-Funkin (old saves/configs can break a new build)
 #        3) upload the .nro and verify its size
+#        4) upload tools/nx-tools/nx_devtools.cfg (test options such as botplay; skipped with --release)
 # ==============================================================================
 set -u
 
 FTP_URL="${NX_FTP_URL:-ftp://192.168.18.198:5000}"
 MTP_ROOT="${NX_MTP_ROOT:-mtp:/DBI MTP Responder/1: SD Card}"
 GAME_DIR="/switch/Friday-Night-Funkin"
-NRO="${1:-$(dirname "$0")/../../export/release/switch/bin/Funkin.nro}"
 LOGS_ONLY=0
-[ "${1:-}" = "--logs-only" ] && LOGS_ONLY=1
+RELEASE=0
+case "${1:-}" in
+    --logs-only) LOGS_ONLY=1; shift ;;
+    --release) RELEASE=1; shift ;;
+esac
+NRO="${1:-$(dirname "$0")/../../export/release/switch/bin/Funkin.nro}"
+DEVTOOLS_CFG="$(dirname "$0")/nx_devtools.cfg"
 BACKUP="$HOME/switch-backups/Friday-Night-Funkin_$(date +%Y%m%d-%H%M%S)"
 
 log() { echo "[deploy_switch] $*"; }
@@ -38,8 +45,8 @@ ftp_rm() { timeout 30 curl -s "$FTP_URL/" -Q "DELE $GAME_DIR/$1" -o /dev/null; }
 ftp_rmdir() { timeout 30 curl -s "$FTP_URL/" -Q "RMD $GAME_DIR/$1" -o /dev/null; }
 mtp_rm() { timeout 60 kioclient --noninteractive remove "$MTP_ROOT$GAME_DIR/$1" > /dev/null 2>&1; }
 
-ftp_put() { curl -s -S -T "$1" "$FTP_URL$GAME_DIR/Funkin.nro"; }
-mtp_put() { kioclient --noninteractive --overwrite copy "$1" "$MTP_ROOT$GAME_DIR/Funkin.nro"; }
+ftp_put() { curl -s -S -T "$1" "$FTP_URL$GAME_DIR/${2:-Funkin.nro}"; }
+mtp_put() { kioclient --noninteractive --overwrite copy "$1" "$MTP_ROOT$GAME_DIR/${2:-Funkin.nro}"; }
 
 ftp_size() { curl -s -I "$FTP_URL$GAME_DIR/Funkin.nro" | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r'; }
 # kioclient stat reads the size from the device without transferring the file again.
@@ -68,10 +75,10 @@ log "Backup: $BACKUP"
 if [ ! -f "$NRO" ]; then log "NRO not found: $NRO"; exit 1; fi
 if [ "$T" = "ftp" ]; then
     for dir in logs saves/FunkinCrew; do for f in $(ftp_ls "$dir"); do ftp_rm "$dir/$f"; done; done
-    ftp_rm "Funkin.nro"
+    ftp_rm "Funkin.nro"; ftp_rm "nx_devtools.cfg"; ftp_rm "autotest.cfg"
     for dir in saves/FunkinCrew saves logs mods; do ftp_rmdir "$dir"; done
 else
-    for entry in logs saves mods Funkin.nro; do mtp_rm "$entry"; done
+    for entry in logs saves mods Funkin.nro nx_devtools.cfg autotest.cfg; do mtp_rm "$entry"; done
 fi
 log "Remaining after wipe: $(${T}_ls . | tr '\n' ' ')"
 
@@ -81,3 +88,10 @@ ${T}_put "$NRO" || { log "Upload failed"; exit 1; }
 REMOTE=$(${T}_size)
 LOCAL=$(stat -c %s "$NRO")
 if [ "$REMOTE" = "$LOCAL" ]; then log "Upload verified ($LOCAL bytes)."; else log "SIZE MISMATCH: remote=$REMOTE local=$LOCAL"; exit 1; fi
+
+# ------------------------------------------------------------------ 4. test options
+if [ "$RELEASE" = "1" ]; then
+    log "Release deploy: nx_devtools.cfg not copied."
+elif [ -f "$DEVTOOLS_CFG" ]; then
+    ${T}_put "$DEVTOOLS_CFG" nx_devtools.cfg > /dev/null && log "nx_devtools.cfg copied: $(grep -E '^[a-z_]+=' "$DEVTOOLS_CFG" | tr '\n' ' ')"
+fi

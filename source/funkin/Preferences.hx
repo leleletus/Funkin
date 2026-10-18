@@ -481,13 +481,11 @@ class Preferences
   public static function init():Void
   {
     #if switch
-    // Defaults for test builds: Advanced Debug Display, Botplay active, Direct loading
+    // Defaults for test builds: Advanced Debug Display, Direct loading (botplay lives in nx.NXDevTools)
     if (Save.instance != null && Save.instance.options != null)
     {
       if (Save.instance.options.debugDisplay == null)
         Save.instance.options.debugDisplay = DebugDisplayMode.Advanced;
-      if (Save.instance.options.botplay == null)
-        Save.instance.options.botplay = true;
       if (Save.instance.options.switchShowLoadingScreen == null)
         Save.instance.options.switchShowLoadingScreen = false;
     }
@@ -800,17 +798,25 @@ class Preferences
 
   static function get_botplay():Bool
   {
-    return Save?.instance?.options?.botplay ?? #if switch true #else false #end;
+    #if switch
+    return nx.NXDevTools.isBotplayOn();
+    #else
+    return Save?.instance?.options?.botplay ?? false;
+    #end
   }
 
   static function set_botplay(value:Bool):Bool
   {
+    #if switch
+    nx.NXDevTools.setBotplay(value);
+    #else
     if (Save.instance != null && Save.instance.options != null)
     {
       var save:Save = Save.instance;
       save.options.botplay = value;
       if (Save.system != null) Save.system.flush();
     }
+    #end
     return value;
   }
 

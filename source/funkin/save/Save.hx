@@ -146,7 +146,7 @@ class Save implements ConsoleClass
           switchNoteSplashes: true,
           switchShowPerfHud: true,
           switchVerboseAudioLog: false,
-          botplay: #if switch true #else false #end,
+          botplay: false,
           ghostTapping: true,
           switchShowLoadingScreen: false,
         },

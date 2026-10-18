@@ -197,6 +197,101 @@ class NXRegressionSuite
     nextStep();
   }
 
+  /**
+   * AUDIO_DRIVER_STALL[_LEGACY]: A/B test of the SDL Switch audio driver (INC-43). Makes the SDL audio
+   * thread sleep right after queuing a buffer, as a descheduled thread does on the console.
+   * Legacy (original SDL PlayDevice): the mixer must die for good, reproducing the hardware bug.
+   * Fixed driver (NXAudioDriver): the mixer and the song must recover after every delay.
+   */
+  public static function startAudioDriverStall(legacy:Bool):Void
+  {
+    steps = [
+      {
+        name: "Spaghetti (Freeplay, Hard) playing",
+        covers: "Setup",
+        timeout: 120,
+        enter: () -> {
+          PlayStatePlaylist.isStoryMode = false;
+          var song:Song = SongRegistry.instance.fetchEntry("spaghetti", {variation: Constants.DEFAULT_VARIATION});
+          LoadingState.loadPlayState({targetSong: song, targetDifficulty: "hard", targetVariation: "default"}, true);
+        },
+        poll: () -> waitSongPlaying("spaghetti", 3.0)
+      },
+      {
+        name: "Audio baseline (replacement driver active)",
+        covers: "INC-43",
+        timeout: 20,
+        enter: () -> resetHealthSampler(),
+        poll: () -> {
+          if (!NXAudioDriver.isActive())
+          {
+            failReason = 'SDL is not using NXAudioDriver (${NXAudioDriver.stats()})';
+            return null;
+          }
+          return captureBaselineWhenHealthy();
+        }
+      }
+    ];
+    if (legacy)
+    {
+      steps.push(
+        {
+          name: "Original SDL driver + 80 ms audio thread delay: mixer dies for good (INC-43 reproduced)",
+          covers: "INC-43",
+          timeout: 15,
+          enter: () -> {
+            NXAudioDriver.setLegacyMode(true);
+            NXAudioDriver.injectThreadDelay(80);
+            trace('[AUTOTEST] Legacy driver, injected 80ms delay. ${NXAudioDriver.stats()}');
+          },
+          poll: () -> {
+            if (now() - stepStart < 5.0) return null;
+            trace('[AUTOTEST] After 5s: mixer ${NXAudioDiagnostics.isMixerStalled() ? "STOPPED" : "running"}, ${NXAudioDriver.stats()}');
+            if (NXAudioDiagnostics.isMixerStalled()) return true;
+            failReason = 'the original driver survived the delay (${NXAudioDriver.stats()})';
+            return false;
+          }
+        });
+    }
+    else
+    {
+      for (ms in [80, 250, 1200])
+      {
+        steps.push(
+          {
+            name: 'Fixed driver + ${ms} ms audio thread delay: mixer and song recover',
+            covers: "INC-43",
+            timeout: 15,
+            enter: () -> {
+              NXAudioDriver.injectThreadDelay(ms);
+              trace('[AUTOTEST] Injected ${ms}ms delay. ${NXAudioDriver.stats()}');
+              resetHealthSampler();
+            },
+            poll: () -> {
+              if (now() - stepStart < 2.5) return null;
+              if (NXAudioDiagnostics.isMixerStalled())
+              {
+                failReason = 'OpenAL mixer stopped (${NXAudioDriver.stats()})';
+                return null;
+              }
+              if (pollAudioHealthy())
+              {
+                trace('[AUTOTEST] Recovered. ${NXAudioDriver.stats()}');
+                return true;
+              }
+              failReason = lastHealthIssue;
+              return null;
+            }
+          });
+      }
+    }
+    results = [];
+    index = -1;
+    running = true;
+    trace('[AUTOTEST] AUDIO_DRIVER_STALL${legacy ? "_LEGACY" : ""}: ${steps.length} steps');
+    nextStep();
+  }
+
   static var peakNativeMb:Float = 0.0;
 
   public static function update():Void

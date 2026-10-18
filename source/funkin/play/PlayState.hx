@@ -1351,8 +1351,8 @@ class PlayState extends MusicBeatSubState
     // Attempt to pause the game.
     if ((controls.PAUSE_P || androidPause || pauseButtonCheck)) pause();
 
-    // Dynamic shortcut to toggle Botplay in-game: Exclusively R3 (Right Stick click)
-    if (!isGamePaused && !isInCutscene && !isSongEnd)
+    // Dynamic shortcut to toggle Botplay in-game: Exclusively R3 (Right Stick click). Test builds only (nx.NXDevTools).
+    if (!isGamePaused && !isInCutscene && !isSongEnd #if switch && nx.NXDevTools.botplayToggleAllowed() #end)
     {
       var r3Pressed:Bool = false;
       #if switch

@@ -31,8 +31,18 @@ class NXAutoTest
    * Checks if an autotest configuration file is present on the SDMC and executes it.
    * @return `true` if an autotest was initiated, `false` to proceed with normal game startup.
    */
+  /**
+   * True while an automated test is running (botplay is forced on).
+   */
+  public static function isActive():Bool
+  {
+    return isRunning;
+  }
+
   public static function checkAndRun():Bool
   {
+    NXDevTools.init();
+    if (!NXDevTools.autotestsAllowed()) return false;
     #if sys
     try
     {
@@ -108,6 +118,10 @@ class NXAutoTest
       if (scenario.indexOf("HAPTICS") != -1)
       {
         startHapticsProbe();
+      }
+      else if (scenario.indexOf("AUDIO_DRIVER_STALL") != -1)
+      {
+        NXRegressionSuite.startAudioDriverStall(scenario.indexOf("LEGACY") != -1);
       }
       else if (scenario.indexOf("AUDIO_STARVE") != -1)
       {
@@ -234,7 +248,8 @@ class NXAutoTest
       return;
     }
 
-    if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1)
+    if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1
+      || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1)
     {
       NXRegressionSuite.update();
     }
