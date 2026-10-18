@@ -57,6 +57,7 @@ class NXPerformance
 
     updatePerfTelemetry();
     NXAudioDiagnostics.checkSystemSuspension();
+    logGamepadInput();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
@@ -186,6 +187,24 @@ class NXPerformance
       trace('Switch resolution set to: ${targetWidth}x${targetHeight} (Mode: $mode)');
     }
     #end
+  }
+
+  /**
+   * Logs every gamepad button press (name and song position), so hardware logs show exactly what the
+   * player did before a failure.
+   */
+  static function logGamepadInput():Void
+  {
+    var pad = FlxG.gamepads?.lastActive;
+    if (pad == null || !pad.justPressed.ANY) return;
+    var pressed:Array<String> = [];
+    for (button in @:privateAccess pad.buttons)
+    {
+      if (button != null && button.justPressed) pressed.push(pad.mapping.getID(button.ID).toString());
+    }
+    var ps = funkin.play.PlayState.instance;
+    var where:String = (ps != null && ps.currentSong != null) ? '${ps.currentSong.id}@${Math.round(funkin.Conductor.instance.songPosition)}ms' : Type.getClassName(Type.getClass(FlxG.state));
+    NXDeepTrace.writeEntry('INPUT', '[PAD] ${pressed.join("+")} ($where)');
   }
 
   static var perfWindowStart:Float = -1.0;

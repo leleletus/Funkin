@@ -138,6 +138,65 @@ class NXRegressionSuite
     nextStep();
   }
 
+  /**
+   * AUDIO_STARVE: reproduces on purpose the hardware failure where the whole audio stack stops
+   * (INC-43). Holds the SDL audio device lock from the main thread so the audio thread misses its
+   * deadline (as a long hitch does on the console) and checks that the mixer and the song recover.
+   */
+  public static function startAudioStarve():Void
+  {
+    steps = [
+      {
+        name: "Spaghetti (Freeplay, Hard) playing",
+        covers: "Setup",
+        timeout: 120,
+        enter: () -> {
+          PlayStatePlaylist.isStoryMode = false;
+          var song:Song = SongRegistry.instance.fetchEntry("spaghetti", {variation: Constants.DEFAULT_VARIATION});
+          LoadingState.loadPlayState({targetSong: song, targetDifficulty: "hard", targetVariation: "default"}, true);
+        },
+        poll: () -> waitSongPlaying("spaghetti", 3.0)
+      },
+      {
+        name: "Audio baseline",
+        covers: "INC-43",
+        timeout: 20,
+        enter: () -> resetHealthSampler(),
+        poll: () -> captureBaselineWhenHealthy()
+      }
+    ];
+    for (ms in [300, 1000])
+    {
+      steps.push(
+        {
+          name: 'SDL audio thread starved for ${ms}ms: mixer and song recover',
+          covers: "INC-43",
+          timeout: 15,
+          enter: () -> {
+            var id:Int = NXAudioNative.starveAudioThread(ms);
+            trace('[AUTOTEST] Starved SDL audio device $id for ${ms}ms (clock ${Math.round(NXAudioNative.deviceClockMs())}ms)');
+            resetHealthSampler();
+          },
+          poll: () -> {
+            if (now() - stepStart < 2.0) return null;
+            if (NXAudioDiagnostics.isMixerStalled())
+            {
+              failReason = 'OpenAL mixer stopped (device clock frozen, sdl ${NXAudioNative.sdlAudioStatus()})';
+              return null;
+            }
+            if (pollAudioHealthy()) return true;
+            failReason = lastHealthIssue;
+            return null;
+          }
+        });
+    }
+    results = [];
+    index = -1;
+    running = true;
+    trace('[AUTOTEST] AUDIO_STARVE: ${steps.length} steps');
+    nextStep();
+  }
+
   static var peakNativeMb:Float = 0.0;
 
   public static function update():Void

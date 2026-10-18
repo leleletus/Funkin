@@ -61,6 +61,17 @@ class NXAutoTest
       if (rawContent == null || rawContent.length == 0) return false;
 
       currentScenario = StringTools.trim(rawContent).toUpperCase();
+      // "ONCE:<SCENARIO>" runs the scenario a single time (used on real hardware): the file is deleted
+      // right away so the next boot starts the game normally.
+      if (StringTools.startsWith(currentScenario, "ONCE:"))
+      {
+        currentScenario = currentScenario.substr(5);
+        try
+        {
+          sys.FileSystem.deleteFile(configPath);
+        }
+        catch (e:Dynamic) {}
+      }
       if (currentScenario.indexOf("NOTEXMEM") != -1) NXTextureMemory.enabled = false;
       if (currentScenario.indexOf("NOUPLOADREL") != -1) NXTextureMemory.releaseOnUpload = false;
       if (currentScenario.indexOf("NOPOSTREL") != -1) NXTextureMemory.releaseAfterCreate = false;
@@ -94,7 +105,11 @@ class NXAutoTest
   {
     try
     {
-      if (scenario.indexOf("SOAK") != -1)
+      if (scenario.indexOf("AUDIO_STARVE") != -1)
+      {
+        NXRegressionSuite.startAudioStarve();
+      }
+      else if (scenario.indexOf("SOAK") != -1)
       {
         NXRegressionSuite.startSoak();
       }
@@ -215,7 +230,7 @@ class NXAutoTest
       return;
     }
 
-    if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1)
+    if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1)
     {
       NXRegressionSuite.update();
     }

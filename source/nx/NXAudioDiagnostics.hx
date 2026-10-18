@@ -213,12 +213,70 @@ class NXAudioDiagnostics
    * logs), so the game never paused and the audio device was left broken (endless stall loop with no
    * sound). A wall-clock gap between two frames is the reliable signal that the process was suspended.
    */
+  // ---------------------------------------------------------------------------
+  // Mixer liveness (OpenAL device clock)
+  // ---------------------------------------------------------------------------
+
+  static var mixerLastWall:Float = -1.0;
+  static var mixerLastClock:Float = -1.0;
+  static var mixerStalled:Bool = false;
+  static var mixerStallStart:Float = 0.0;
+  static var mixerLastSummary:Float = 0.0;
+  static var mixerMinRatio:Float = 99.0;
+
+  /**
+   * Every 0.5 s compares the OpenAL device clock with wall time. The device clock only advances while
+   * the mixer (SDL audio thread) renders audio, so a ratio near 0 means the whole audio stack stopped,
+   * not just one sound. Logs the exact moment it stops/recovers and a summary every 10 s.
+   */
+  public static function monitorMixer():Void
+  {
+    var wall:Float = Sys.time();
+    if (mixerLastWall >= 0 && wall - mixerLastWall < 0.5) return;
+    var clock:Float = NXAudioNative.deviceClockMs();
+    if (clock < 0)
+    {
+      mixerLastWall = wall;
+      return;
+    }
+    if (mixerLastWall >= 0 && mixerLastClock >= 0)
+    {
+      var dWall:Float = (wall - mixerLastWall) * 1000.0;
+      var dClock:Float = clock - mixerLastClock;
+      var ratio:Float = (dWall > 0) ? dClock / dWall : 1.0;
+      if (ratio < mixerMinRatio) mixerMinRatio = ratio;
+      if (!mixerStalled && ratio < 0.3)
+      {
+        mixerStalled = true;
+        mixerStallStart = wall;
+        nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] STOPPED: device clock +${Math.round(dClock)}ms in ${Math.round(dWall)}ms (sdl ${NXAudioNative.sdlAudioStatus()}). ${describeAudioState()}');
+      }
+      else if (mixerStalled && ratio > 0.7)
+      {
+        mixerStalled = false;
+        nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] RUNNING again after ${Math.round((wall - mixerStallStart) * 10) / 10}s (sdl ${NXAudioNative.sdlAudioStatus()})');
+      }
+      if (wall - mixerLastSummary >= 10.0)
+      {
+        mixerLastSummary = wall;
+        nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] ${mixerStalled ? "STOPPED" : "ok"} clock ${Math.round(clock)}ms, min ratio last 10s ${Math.round(mixerMinRatio * 100) / 100}, sdl ${NXAudioNative.sdlAudioStatus()}');
+        mixerMinRatio = 99.0;
+      }
+    }
+    mixerLastWall = wall;
+    mixerLastClock = clock;
+  }
+
+  public static function isMixerStalled():Bool
+    return mixerStalled;
+
   static var lastFrameState:Null<flixel.FlxState> = null;
   static var stateSwitchSeen:Bool = false;
   static var stateSignalsHooked:Bool = false;
 
   public static function checkSystemSuspension():Void
   {
+    monitorMixer();
     if (!stateSignalsHooked && FlxG.signals != null)
     {
       stateSignalsHooked = true;
@@ -332,6 +390,7 @@ class NXAudioDiagnostics
       {
         var connected = ALC.getIntegerv(device, 0x313, 1); // ALC_CONNECTED
         parts.push('alcConnected=${connected != null && connected.length > 0 ? Std.string(connected[0]) : "?"} alcError=${ALC.getError(device)}');
+        parts.push('deviceClock=${Math.round(NXAudioNative.deviceClockMs())}ms mixer=${mixerStalled ? "STOPPED" : "running"} sdl=${NXAudioNative.sdlAudioStatus()}');
       }
       else
         parts.push('alcDevice=null');
