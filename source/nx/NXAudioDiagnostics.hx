@@ -217,6 +217,38 @@ class NXAudioDiagnostics
   // Mixer liveness (OpenAL device clock)
   // ---------------------------------------------------------------------------
 
+  // ---------------------------------------------------------------------------
+  // Black box: last audio events, dumped to the log the moment the mixer stops
+  // ---------------------------------------------------------------------------
+
+  static final BLACKBOX_SIZE:Int = 96;
+  static var blackBox:Array<String> = [];
+  static var blackBoxStart:Float = -1.0;
+
+  /**
+   * Records an event in an in-memory ring buffer (no disk I/O). Called for every FunkinSound start,
+   * pause, resume, seek, completion and destroy, plus gamepad input and state changes.
+   */
+  public static function record(event:String, ?sound:FlxSound, value:Float = 0.0):Void
+  {
+    var now:Float = Sys.time();
+    if (blackBoxStart < 0) blackBoxStart = now;
+    var label:String = '';
+    if (sound != null)
+    {
+      var lbl:Null<String> = Std.isOfType(sound, FunkinSound) ? @:privateAccess (cast sound : FunkinSound)._label : null;
+      label = (sound == FlxG.sound.music ? 'MUSIC ' : '') + (lbl != null && lbl != 'unknown' ? lbl.substr(lbl.lastIndexOf('/') + 1) : 'snd') + ' t=${Math.round(value)} len=${Math.round(sound.length)}';
+    }
+    else if (value != 0.0) label = Std.string(Math.round(value));
+    blackBox.push('${nx.NXDeepTrace.getTimestamp()} $event $label');
+    if (blackBox.length > BLACKBOX_SIZE) blackBox.shift();
+  }
+
+  public static function dumpBlackBox(reason:String):Void
+  {
+    nx.NXDeepTrace.writeEntry('AUDIO', '[BLACKBOX] $reason. Last ${blackBox.length} audio events:\n    ' + blackBox.join('\n    '));
+  }
+
   static var mixerLastWall:Float = -1.0;
   static var mixerLastClock:Float = -1.0;
   static var mixerStalled:Bool = false;
@@ -232,7 +264,7 @@ class NXAudioDiagnostics
   public static function monitorMixer():Void
   {
     var wall:Float = Sys.time();
-    if (mixerLastWall >= 0 && wall - mixerLastWall < 0.5) return;
+    if (mixerLastWall >= 0 && wall - mixerLastWall < 0.1) return;
     var clock:Float = NXAudioNative.deviceClockMs();
     if (clock < 0)
     {
@@ -250,6 +282,7 @@ class NXAudioDiagnostics
         mixerStalled = true;
         mixerStallStart = wall;
         nx.NXDeepTrace.writeEntry('AUDIO', '[MIXER] STOPPED: device clock +${Math.round(dClock)}ms in ${Math.round(dWall)}ms (sdl ${NXAudioNative.sdlAudioStatus()}). ${describeAudioState()}');
+        dumpBlackBox('Mixer stopped at device clock ${Math.round(clock)}ms');
       }
       else if (mixerStalled && ratio > 0.7)
       {
@@ -280,7 +313,10 @@ class NXAudioDiagnostics
     if (!stateSignalsHooked && FlxG.signals != null)
     {
       stateSignalsHooked = true;
-      FlxG.signals.preStateSwitch.add(() -> stateSwitchSeen = true);
+      FlxG.signals.preStateSwitch.add(() -> {
+        stateSwitchSeen = true;
+        record('state-switch');
+      });
     }
 
     var now:Float = Sys.time();

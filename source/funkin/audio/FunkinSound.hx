@@ -232,6 +232,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   public override function pause():FunkinSound
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('pause', this, _time);
+    #end
     if (_shouldPlay)
     {
       // This sound will eventually play, but is still at a negative timestamp.
@@ -249,6 +252,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   public override function resume():FunkinSound
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('resume', this, _time);
+    #end
     if (this._time < 0)
     {
       // Sound with negative timestamp, restart the timer.
@@ -265,6 +271,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   override function set_time(time:Float):Float
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('seek', this, time);
+    #end
     if (_time < 0)
     {
       return _time = time;
@@ -557,6 +566,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   override function stopped(?_):Void
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('complete', this, _time);
+    #end
     super.stopped(_);
     if (!looped && !persist && this != FlxG.sound.music)
     {
@@ -591,6 +603,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
   @:nullSafety(Off)
   public override function destroy():Void
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('destroy', this, _time);
+    #end
     // trace('[FunkinSound] Destroying sound "${this._label}"');
     if (_channel != null)
     {
@@ -617,6 +632,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
   @:access(openfl.media.SoundMixer)
   override function startSound(startTime:Float)
   {
+    #if switch
+    nx.NXAudioDiagnostics.record('start', this, startTime);
+    #end
     if (!important)
     {
       super.startSound(startTime);
