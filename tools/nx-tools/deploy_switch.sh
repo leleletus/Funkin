@@ -42,7 +42,8 @@ ftp_put() { curl -s -S -T "$1" "$FTP_URL$GAME_DIR/Funkin.nro"; }
 mtp_put() { kioclient --noninteractive --overwrite copy "$1" "$MTP_ROOT$GAME_DIR/Funkin.nro"; }
 
 ftp_size() { curl -s -I "$FTP_URL$GAME_DIR/Funkin.nro" | awk 'tolower($1)=="content-length:"{print $2}' | tr -d '\r'; }
-mtp_size() { timeout 600 kioclient cat "$MTP_ROOT$GAME_DIR/Funkin.nro" | wc -c; }
+# kioclient stat reads the size from the device without transferring the file again.
+mtp_size() { timeout 30 kioclient stat "$MTP_ROOT$GAME_DIR/Funkin.nro" 2>/dev/null | awk '$1=="SIZE"{print $2}'; }
 
 if ftp_available; then T=ftp; elif mtp_available; then T=mtp; else
     log "No FTP ($FTP_URL) and no MTP ($MTP_ROOT) access to the console."
