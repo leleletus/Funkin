@@ -6,6 +6,7 @@ import funkin.Preferences;
 import funkin.audio.FunkinSound;
 #if lime
 import lime.media.openal.AL;
+import lime.media.openal.ALC;
 #end
 
 /**
@@ -196,6 +197,157 @@ class NXAudioDiagnostics
       f.close();
     }
     catch (e:Dynamic) {}
+  }
+
+  // ---------------------------------------------------------------------------
+  // Horizon suspension (HOME / Sleep) and OpenAL device recovery
+  // ---------------------------------------------------------------------------
+
+  static var lastFrameWallTime:Float = -1.0;
+  static var stallRebuildCount:Int = 0;
+  static var lastStallRebuildTime:Float = -1.0;
+
+  /**
+   * Called every frame (NXPerformance.update). On real hardware HOME/Sleep freezes the process at once
+   * and the focus-lost event only arrives after the player comes back (seen 35 s late in hardware
+   * logs), so the game never paused and the audio device was left broken (endless stall loop with no
+   * sound). A wall-clock gap between two frames is the reliable signal that the process was suspended.
+   */
+  static var lastFrameState:Null<flixel.FlxState> = null;
+  static var stateSwitchSeen:Bool = false;
+  static var stateSignalsHooked:Bool = false;
+
+  public static function checkSystemSuspension():Void
+  {
+    if (!stateSignalsHooked && FlxG.signals != null)
+    {
+      stateSignalsHooked = true;
+      FlxG.signals.preStateSwitch.add(() -> stateSwitchSeen = true);
+    }
+
+    var now:Float = Sys.time();
+    var gap:Float = (lastFrameWallTime < 0) ? 0.0 : now - lastFrameWallTime;
+    lastFrameWallTime = now;
+
+    // Loading a state blocks a single frame for seconds: that is not a suspension.
+    var switched:Bool = stateSwitchSeen || FlxG.state != lastFrameState;
+    stateSwitchSeen = false;
+    lastFrameState = FlxG.state;
+    if (gap < 3.0 || switched) return; // Real HOME/Sleep suspensions last seconds; loading hitches stay below this.
+
+    nx.NXDeepTrace.writeEntry('AUDIO', '[NXSuspend] Process was suspended for ${Math.round(gap * 10) / 10}s (HOME/Sleep). ${describeAudioState()}');
+    cycleAudioDevice('resume after ${Math.round(gap * 10) / 10}s suspension');
+
+    // Behave like a console game: come back paused while a song is playing, the player resumes when ready.
+    // During cutscenes and the countdown PlayState handles focus itself (and needs a matching onFocus).
+    var ps = funkin.play.PlayState.instance;
+    if (ps != null && ps.subState == null && !@:privateAccess ps._requestSubStateReset && !ps.isInCutscene
+      && !@:privateAccess ps.startingSong && FlxG.sound.music != null && FlxG.sound.music.playing)
+    {
+      @:privateAccess ps.pause(funkin.play.PauseSubState.PauseMode.Standard, true);
+    }
+  }
+
+  /**
+   * Pauses and resumes the OpenAL device (alcDevicePauseSOFT / alcDeviceResumeSOFT) and reprocesses the
+   * context. lime-nx disables AudioManager.suspend/resume on Switch, so nothing did this after a resume.
+   */
+  public static function cycleAudioDevice(reason:String):Void
+  {
+    #if (lime && cpp)
+    try
+    {
+      var context = ALC.getCurrentContext();
+      if (context == null)
+      {
+        nx.NXDeepTrace.writeEntry('AUDIO', '[NXSuspend] cycleAudioDevice($reason): no current ALC context');
+        return;
+      }
+      var device = ALC.getContextsDevice(context);
+      if (device == null)
+      {
+        nx.NXDeepTrace.writeEntry('AUDIO', '[NXSuspend] cycleAudioDevice($reason): no ALC device');
+        return;
+      }
+      ALC.pauseDevice(device);
+      ALC.resumeDevice(device);
+      ALC.processContext(context);
+      while (AL.getError() != AL.NO_ERROR) {}
+      nx.NXDeepTrace.writeEntry('AUDIO', '[NXSuspend] OpenAL device cycled ($reason). ${describeAudioState()}');
+    }
+    catch (e:Dynamic)
+    {
+      nx.NXDeepTrace.logError('[NXSuspend] cycleAudioDevice($reason) failed: $e');
+    }
+    #end
+  }
+
+  /**
+   * Called by PlayState each time its stall recovery rebuilds the instrumental. Logs the full audio
+   * state (for hardware diagnosis) and escalates to an OpenAL device cycle when rebuilds keep failing.
+   */
+  public static function onStallRebuild(songPosition:Float):Void
+  {
+    var now:Float = Sys.time();
+    if (lastStallRebuildTime < 0 || now - lastStallRebuildTime > 5.0) stallRebuildCount = 0;
+    lastStallRebuildTime = now;
+    stallRebuildCount++;
+    nx.NXDeepTrace.writeEntry('AUDIO', '[NXAudioRecovery] Rebuild #$stallRebuildCount at ${Math.round(songPosition)}ms. ${describeAudioState()}');
+    if (stallRebuildCount >= 2)
+    {
+      cycleAudioDevice('stall rebuild #$stallRebuildCount did not restore the clock');
+    }
+  }
+
+  /**
+   * One-line snapshot of the audio stack: music source state/offset, AL error, ALC connection,
+   * live FlxG.sound.list entries and OpenFL SoundMixer channels.
+   */
+  public static function describeAudioState():String
+  {
+    var parts:Array<String> = [];
+    try
+    {
+      var music = FlxG.sound.music;
+      if (music == null) parts.push('music=null');
+      else
+      {
+        var handle:Dynamic = null;
+        @:privateAccess
+        {
+          var sc:Dynamic = music._channel;
+          if (sc != null)
+          {
+            var src:Dynamic = (sc.__audioSource != null) ? sc.__audioSource : sc.__source;
+            if (src != null && src.__backend != null) handle = src.__backend.handle;
+          }
+        }
+        parts.push('music=${music.playing ? "playing" : "stopped"} time=${Math.round(music.time)}/${Math.round(music.length)} source=${handle == null ? "NONE" : getOpenALSourceState(music)}');
+      }
+      #if (lime && cpp)
+      parts.push('alError=${AL.getError()}');
+      var context = ALC.getCurrentContext();
+      var device = (context != null) ? ALC.getContextsDevice(context) : null;
+      if (device != null)
+      {
+        var connected = ALC.getIntegerv(device, 0x313, 1); // ALC_CONNECTED
+        parts.push('alcConnected=${connected != null && connected.length > 0 ? Std.string(connected[0]) : "?"} alcError=${ALC.getError(device)}');
+      }
+      else
+        parts.push('alcDevice=null');
+      @:privateAccess parts.push('mixerChannels=${openfl.media.SoundMixer.__soundChannels != null ? openfl.media.SoundMixer.__soundChannels.length : -1}');
+      #end
+      var names:Array<String> = [];
+      FlxG.sound.list.forEach(function(snd:FlxSound) {
+        if (snd != null && names.length < 16) names.push('${snd.playing ? "P" : "-"}${Math.round(snd.length / 1000)}s');
+      });
+      parts.push('soundList=${FlxG.sound.list.length}[${names.join(",")}]');
+    }
+    catch (e:Dynamic)
+    {
+      parts.push('describe failed: $e');
+    }
+    return parts.join(' | ');
   }
 
   /**

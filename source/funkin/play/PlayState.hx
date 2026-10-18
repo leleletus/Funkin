@@ -1277,6 +1277,7 @@ class PlayState extends MusicBeatSubState
             {
               var recoverTime:Float = Math.max(0, Math.min(expectedTime, FlxG.sound.music.length - 200));
               trace('[NXAudioRecovery] OpenAL clock stall/drop detected at ${recoverTime}ms (stalled for ${musicStallTimer}s)! Re-igniting OpenAL stream...');
+              nx.NXAudioDiagnostics.onStallRebuild(recoverTime);
               FlxG.sound.music.pause();
               FlxG.sound.music.time = recoverTime;
               FlxG.sound.music.play(true, recoverTime);

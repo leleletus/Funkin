@@ -702,11 +702,16 @@ class Project extends HXProject
     if (isSwitch())
     {
       this.window.orientation = Orientation.LANDSCAPE;
-      this.window.fullscreen = true;
+      // Not "fullscreen": SDL's fullscreen mode always takes the display mode (1920x1080). A plain window
+      // still covers the whole screen on Switch.
+      this.window.fullscreen = false;
       this.window.resizable = false;
       this.window.hardware = true;
-      this.window.width = 0;
-      this.window.height = 0;
+      // A 0x0 window makes SDL create a 1920x1080 surface even in handheld (hardware logs: "res 1920x1080 |
+      // handheld"), shading 2.25x the pixels of the 720p screen. The game's logical size is 1280x720, so the
+      // EGL surface is created at that size and the console scales it to the display.
+      this.window.width = 1280;
+      this.window.height = 720;
     }
 
     if (isAndroid())

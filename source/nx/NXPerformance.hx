@@ -56,6 +56,7 @@ class NXPerformance
     }
 
     updatePerfTelemetry();
+    NXAudioDiagnostics.checkSystemSuspension();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
