@@ -36,6 +36,9 @@ enum AppletStateMode
  *
  * Ported from Switch-Funkin
  */
+#if switch
+@:build(nx.macro.NXLibraryPatches.requirePatched())
+#end
 class NXMain
 {
   /**

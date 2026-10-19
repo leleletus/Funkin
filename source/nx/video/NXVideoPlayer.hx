@@ -50,6 +50,12 @@ class NXVideoPlayer
   static var prefetchedImage:Null<lime.graphics.Image> = null;
   static var prefetchedXml:Null<String> = null;
   static var isPrefetching:Bool = false;
+  /**
+   * Bumped by stop() and playConverted() under prefetchMutex. A prefetch thread only publishes its sheet if the
+   * generation it started with is still current; otherwise a skipped cutscene's sheet (~58 MiB) would stay pinned
+   * and be shown inside the next cutscene (Ugh frames in Guns).
+   */
+  static var prefetchGen:Int = 0;
   #end
 
   static function prefetchNextSheet(nextIndex:Int):Void
@@ -66,6 +72,7 @@ class NXVideoPlayer
       return;
     }
     isPrefetching = true;
+    var gen:Int = prefetchGen;
     prefetchMutex.release();
 
     var vidName:String = currentVideoName;
@@ -81,6 +88,12 @@ class NXVideoPlayer
         var xmlPath:String = (sheetsTotal > 1) ? 'assets/videos/converted/${vidName}_$nextIndex.xml' : 'assets/videos/converted/$vidName.xml';
 
         var img:Null<lime.graphics.Image> = null;
+        // Skip the whole decode if the cutscene was stopped or replaced meanwhile.
+        if (isStalePrefetch(gen))
+        {
+          trace('[NXVideoPlayer] Prefetch DROPPED (stale) before decoding sheet $nextIndex of $vidName');
+          return;
+        }
         var romfsPng:String = 'romfs:/' + pngPath;
         if (sys.FileSystem.exists(romfsPng))
         {
@@ -115,6 +128,15 @@ class NXVideoPlayer
         if (prefetchMutex != null)
         {
           prefetchMutex.acquire();
+          if (gen != prefetchGen)
+          {
+            // Stopped or replaced while decoding: never publish it, and leave isPrefetching to the newer prefetch.
+            if (img != null && img.buffer != null) img.buffer.data = null;
+            img = null;
+            prefetchMutex.release();
+            trace('[NXVideoPlayer] Prefetch DROPPED (stale) sheet $nextIndex of $vidName');
+            return;
+          }
           if (img != null && xmlStr != null)
           {
             prefetchedImage = img;
@@ -136,11 +158,24 @@ class NXVideoPlayer
         if (prefetchMutex != null)
         {
           prefetchMutex.acquire();
-          isPrefetching = false;
+          if (gen == prefetchGen) isPrefetching = false;
           prefetchMutex.release();
         }
       }
     });
+    #end
+  }
+
+  static function isStalePrefetch(gen:Int):Bool
+  {
+    #if sys
+    if (prefetchMutex == null) return true;
+    prefetchMutex.acquire();
+    var stale:Bool = gen != prefetchGen;
+    prefetchMutex.release();
+    return stale;
+    #else
+    return true;
     #end
   }
 
@@ -150,6 +185,19 @@ class NXVideoPlayer
   public static inline function isCutscenePlaying():Bool
   {
     return isPlaying;
+  }
+
+  /**
+   * Sheet being shown and sheet count of the cutscene that is playing (tests check that it reached the last sheet).
+   */
+  public static inline function sheetIndex():Int
+  {
+    return currentSheetIndex;
+  }
+
+  public static inline function sheetCount():Int
+  {
+    return totalSheets;
   }
 
   /**
@@ -476,6 +524,18 @@ class NXVideoPlayer
       currentSheetFrameCount = 0;
       lastValidAudioSec = 0.0;
       lastWallTimestamp = haxe.Timer.stamp();
+
+      #if sys
+      // A new cutscene never inherits another cutscene's prefetched sheet.
+      if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
+      prefetchMutex.acquire();
+      prefetchGen++;
+      prefetchedImage = null;
+      prefetchedXml = null;
+      prefetchedSheetIndex = -1;
+      isPrefetching = false;
+      prefetchMutex.release();
+      #end
 
       // Start sheet 0
       if (!loadAndPlaySheet(0))
@@ -913,6 +973,7 @@ class NXVideoPlayer
       prefetchedXml = null;
       prefetchedSheetIndex = -1;
       isPrefetching = false;
+      prefetchGen++;
       prefetchMutex.release();
     }
     #end

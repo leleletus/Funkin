@@ -114,6 +114,8 @@ class NXAutoTest
       if (currentScenario.indexOf("NOTEXMEM") != -1) NXTextureMemory.enabled = false;
       if (currentScenario.indexOf("NOUPLOADREL") != -1) NXTextureMemory.releaseOnUpload = false;
       if (currentScenario.indexOf("NOPOSTREL") != -1) NXTextureMemory.releaseAfterCreate = false;
+      if (currentScenario.indexOf("NOORDEREDREL") != -1) NXTextureMemory.orderedRelease = false;
+      if (currentScenario.indexOf("NOBANDUPLOAD") != -1) NXTextureUpload.enabled = false;
       isRunning = true;
       testTimer = 0.0;
       stepState = 0;
@@ -163,6 +165,10 @@ class NXAutoTest
       else if (scenario.indexOf("DECODE_PARITY") != -1)
       {
         runDecodeParity();
+      }
+      else if (scenario.indexOf("UPLOAD_PARITY") != -1)
+      {
+        runUploadParity();
       }
       else if (scenario.indexOf("AUDIO_DRIVER_STALL") != -1)
       {
@@ -853,8 +859,11 @@ class NXAutoTest
       'assets/shared/images/resultScreen/rankText/rankTextPERFECT.png', 'assets/week6/images/weeb/pixelUI/dialogueBox-evil.png',
       'assets/images/freeplay/ref.png', 'assets/images/icons/icon-face.png', 'assets/week1/opensauceforever.png',
       'assets/week6/images/weeb/petals.png', 'assets/shared/images/characters/gfTankmen.png',
-      'assets/weekend1/images/spraycanAtlas/spritemap1.png', 'assets/videos/converted/2hotCutscene_0.png'
+      'assets/weekend1/images/spraycanAtlas/spritemap1.png', 'assets/videos/converted/2hotCutscene_0.png',
+      'assets/weekend1/images/characters/picoExplosionDeath/spritemap1.png', 'assets/week2/images/halloween_bg.png'
     ];
+    // Files of 128 MiB or more are only compared through the file path, to keep the bytes runs small.
+    var hugeOnlyFile:Array<String> = ['gfTankmen', 'picoExplosionDeath', 'halloween_bg'];
     var failures:Array<String> = [];
     var checked:Int = 0;
     inline function empty() return new lime.graphics.ImageBuffer(new lime.utils.UInt8Array(haxe.io.Bytes.alloc(0)));
@@ -876,33 +885,243 @@ class NXAutoTest
       if (a.data.byteLength != b.data.byteLength || ab.compare(bb) != 0) failures.push('$label: pixels differ (${a.data.byteLength} vs ${b.data.byteLength} bytes)');
       else trace('[AUTOTEST] DECODE_PARITY ok: $label ${a.width}x${a.height}');
     }
+    // Every image of 64 KiB or more must take the single-copy path (smaller ones take the stock call by design).
+    function requireSingleCopy(label:String, decoded:Null<lime.graphics.ImageBuffer>, usedSingleCopy:Bool):Void
+    {
+      if (decoded == null) return;
+      if (decoded.width * 4.0 * decoded.height >= 64 * 1024 && !usedSingleCopy)
+        failures.push('$label: took the stock two-block decode (${decoded.width}x${decoded.height})');
+    }
     for (file in files)
     {
       var path:String = 'romfs:/' + file;
       var stockFile:lime.graphics.ImageBuffer = lime._internal.backend.native.NativeCFFI.lime_image_load_file(path, empty());
+      var singleBefore:Int = NXImageDecode.singleCopy;
       var nxFile:lime.graphics.ImageBuffer = NXImageDecode.loadFile(path);
+      requireSingleCopy('file ' + file, stockFile, NXImageDecode.singleCopy > singleBefore);
       compare('file ' + file, stockFile, nxFile);
       stockFile = null;
       nxFile = null;
       cpp.vm.Gc.run(true);
-      if (file.indexOf('gfTankmen') != -1) continue; // 128 MiB: the file path already covers it, keep bytes runs small
+      var huge:Bool = false;
+      for (name in hugeOnlyFile)
+        if (file.indexOf(name) != -1) huge = true;
+      if (huge) continue;
       var bytes = sys.io.File.getBytes(path);
       var stockBytes:lime.graphics.ImageBuffer = lime._internal.backend.native.NativeCFFI.lime_image_load_bytes(bytes, empty());
+      var singleBeforeBytes:Int = NXImageDecode.singleCopy;
       var nxBytes:lime.graphics.ImageBuffer = NXImageDecode.loadBytes(bytes);
+      requireSingleCopy('bytes ' + file, stockBytes, NXImageDecode.singleCopy > singleBeforeBytes);
       compare('bytes ' + file, stockBytes, nxBytes);
       stockBytes = null;
       nxBytes = null;
       bytes = null;
       cpp.vm.Gc.run(true);
     }
+    // The real entry points the game uses must reach NXImageDecode (the macro patched lime.graphics.Image).
+    var before:Int = NXImageDecode.singleCopy;
+    var viaFile = lime.graphics.Image.fromFile('romfs:/assets/week1/opensauceforever.png');
+    var viaBytes = lime.graphics.Image.fromBytes(sys.io.File.getBytes('romfs:/assets/week1/opensauceforever.png'));
+    if (viaFile == null || viaBytes == null || NXImageDecode.singleCopy - before != 2)
+      failures.push('lime.graphics.Image.fromFile/fromBytes did not go through NXImageDecode (single-copy delta ${NXImageDecode.singleCopy - before})');
+    else trace('[AUTOTEST] DECODE_PARITY ok: lime Image.fromFile/fromBytes use the single-copy path');
+    viaFile = null;
+    viaBytes = null;
+
     var stats:String = NXImageDecode.describe();
     trace('[AUTOTEST] DECODE_PARITY: $checked comparisons, ${failures.length} failures, $stats');
     if (failures.length > 0) failTest('DECODE_PARITY: ' + failures.join(' | '));
     else if (NXImageDecode.missed > 0) failTest('DECODE_PARITY: pixels match but ${NXImageDecode.missed} decodes still copied ($stats)');
-    else if (NXImageDecode.singleCopy < files.length) failTest('DECODE_PARITY: single-copy path not used ($stats)');
     else passTest();
     #else
     failTest('DECODE_PARITY needs the Switch build');
+    #end
+  }
+
+  /**
+   * UPLOAD_PARITY: uploads shipped sheets with nx.NXTextureUpload's row bands (through BitmapData.getTexture, the
+   * game's path) and with OpenFL's single glTexImage2D (banding off), reads both textures back from the GPU in 64-row
+   * slices and requires them to be identical and equal to the uploaded image (INC-49).
+   */
+  @:access(openfl.display.BitmapData)
+  @:access(openfl.display3D.Context3D)
+  @:access(openfl.display3D._internal.Context3DState)
+  @:access(openfl.display3D.textures.TextureBase)
+  static function runUploadParity():Void
+  {
+    #if (switch && lime_cffi)
+    var context:openfl.display3D.Context3D = FlxG.stage.context3D;
+    if (context == null)
+    {
+      failTest('UPLOAD_PARITY: no Context3D');
+      return;
+    }
+    var gl = context.gl;
+    // Largest first, while the heap is still in one piece.
+    var files:Array<String> = [
+      'assets/week2/images/halloween_bg.png', // 8192x8192, 256 MiB: 32 whole bands
+      'assets/weekend1/images/characters/picoExplosionDeath/spritemap1.png', // 8187x5374: odd stride, last band 254 rows
+      'assets/shared/images/characters/gfTankmen.png', // 8192x4096 (INC-49)
+      'assets/weekend1/images/spraycanAtlas/spritemap1.png', // 8187x2907 (INC-32)
+      'assets/shared/images/characters/Pico_Death.png', // 6371x3442: 329-row bands
+      'assets/videos/converted/ughCutscene_0.png', // 3840x3960 video sheet
+      'assets/weekend1/images/bgConcept.png', // 4200x2600 RGB PNG without alpha
+      'assets/weekend1/images/fightPico.png', // 2048x2048: exactly 16 MiB, the smallest banded size
+      'assets/images/titleEnter.png' // 2017x1950, 15 MiB: must keep OpenFL's single call
+    ];
+    var sliceRows:Int = 64;
+    var wasEnabled:Bool = NXTextureUpload.enabled;
+    // OpenFL uploads BGRA bytes when the driver has a BGRA extension; readPixels(RGBA) returns R and B swapped.
+    var swapRB:Bool = openfl.display3D.textures.TextureBase.__textureFormat != gl.RGBA;
+    var failures:Array<String> = [];
+    var inconclusive:Array<String> = [];
+    var bandedImages:Int = 0;
+    inline function hex(code:Int):String return '0x' + StringTools.hex(code, 4);
+    for (file in files)
+    {
+      var started:Float = haxe.Timer.stamp();
+      var bitmap:openfl.display.BitmapData = openfl.display.BitmapData.fromFile('romfs:/' + file);
+      if (bitmap == null || bitmap.image == null)
+      {
+        failures.push('$file: could not load');
+        continue;
+      }
+      var image:lime.graphics.Image = bitmap.image;
+      var width:Int = image.buffer.width;
+      var height:Int = image.buffer.height;
+      var stride:Int = width * 4;
+      var label:String = '$file ${width}x${height}';
+      var bandable:Bool = stride * height >= 16 * 1024 * 1024;
+      if (bandable) bandedImages++;
+      // getTexture must upload this exact image (no premultiply clone), so both arms send the same bytes.
+      if (!image.premultiplied && image.transparent) failures.push('$label: not premultiplied, getTexture would upload a clone');
+      for (i in 0...16)
+        if (gl.getError() == gl.NO_ERROR) break;
+
+      NXTextureUpload.enabled = true;
+      var oom0:Int = NXTextureUpload.outOfMemory;
+      var banded0:Int = NXTextureUpload.banded;
+      // Test builds read the GL error right after every upload (clearing Mesa's flag): count those reads too.
+      var uploadErrors0:Int = NXTextureUpload.uploadErrors;
+      var texA:openfl.display3D.textures.TextureBase = bitmap.getTexture(context);
+      var errA:Int = gl.getError();
+      if (errA == gl.NO_ERROR && NXTextureUpload.uploadErrors != uploadErrors0) errA = -1;
+      var uploadErrorsA:Int = NXTextureUpload.uploadErrors;
+      var bandedDelta:Int = NXTextureUpload.banded - banded0;
+
+      var full0:Int = NXTextureUpload.fullLarge;
+      var texB:openfl.display3D.textures.RectangleTexture = context.createRectangleTexture(width, height, openfl.display3D.Context3DTextureFormat.BGRA,
+        false);
+      NXTextureUpload.enabled = false;
+      texB.__uploadFromImage(image);
+      NXTextureUpload.enabled = true;
+      var errB:Int = gl.getError();
+      if (errB == gl.NO_ERROR && NXTextureUpload.uploadErrors != uploadErrorsA) errB = -1;
+      var fullDelta:Int = NXTextureUpload.fullLarge - full0;
+      var uploaded:Float = haxe.Timer.stamp();
+
+      var sliceA = new lime.utils.UInt8Array(haxe.io.Bytes.alloc(stride * sliceRows));
+      var sliceB = new lime.utils.UInt8Array(haxe.io.Bytes.alloc(stride * sliceRows));
+      var previous = context.__contextState.__currentGLFramebuffer;
+      var fbA = texA.__getGLFramebuffer(false, 0, 0);
+      context.__bindGLFramebuffer(fbA);
+      var statusA:Int = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      var fbB = texB.__getGLFramebuffer(false, 0, 0);
+      context.__bindGLFramebuffer(fbB);
+      var statusB:Int = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+      var abDiff:Int = 0;
+      var aSrcDiff:Int = 0;
+      var bSrcDiff:Int = 0;
+      var firstAB:String = '';
+      var firstSrc:String = '';
+      var readError:Int = 0;
+      if (statusA == gl.FRAMEBUFFER_COMPLETE && statusB == gl.FRAMEBUFFER_COMPLETE)
+      {
+        var src:haxe.io.Bytes = image.data.buffer;
+        var srcOffset:Int = image.data.byteOffset;
+        var a:haxe.io.Bytes = sliceA.buffer;
+        var b:haxe.io.Bytes = sliceB.buffer;
+        var y:Int = 0;
+        while (y < height)
+        {
+          var n:Int = (height - y < sliceRows) ? height - y : sliceRows;
+          context.__bindGLFramebuffer(fbA);
+          gl.readPixels(0, y, width, n, gl.RGBA, gl.UNSIGNED_BYTE, sliceA);
+          context.__bindGLFramebuffer(fbB);
+          gl.readPixels(0, y, width, n, gl.RGBA, gl.UNSIGNED_BYTE, sliceB);
+          var base:Int = srcOffset + y * stride;
+          var end:Int = n * stride;
+          var p:Int = 0;
+          while (p < end)
+          {
+            var wa:Int = a.getInt32(p);
+            var wb:Int = b.getInt32(p);
+            var ws:Int = src.getInt32(base + p);
+            if (swapRB) ws = (ws & 0xFF00FF00) | ((ws & 0xFF) << 16) | ((ws >>> 16) & 0xFF);
+            if (wa != wb)
+            {
+              if (abDiff == 0) firstAB = 'at (${Std.int((p % stride) / 4)},${y + Std.int(p / stride)}) banded ${StringTools.hex(wa, 8)} single ${StringTools.hex(wb, 8)}';
+              abDiff++;
+            }
+            if (wa != ws)
+            {
+              if (aSrcDiff == 0) firstSrc = 'at (${Std.int((p % stride) / 4)},${y + Std.int(p / stride)}) read ${StringTools.hex(wa, 8)} image ${StringTools.hex(ws, 8)}';
+              aSrcDiff++;
+            }
+            if (wb != ws) bSrcDiff++;
+            p += 4;
+          }
+          y += n;
+        }
+        readError = gl.getError();
+      }
+      context.__bindGLFramebuffer(previous);
+      var ms:Int = Math.round((haxe.Timer.stamp() - started) * 1000);
+      var uploadMs:Int = Math.round((uploaded - started) * 1000);
+
+      if (bandable && bandedDelta != 1) failures.push('$label: getTexture did not band (banded +$bandedDelta, fallbacks ${NXTextureUpload.fallbacks})');
+      if (!bandable && bandedDelta != 0) failures.push('$label: banded below 16 MiB');
+      if (bandable && fullDelta != 1) failures.push('$label: banded_upload off did not take OpenFL\'s call (single call +$fullDelta)');
+      // -1: an error that NXTextureUpload read (and cleared) right after the upload.
+      if (errA != gl.NO_ERROR || errB != gl.NO_ERROR) failures.push('$label: GL error after upload (banded ${hex(errA)}, single ${hex(errB)})');
+      if (NXTextureUpload.outOfMemory != oom0) failures.push('$label: GL_OUT_OF_MEMORY during the uploads (${NXTextureUpload.outOfMemory - oom0})');
+      if (statusA != gl.FRAMEBUFFER_COMPLETE || statusB != gl.FRAMEBUFFER_COMPLETE || readError != gl.NO_ERROR)
+      {
+        inconclusive.push('$label: no readback (framebuffer ${hex(statusA)}/${hex(statusB)}, readPixels ${hex(readError)})');
+      }
+      else if (abDiff > 0 && bSrcDiff == 0)
+      {
+        failures.push('$label: banded upload differs from OpenFL\'s in $abDiff pixels, first $firstAB');
+      }
+      else if (abDiff > 0 || aSrcDiff > 0)
+      {
+        // OpenFL's own upload does not read back as the image either: the readback is not reliable here.
+        inconclusive.push('$label: readback differs from the image (banded $aSrcDiff px, single $bSrcDiff px, banded vs single $abDiff px), first $firstSrc');
+      }
+      else
+      {
+        trace('[AUTOTEST] UPLOAD_PARITY ok: $label ${bandable ? "banded" : "single call"}, identical to OpenFL\'s upload and to the image (uploads $uploadMs ms, total $ms ms)');
+      }
+
+      texB.dispose();
+      bitmap.dispose(); // also disposes texA (BitmapData.dispose -> __texture.dispose)
+      texA = null;
+      texB = null;
+      bitmap = null;
+      image = null;
+      sliceA = null;
+      sliceB = null;
+      cpp.vm.Gc.run(true);
+    }
+    NXTextureUpload.enabled = wasEnabled;
+
+    var stats:String = NXTextureUpload.describe();
+    trace('[AUTOTEST] UPLOAD_PARITY: ${files.length} images ($bandedImages bandable), ${failures.length} failures, ${inconclusive.length} inconclusive, $stats');
+    if (failures.length > 0) failTest('UPLOAD_PARITY: ' + failures.join(' | '));
+    else if (inconclusive.length > 0) failTest('UPLOAD_PARITY inconclusive: ' + inconclusive.join(' | '));
+    else passTest();
+    #else
+    failTest('UPLOAD_PARITY needs the Switch build');
     #end
   }
 

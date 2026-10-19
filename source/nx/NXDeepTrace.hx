@@ -216,7 +216,8 @@ class NXDeepTrace
       {
         for (graphic in FlxG.bitmap._cache)
         {
-          if (graphic == null) continue;
+          // Destroyed graphics left in the cache (flixel-animate's baked frames) keep width, height and a disposed bitmap.
+          if (graphic == null || graphic.isDestroyed) continue;
           bitmapCount++;
           if (graphic.bitmap != null) bitmapPixelMb += (graphic.width * graphic.height * 4) / (1024.0 * 1024.0);
         }

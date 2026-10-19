@@ -727,7 +727,7 @@ class NXRegressionSuite
             introSongStarted = false;
             launchStoryLikePlayer("sserafim");
           },
-          poll: () -> (run == 3) ? playSpaghettiWithSuspends(holds[2]) : playStoryWeek("sserafim", run, holds[run - 1])
+          poll: () -> glChecked(() -> (run == 3) ? playSpaghettiWithSuspends(holds[2]) : playStoryWeek("sserafim", run, holds[run - 1]))
         });
       steps.push(
         {
@@ -735,16 +735,22 @@ class NXRegressionSuite
           covers: "Memory",
           timeout: 20,
           enter: () -> {},
-          poll: () -> logCheckpoint('after spaghetti $run')
+          poll: () -> glChecked(() -> logCheckpoint('after spaghetti $run'))
         });
     }
     steps.push(
       {
-        name: "Story Mode Week 7: Ugh loads (INC-49 crash site) and plays",
+        name: "Story Mode Week 7: Ugh loads (INC-49 crash site), its cutscene plays to the end, the song plays with no GL out-of-memory",
         covers: "INC-49",
         timeout: 600,
-        enter: () -> launchStoryLikePlayer("week7"),
-        poll: () -> waitSongPlaying("ugh", 10.0)
+        enter: () -> {
+          drainGlErrors();
+          videoSeen = false;
+          videoSheetMax = -1;
+          videoSheetCount = 0;
+          launchStoryLikePlayer("week7");
+        },
+        poll: () -> glChecked(() -> waitSongPlaying("ugh", 10.0, true, true))
       });
     steps.push(
       {
@@ -752,17 +758,106 @@ class NXRegressionSuite
         covers: "Memory",
         timeout: 20,
         enter: () -> {},
-        poll: () -> logCheckpoint('ugh playing')
+        poll: () -> glChecked(() -> logCheckpoint('ugh playing'))
+      });
+    steps.push(
+      {
+        name: "Pause -> exit Week 7 to the Story menu",
+        covers: "Setup",
+        timeout: 40,
+        enter: () -> {},
+        poll: () -> glChecked(() -> pauseAndQuitToMenu(StoryMenuState))
+      });
+    steps.push(
+      {
+        name: "Story Mode Week 2: Spookeez loads (halloween_bg, 256 MiB, the largest image) and plays with no GL out-of-memory",
+        covers: "INC-49",
+        timeout: 300,
+        enter: () -> {
+          drainGlErrors();
+          launchStoryLikePlayer("week2");
+        },
+        poll: () -> glChecked(() -> waitSongPlaying("spookeez", 10.0, true))
+      });
+    steps.push(
+      {
+        name: "Memory with Spookeez playing",
+        covers: "Memory",
+        timeout: 20,
+        enter: () -> {},
+        poll: () -> glChecked(() -> logCheckpoint('spookeez playing'))
       });
     results = [];
     index = -1;
     running = true;
+    // One baseline for the whole replay: a GL_OUT_OF_MEMORY in any step after this point fails it.
+    drainGlErrors();
+    pendingGlOom = false;
+    uploadOomBaseline = NXTextureUpload.outOfMemory;
     trace('[AUTOTEST] INC49_REPRO: ${steps.length} steps');
-    NXDeepTrace.writeEntry('MEMORY', '[HEAP] INC49_REPRO start: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()}');
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] INC49_REPRO start: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()} | release ${NXTextureMemory.describe()} | upload ${NXTextureUpload.describe()}');
     nextStep();
   }
 
   static inline final INC49_HEAP_CAP_MB:Int = 3110;
+  static inline final GL_OUT_OF_MEMORY:Int = 0x0505;
+
+  /**
+   * GL errors are sticky: read and log them before a step so only the step's own errors count.
+   */
+  static var seenGlErrors:Array<Int> = [];
+
+  /**
+   * NXTextureUpload.outOfMemory when the replay started: any increase fails it, whichever step it happens in.
+   */
+  static var uploadOomBaseline:Int = 0;
+
+  /**
+   * A GL_OUT_OF_MEMORY read between steps (drainGlErrors): the next glChecked poll fails.
+   */
+  static var pendingGlOom:Bool = false;
+
+  static var videoSeen:Bool = false;
+  static var videoSheetMax:Int = -1;
+  static var videoSheetCount:Int = 0;
+
+  static function drainGlErrors():Void
+  {
+    seenGlErrors = [];
+    for (i in 0...16)
+    {
+      var err:Int = lime.graphics.opengl.GL.getError();
+      if (err == 0) break;
+      if (err == GL_OUT_OF_MEMORY) pendingGlOom = true;
+      trace('[AUTOTEST] GL error before step: 0x${StringTools.hex(err)}');
+    }
+  }
+
+  /**
+   * Wraps a poll so it fails on GL_OUT_OF_MEMORY: a texture or GPU buffer that cannot be allocated does not crash,
+   * it just draws nothing, so a memory problem would otherwise pass unnoticed.
+   */
+  static function glChecked(poll:Void->Null<Bool>):Null<Bool>
+  {
+    var err:Int = lime.graphics.opengl.GL.getError();
+    if (err == GL_OUT_OF_MEMORY) pendingGlOom = true;
+    // Uploads read the error themselves (a recurring error elsewhere in the frame would hide it from this poll).
+    var uploadOom:Int = NXTextureUpload.outOfMemory - uploadOomBaseline;
+    if (pendingGlOom || uploadOom > 0)
+    {
+      var where:String = uploadOom > 0 ? ' ($uploadOom during texture uploads)' : '';
+      NXDeepTrace.writeEntry('MEMORY', '[HEAP] GL_OUT_OF_MEMORY in ${currentSongId()}$where: ${NXPerformance.describeHeap()}');
+      failReason = 'GL_OUT_OF_MEMORY while loading/playing ${currentSongId()} (a texture or GPU buffer did not fit)';
+      return false;
+    }
+    if (err != 0 && seenGlErrors.indexOf(err) == -1)
+    {
+      // Not a memory error (e.g. a recurring GL_INVALID_ENUM): log it once per step.
+      seenGlErrors.push(err);
+      trace('[AUTOTEST] GL error 0x${StringTools.hex(err)} in ${currentSongId()} (logged once)');
+    }
+    return poll();
+  }
   // Music positions of the four suspensions in the console log ([PAUSE] lines 552/758/1064/1169).
   static final SUSPEND_AT_MUSIC_MS:Array<Float> = [144219, 148886, 158847, 161586];
   static final SUSPEND_SECONDS:Array<Float> = [7.6, 8.0, 16.0, 19.2];
@@ -885,7 +980,8 @@ class NXRegressionSuite
   {
     if (now() - mark < 2.0) return null;
     NXDeepTrace.logMemorySnapshot('PLAYTHROUGH $label', false);
-    NXDeepTrace.writeEntry('MEMORY', '[HEAP] $label: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()}');
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] $label: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()} | release ${NXTextureMemory.describe()} | upload ${NXTextureUpload.describe()}');
+    NXDeepTrace.writeEntry('MEMORY', '[CACHE] $label: ${NXTextureMemory.describeCache()}');
     return true;
   }
 
@@ -1332,18 +1428,31 @@ class NXRegressionSuite
       }, true);
   }
 
-  static function waitSongPlaying(songId:String, seconds:Float):Null<Bool>
+  static function waitSongPlaying(songId:String, seconds:Float, letCutscenePlay:Bool = false, requireCutscene:Bool = false):Null<Bool>
   {
     if (!songIs(songId))
     {
       failReason = 'waiting for song "$songId" (current: ${currentSongId()})';
       return null;
     }
-    // Finish any starting cutscene through the natural completion path.
-    if (NXVideoPlayer.isCutscenePlaying() && now() - mark > 2.0)
+    if (NXVideoPlayer.isCutscenePlaying())
     {
-      NXVideoPlayer.finishCutscene();
-      return null;
+      if (letCutscenePlay)
+      {
+        // The console watched it: its sheet decodes and the prefetch thread run after the character decodes.
+        videoSeen = true;
+        if (NXVideoPlayer.sheetIndex() > videoSheetMax) videoSheetMax = NXVideoPlayer.sheetIndex();
+        videoSheetCount = NXVideoPlayer.sheetCount();
+        failReason = 'cutscene playing in $songId';
+        mark = now();
+        return null;
+      }
+      // Finish any starting cutscene through the natural completion path.
+      if (now() - mark > 2.0)
+      {
+        NXVideoPlayer.finishCutscene();
+        return null;
+      }
     }
     if (!songPlaying())
     {
@@ -1356,7 +1465,14 @@ class NXRegressionSuite
       phase = 1;
       mark = now();
     }
-    return (now() - mark >= seconds) ? true : null;
+    if (now() - mark < seconds) return null;
+    if (requireCutscene && (!videoSeen || videoSheetMax < videoSheetCount - 1))
+    {
+      // A cutscene that never started, or ended early on a missing or undecodable sheet, lets the song start anyway.
+      failReason = videoSeen ? 'the $songId cutscene stopped at sheet ${videoSheetMax + 1} of $videoSheetCount' : 'the $songId cutscene never played';
+      return false;
+    }
+    return true;
   }
 
   static function playCutsceneThenSong(songId:String, videoName:String):Null<Bool>

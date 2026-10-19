@@ -104,6 +104,28 @@ static void nx_heapProbe(struct nx_heapstat *st)
   st->n16 = n16; st->n64 = n64; st->n128 = n128; st->n256 = n256; st->walked = walked; st->truncated = truncated;
 }
 
+// Largest block malloc can return right now without growing the arena: the head of bin 126 (every free chunk of
+// 512 KiB or more, kept sorted largest first), the last split remainder (bin 1) and the top chunk. O(1), never
+// allocates, read under the (recursive) malloc lock like nx_heapProbe.
+static size_t nx_largestFreeChunk(void)
+{
+  __malloc_lock(_REENT);
+  size_t largest = 0;
+  struct nx_mchunk *big = (struct nx_mchunk *)((char *)&__malloc_av_[2 * 126 + 2] - 2 * sizeof(size_t));
+  if (big->fd != big) largest = big->fd->size & ~(size_t)3;
+  struct nx_mchunk *lr = (struct nx_mchunk *)((char *)&__malloc_av_[2 * 1 + 2] - 2 * sizeof(size_t));
+  if (lr->fd != lr)
+  {
+    size_t s = lr->fd->size & ~(size_t)3;
+    if (s > largest) largest = s;
+  }
+  struct nx_mchunk *top = (struct nx_mchunk *)__malloc_av_[2];
+  size_t topSize = top->size & ~(size_t)3;
+  if (topSize > largest) largest = topSize;
+  __malloc_unlock(_REENT);
+  return largest;
+}
+
 // Test builds: lower the heap ceiling (libnx _sbrk_r re-reads fake_heap_end on every call) to emulate the
 // console heap in Citron. Only allowed while the arena is well below the new ceiling.
 static int nx_capHeap(size_t capBytes)
@@ -566,6 +588,22 @@ class NXPerformance
       + ' | top ${mb(top)} MB | untouched ${mb(untouched)} MB | max single alloc ~${mb(allocBound)} MB | peak arena ${mb(peakArena)} MB';
     #else
     return 'heap n/a';
+    #end
+  }
+
+  /**
+   * Largest block malloc can hand out right now without growing the arena (largest free chunk, last split remainder
+   * or top chunk), in bytes. O(1) and allocation-free: NXTextureMemory uses it to tell whether a GPU texture would
+   * extend the heap (INC-49).
+   */
+  public static function getLargestFreeChunkBytes():Float
+  {
+    #if (switch && cpp)
+    var bytes:Float = 0;
+    untyped __cpp__('{0} = (double)nx_largestFreeChunk()', bytes);
+    return bytes;
+    #else
+    return 0.0;
     #end
   }
 

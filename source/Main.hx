@@ -176,6 +176,8 @@ class Main extends Sprite
     #if switch
     Sys.setCwd("romfs:/");
     NXMain.init();
+    // Test builds: read nx_devtools.cfg before the first image is decoded (FlxGame.create decodes the sound tray).
+    nx.NXDevTools.init();
     var game:NXGame = new NXGame(gameWidth, gameHeight, initialState, zoom, Preferences.framerate, Preferences.framerate, skipSplash,
       (FlxG.stage.window.fullscreen || Preferences.autoFullscreen));
     #else

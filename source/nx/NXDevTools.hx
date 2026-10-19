@@ -14,6 +14,8 @@ package nx;
  *   botplay_start=false   # songs start with botplay already on
  *   heap_cap_mb=0         # 0 = off; e.g. 3110 caps the heap to emulate the console in Citron (INC49_REPRO)
  *   single_copy_decode=true  # false = lime's stock double-copy PNG decode, for A/B memory runs (INC-49)
+ *   ordered_release=true     # false = Build 25 post-switch texture release (hash order, copies parked), A/B (INC-49)
+ *   banded_upload=true       # false = OpenFL's single glTexImage2D (Mesa stages the whole image), A/B (INC-49)
  *
  * Automated tests (NXAutoTest) always run with botplay on. The botplay state is never saved, so a
  * save made with a test build cannot carry it into a release build.
@@ -61,6 +63,10 @@ class NXDevTools
               cfgHeapCapMb = (mb != null && mb > 0) ? mb : 0;
             case 'single_copy_decode':
               NXImageDecode.enabled = value;
+            case 'ordered_release':
+              NXTextureMemory.orderedRelease = value;
+            case 'banded_upload':
+              NXTextureUpload.enabled = value;
             default:
           }
         }
@@ -71,7 +77,7 @@ class NXDevTools
       source = 'defaults (nx_devtools.cfg unreadable: $e)';
     }
     #end
-    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} from $source');
+    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} from $source');
     #if switch
     NXDeepTrace.writeEntry('MEMORY', '[HEAP] boot: ${NXPerformance.describeHeapBounds()} | ${NXPerformance.describeHeap()}');
     // Citron's heap is ~98 MB larger than the console's: heap_cap_mb lets long-session tests run with the console's ceiling.
