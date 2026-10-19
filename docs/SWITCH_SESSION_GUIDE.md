@@ -78,6 +78,6 @@ Seguir la sección 7 del tracker:
 1. Fila de la build nueva en la tabla de compilaciones.
 2. Fila `INC-XX` por cada incidencia (síntoma, causa raíz demostrada y estado).
 3. Entrada en la bitácora de sesiones (fecha, build, trabajo realizado, pendiente).
-4. Commit sin trailers de atribución, push a `personal`, tag anotado `v0.8.1-nx-preview-N` y push del tag.
-5. Release en GitHub según la política vigente sobre el `.nro` (ver bitácora).
+4. Commit sin trailers de atribución, push a `personal`, tag anotado (`v0.8.1-nx-preview-N` para las builds de prueba, `v0.8.1-nx-release-N` para las versiones estables) y push del tag.
+5. Release en GitHub sin `.nro` (decidido el 2026-10-19: la licencia de los assets prohíbe redistribuirlos); el `.nro` público se archiva en `~/switch-builds` y en el disco externo. Las versiones estables actualizan además `nx-develop` y `feature/switch-upstream-0.8.7` del fork.
 6. Despliegue en la consola por FTP si está activo: respaldar `saves/` y `logs/`, limpiar la carpeta y subir el `.nro`.
