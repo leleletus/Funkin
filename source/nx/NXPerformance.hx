@@ -20,6 +20,12 @@ extern "C" {
   extern unsigned long __malloc_max_sbrked_mem;
   extern unsigned long __malloc_top_pad;
   extern struct mallinfo __malloc_current_mallinfo; // .arena = bytes obtained from sbrk (sbrked_mem)
+  // nx.NXLargeHeap (region for blocks of 2 MiB or more); null when built with -Dnx_legacy_heap.
+  size_t nxl_totalBytes(void) __attribute__((weak));
+  size_t nxl_allocBound(void) __attribute__((weak));
+  size_t nxl_largestFree(void) __attribute__((weak));
+  size_t nxl_usedBytes(void) __attribute__((weak));
+  int nxl_cap(size_t) __attribute__((weak));
 }
 
 struct nx_mchunk { size_t prev_size; size_t size; struct nx_mchunk *fd; struct nx_mchunk *bk; };
@@ -88,9 +94,14 @@ static void nx_heapProbe(struct nx_heapstat *st)
   if (fromTop > bound) bound = fromTop;
   if (fromSbrk > bound) bound = fromSbrk;
   bound = bound > 64 ? bound - 64 : 0; // _memalign_r(32, n) overhead
+  if (nxl_allocBound)
+  {
+    size_t largeBound = nxl_allocBound(); // requests of 2 MiB or more are served by the large region first
+    if (largeBound > bound) bound = largeBound;
+  }
   if (bound > 0x7fffffffUL) bound = 0x7fffffffUL;
 
-  st->total = (double)(heapEnd - heapStart);
+  st->total = nxl_totalBytes ? (double)nxl_totalBytes() : (double)(heapEnd - heapStart);
   st->used = (double)used;
   st->freeAll = (double)freeAll;
   st->top = (double)topSize;
@@ -122,6 +133,11 @@ static size_t nx_largestFreeChunk(void)
   struct nx_mchunk *top = (struct nx_mchunk *)__malloc_av_[2];
   size_t topSize = top->size & ~(size_t)3;
   if (topSize > largest) largest = topSize;
+  if (nxl_largestFree)
+  {
+    size_t regionLargest = nxl_largestFree();
+    if (regionLargest > largest) largest = regionLargest;
+  }
   __malloc_unlock(_REENT);
   return largest;
 }
@@ -133,6 +149,13 @@ static int nx_capHeap(size_t capBytes)
   // Under the malloc lock: every _sbrk_r call runs under it, so the margin check and the new ceiling are atomic
   // with respect to heap growth.
   __malloc_lock(_REENT);
+  if (nxl_cap)
+  {
+    // The large region sits at the top of the heap: the cap becomes unusable space between it and newlib.
+    int rc = nxl_cap(capBytes);
+    __malloc_unlock(_REENT);
+    return rc;
+  }
   char *newEnd = fake_heap_start + capBytes;
   if (newEnd >= fake_heap_end) { __malloc_unlock(_REENT); return 1; }
   struct nx_mchunk *top = (struct nx_mchunk *)__malloc_av_[2];
@@ -540,7 +563,7 @@ class NXPerformance
   }
 
   /**
-   * Returns bytes currently allocated through newlib malloc (`mallinfo().uordblks`), in megabytes (MB).
+   * Returns bytes currently allocated through malloc (newlib's `mallinfo().uordblks` plus NXLargeHeap's blocks), in MB.
    * Unlike `getPhysicalMemoryUsed()` (which reports the heap mapped by `svcSetHeapSize`), this tracks real
    * native allocations: decoded image pixel buffers, PCM audio buffers, and Mesa/nouveau driver allocations.
    */
@@ -550,7 +573,7 @@ class NXPerformance
     var usedBytes:Float = 0;
     untyped __cpp__('
       struct mallinfo mi = mallinfo();
-      {0} = (double)mi.uordblks;
+      {0} = (double)mi.uordblks + (nxl_usedBytes ? (double)nxl_usedBytes() : 0.0);
     ', usedBytes);
     return usedBytes / (1024.0 * 1024.0);
     #else
@@ -585,7 +608,8 @@ class NXPerformance
     var mb = (x:Float) -> Math.round(x / 104857.6) / 10;
     // "free in bins" excludes the top chunk (mallinfo fordblks includes it).
     return 'heap ${mb(total)} MB | in use ${mb(used)} MB | free in bins ${mb(freeAll - top)} MB (largest hole ${mb(largestHole)} MB, holes >=16/64/128/256 MB: $n16/$n64/$n128/$n256, $walked chunks${truncated ? " TRUNCATED" : ""})'
-      + ' | top ${mb(top)} MB | untouched ${mb(untouched)} MB | max single alloc ~${mb(allocBound)} MB | peak arena ${mb(peakArena)} MB';
+      + ' | top ${mb(top)} MB | untouched ${mb(untouched)} MB | max single alloc ~${mb(allocBound)} MB | peak arena ${mb(peakArena)} MB'
+      + ' | ${NXLargeHeap.describe()}';
     #else
     return 'heap n/a';
     #end

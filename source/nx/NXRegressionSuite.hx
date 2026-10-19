@@ -126,11 +126,11 @@ class NXRegressionSuite
     }
     steps.push(
       {
-        name: "Round 2 vs Round 1: no memory growth",
+        name: "Round 2 vs Round 1: no memory growth at the end of the round",
         covers: "GC / purge leaks",
         timeout: 5,
         enter: () -> {},
-        poll: () -> compareRounds(150.0)
+        poll: () -> compareRounds(150.0, "reentry")
       });
     results = [];
     index = -1;
@@ -138,6 +138,89 @@ class NXRegressionSuite
     trace('[AUTOTEST] SOAK: ${steps.length} steps');
     NXDeepTrace.logMemorySnapshot('SOAK BASELINE', false);
     nextStep();
+  }
+
+  /**
+   * MEMORY_BUDGET: every Story week twice in a row without restarting (cutscenes 2 s, songs 3 s, dialogues skipped).
+   * For each week it logs a [BUDGET] line with the large-block peak and the largest single request while the week ran,
+   * plus the heap state afterwards: the heaviest week sets the memory the game must always keep available, and the
+   * second round shows whether a long session still finds its large blocks (INC-49, INC-42).
+   */
+  public static function startMemoryBudget():Void
+  {
+    captureSongFrames = false;
+    skipConversations = true;
+    // The console heap (Citron gives ~98 MB more), so the budget and the second round mean the same as on hardware.
+    NXDeepTrace.writeEntry('MEMORY', '[BUDGET] ${NXPerformance.capHeap(INC49_HEAP_CAP_MB)}');
+    steps = [
+      {
+        name: "Console heap ceiling applied",
+        covers: "Setup",
+        timeout: 5,
+        enter: () -> {},
+        poll: () -> {
+          var mb:Float = NXPerformance.getHeapTotalMB();
+          if (mb > INC49_HEAP_CAP_MB + 1)
+          {
+            failReason = 'heap is ${Math.round(mb)} MB, the budget needs the console ceiling (${INC49_HEAP_CAP_MB} MB)';
+            return false;
+          }
+          return true;
+        }
+      }
+    ];
+    memoryFloors = new Map<String, Float>();
+    var weeks:Array<String> = ["tutorial", "week1", "week2", "week3", "week4", "week5", "week6", "week7", "weekend1", "sserafim"];
+    for (round in 1...3)
+    {
+      for (week in weeks)
+      {
+        steps.push(
+          {
+            name: 'Round $round: Story Mode $week complete',
+            covers: "Memory budget",
+            timeout: 400,
+            enter: () -> {
+              NXLargeHeap.describe(true); // new peak window for this week
+              launchStory(week);
+            },
+            poll: () -> glChecked(() -> playStoryWeek(week, round))
+          });
+        steps.push(
+          {
+            name: 'Round $round: memory budget of $week',
+            covers: "Memory budget",
+            timeout: 30,
+            enter: () -> {},
+            poll: () -> budgetCheckpoint(week, round)
+          });
+      }
+    }
+    steps.push(
+      {
+        name: "Round 2 vs Round 1: no memory growth at the end of the round",
+        covers: "GC / purge leaks",
+        timeout: 5,
+        enter: () -> {},
+        poll: () -> compareRounds(150.0, "sserafim")
+      });
+    results = [];
+    index = -1;
+    running = true;
+    drainGlErrors();
+    pendingGlOom = false;
+    uploadOomBaseline = NXTextureUpload.outOfMemory;
+    trace('[AUTOTEST] MEMORY_BUDGET: ${steps.length} steps');
+    NXDeepTrace.writeEntry('MEMORY', '[BUDGET] start: ${NXPerformance.describeHeap()}');
+    nextStep();
+  }
+
+  static function budgetCheckpoint(week:String, round:Int):Null<Bool>
+  {
+    if (!Std.isOfType(FlxG.state, StoryMenuState) || now() - mark < 3.0) return null;
+    // The week window first (peak and largest request since the week started), then the state left behind.
+    NXDeepTrace.writeEntry('MEMORY', '[BUDGET] R$round $week: ${NXLargeHeap.describe(false)} | after: ${NXPerformance.describeHeap()}');
+    return memoryCheckpoint('R$round-$week', round);
   }
 
   /**
@@ -298,6 +381,13 @@ class NXRegressionSuite
    * Songs and cutscenes run to their natural end (PLAYTHROUGH) instead of 2-3 s each.
    */
   static var fullLength:Bool = false;
+
+  /**
+   * MEMORY_BUDGET only: dialogues (Week 6) are skipped after 2 s instead of waiting for button presses.
+   */
+  static var skipConversations:Bool = false;
+
+  static var conversationMark:Float = -1.0;
 
   /**
    * PLAYTHROUGH (L+R held 3 s on a test build, or autotest.cfg): a real session played to the end with
@@ -2071,6 +2161,19 @@ class NXRegressionSuite
       trace('[AUTOTEST] Entered "${ps.currentSong.id}" on stage "${ps.currentStageId}"');
     }
 
+    if (skipConversations && ps.currentConversation != null)
+    {
+      if (conversationMark < 0) conversationMark = now();
+      if (now() - conversationMark > 2.0)
+      {
+        ps.currentConversation.skipConversation();
+        conversationMark = -1.0;
+      }
+      failReason = 'dialogue in ${ps.currentSong.id}';
+      return null;
+    }
+    conversationMark = -1.0;
+
     if (NXVideoPlayer.isCutscenePlaying())
     {
       if (cutsceneMark < 0) cutsceneMark = now();
@@ -2279,26 +2382,33 @@ class NXRegressionSuite
     return true;
   }
 
-  static function compareRounds(maxGrowthMb:Float):Null<Bool>
+  /**
+   * Leak check between rounds at the END of each round (`endLabel`): same point of the same sequence. The other
+   * checkpoints are only logged: in round 1 every week is played for the first time and loads what then stays (UI,
+   * fonts, the GC growing to its working size), so round 1 vs round 2 there measures warm-up, not leaks (MEMORY_BUDGET:
+   * the floor climbs from 415 to 795 MB during round 1, then stays at 790-840 MB through round 2).
+   */
+  static function compareRounds(maxGrowthMb:Float, endLabel:String):Null<Bool>
   {
-    var worst:Float = 0.0;
-    var worstLabel:String = "";
     for (label => r2 in memoryFloors)
     {
-      if (!StringTools.startsWith(label, "R2-")) continue;
+      if (!StringTools.startsWith(label, "R2-") || label.substr(3) == endLabel) continue;
       var r1:Null<Float> = memoryFloors.get("R1-" + label.substr(3));
       if (r1 == null) continue;
-      var growth:Float = r2 - r1;
-      trace('[AUTOTEST] Leak check ${label.substr(3)}: round 1 = ${Math.round(r1)} MB, round 2 = ${Math.round(r2)} MB, growth = ${Math.round(growth)} MB');
-      if (growth > worst)
-      {
-        worst = growth;
-        worstLabel = label.substr(3);
-      }
+      trace('[AUTOTEST] Round floors ${label.substr(3)}: round 1 = ${Math.round(r1)} MB, round 2 = ${Math.round(r2)} MB (warm-up included, not checked)');
     }
-    if (worst > maxGrowthMb)
+    var r1End:Null<Float> = memoryFloors.get('R1-$endLabel');
+    var r2End:Null<Float> = memoryFloors.get('R2-$endLabel');
+    if (r1End == null || r2End == null)
     {
-      failReason = 'native memory grew ${Math.round(worst)} MB between rounds after $worstLabel (limit $maxGrowthMb MB)';
+      failReason = 'missing end-of-round memory floor for $endLabel';
+      return false;
+    }
+    var growth:Float = r2End - r1End;
+    trace('[AUTOTEST] Leak check (end of round, $endLabel): round 1 = ${Math.round(r1End)} MB, round 2 = ${Math.round(r2End)} MB, growth = ${Math.round(growth)} MB (limit $maxGrowthMb MB)');
+    if (growth > maxGrowthMb)
+    {
+      failReason = 'native memory grew ${Math.round(growth)} MB in one round (end of round, $endLabel; limit $maxGrowthMb MB)';
       return false;
     }
     return true;

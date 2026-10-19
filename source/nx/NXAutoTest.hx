@@ -178,6 +178,10 @@ class NXAutoTest
       {
         NXRegressionSuite.startAudioStarve();
       }
+      else if (scenario.indexOf("MEMORY_BUDGET") != -1)
+      {
+        NXRegressionSuite.startMemoryBudget();
+      }
       else if (scenario.indexOf("SOAK") != -1)
       {
         NXRegressionSuite.startSoak();
@@ -291,7 +295,7 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1 || currentScenario.indexOf("MEMORY_BUDGET") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
       || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {
@@ -301,7 +305,7 @@ class NXAutoTest
 
     if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1
       || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1 || currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("CUTSCENE_SKIP") != -1
-      || currentScenario.indexOf("INC49_REPRO") != -1)
+      || currentScenario.indexOf("INC49_REPRO") != -1 || currentScenario.indexOf("MEMORY_BUDGET") != -1)
     {
       NXRegressionSuite.update();
     }
