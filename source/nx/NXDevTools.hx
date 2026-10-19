@@ -31,6 +31,7 @@ class NXDevTools
   static var cfgHeapCapMb:Int = 0;
   static var cfgComboLR:String = '';
   static var cfgComboZLZR:String = '';
+  static var cfgAudioThreadHigh:Bool = false;
   static var botplayOverride:Null<Bool> = null;
 
   /**
@@ -75,6 +76,8 @@ class NXDevTools
               cfgComboLR = comboValue(raw);
             case 'combo_zlzr':
               cfgComboZLZR = comboValue(raw);
+            case 'audio_thread_priority':
+              cfgAudioThreadHigh = (raw == 'high');
             default:
           }
         }
@@ -85,7 +88,10 @@ class NXDevTools
       source = 'defaults (nx_devtools.cfg unreadable: $e)';
     }
     #end
-    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} combo_lr=${cfgComboLR == "" ? "off" : cfgComboLR} combo_zlzr=${cfgComboZLZR == "" ? "off" : cfgComboZLZR} from $source');
+    #if switch
+    NXAudioDriver.setHighThreadPriority(cfgAudioThreadHigh);
+    #end
+    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} combo_lr=${cfgComboLR == "" ? "off" : cfgComboLR} combo_zlzr=${cfgComboZLZR == "" ? "off" : cfgComboZLZR} audio_thread_priority=${cfgAudioThreadHigh ? "high" : "default"} from $source');
     #if switch
     NXDeepTrace.writeEntry('MEMORY', '[HEAP] boot: ${NXPerformance.describeHeapBounds()} | ${NXPerformance.describeHeap()}');
     // Citron's heap is ~98 MB larger than the console's: heap_cap_mb lets long-session tests run with the console's ceiling.

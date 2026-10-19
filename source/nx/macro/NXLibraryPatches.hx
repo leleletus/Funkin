@@ -83,6 +83,52 @@ class NXLibraryPatches
     return fields;
   }
 
+  /**
+   * openfl.display3D.textures.TextureBase: drop the GL_TEXTURE_LOD_BIAS call from __setSamplerState. The Switch context
+   * is OpenGL ES, where that texture parameter does not exist: every sampler state change raised GL_INVALID_ENUM (the
+   * 0x500 seen every frame), which also hid real GL errors from the upload checks. OpenFL never sets a bias other than
+   * 0, so nothing changes on screen. Disable with -Dnx_stock_lod_bias for A/B tests.
+   */
+  public static function glesSamplerState():Array<Field>
+  {
+    if (!Context.defined('switch') || Context.defined('nx_stock_lod_bias')) return null;
+    var fields:Array<Field> = Context.getBuildFields();
+    var count:Array<Int> = [0];
+    for (field in fields)
+    {
+      if (field.name != '__setSamplerState') continue;
+      switch (field.kind)
+      {
+        case FFun(f) if (f.expr != null):
+          f.expr = removeLodBias(f.expr, count);
+        default:
+      }
+    }
+    if (count[0] != 1)
+    {
+      Context.fatalError('NXLibraryPatches: expected exactly one stock gl.texParameterf(__textureTarget, 34049, state.lodBias) in openfl.display3D.textures.TextureBase.__setSamplerState, found ${count[0]}. Update the patch for this OpenFL version.',
+        Context.currentPos());
+    }
+    Context.getLocalClass().get().meta.add(':nxNoLodBias', [], Context.currentPos());
+    return fields;
+  }
+
+  static function removeLodBias(e:Expr, count:Array<Int>):Expr
+  {
+    return switch (e.expr)
+    {
+      case ECall({expr: EField({expr: EConst(CIdent('gl'))}, 'texParameterf', _)}, args)
+        if (args.length == 3 && ExprTools.toString(args[0]) == '__textureTarget' && ExprTools.toString(args[1]) == '34049'
+          && ExprTools.toString(args[2]) == 'state.lodBias'):
+        count[0]++;
+        var replacement:Expr = macro {};
+        replacement.pos = e.pos;
+        replacement;
+      default:
+        ExprTools.map(e, (sub) -> removeLodBias(sub, count));
+    };
+  }
+
   static function rewriteImageUpload(e:Expr, count:Array<Int>):Expr
   {
     return switch (e.expr)
@@ -110,15 +156,16 @@ class NXLibraryPatches
   /**
    * Build guard registered from nx.NXMain (always compiled on Switch): fails the build if lime.graphics.Image or
    * openfl.display3D.textures.TextureBase was typed without its patch (class renamed or moved by a library update, or
-   * typed before the metadata from project.hxp was registered), so neither stock path can come back silently. Each
-   * check is skipped only by its own -Dnx_legacy_* flag.
+   * typed before the metadata from project.hxp was registered), so no stock path can come back silently. Each
+   * check is skipped only by its own flag (-Dnx_legacy_image_decode, -Dnx_legacy_texture_upload, -Dnx_stock_lod_bias).
    */
   public static function requirePatched():Array<Field>
   {
     if (!Context.defined('switch') || Context.defined('display')) return null;
     var checkDecode:Bool = !Context.defined('nx_legacy_image_decode');
     var checkUpload:Bool = !Context.defined('nx_legacy_texture_upload');
-    if (!checkDecode && !checkUpload) return null;
+    var checkLodBias:Bool = !Context.defined('nx_stock_lod_bias');
+    if (!checkDecode && !checkUpload && !checkLodBias) return null;
     // onGenerate runs once with every type that will be generated (onAfterTyping can be called again with only the
     // types added by other macros, which does not include lime.graphics.Image).
     Context.onGenerate(function(types) {
@@ -126,6 +173,7 @@ class NXLibraryPatches
       var patched:Bool = false;
       var textureFound:Bool = false;
       var texturePatched:Bool = false;
+      var lodBiasPatched:Bool = false;
       for (type in types)
       {
         switch (type)
@@ -142,6 +190,7 @@ class NXLibraryPatches
             {
               textureFound = true;
               texturePatched = cls.meta.has(':nxBanded');
+              lodBiasPatched = cls.meta.has(':nxNoLodBias');
             }
           default:
         }
@@ -154,6 +203,11 @@ class NXLibraryPatches
       if (checkUpload && (!textureFound || !texturePatched))
       {
         Context.fatalError('NXLibraryPatches: openfl.display3D.textures.TextureBase was ${textureFound ? "typed without the banded upload patch" : "not found"}. Check configureCustomMacros in project.hxp.',
+          Context.currentPos());
+      }
+      if (checkLodBias && (!textureFound || !lodBiasPatched))
+      {
+        Context.fatalError('NXLibraryPatches: openfl.display3D.textures.TextureBase was ${textureFound ? "typed without the GLES sampler state patch" : "not found"}. Check configureCustomMacros in project.hxp.',
           Context.currentPos());
       }
     });

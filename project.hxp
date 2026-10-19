@@ -1189,6 +1189,9 @@ class Project extends HXProject
     // Switch: upload textures of 16 MiB or more in row bands so Mesa never stages a whole image at once (INC-49).
     // See source/nx/NXTextureUpload.hx. -Dnx_legacy_texture_upload keeps OpenFL's single texImage2D.
     if (isSwitch()) addHaxeMacro("addMetadata('@:build(nx.macro.NXLibraryPatches.bandedTextureUpload())', 'openfl.display3D.textures.TextureBase')");
+    // Switch: no GL_TEXTURE_LOD_BIAS in sampler state changes; the context is OpenGL ES, where it raises GL_INVALID_ENUM
+    // (the 0x500 seen every frame). -Dnx_stock_lod_bias keeps OpenFL's call.
+    if (isSwitch()) addHaxeMacro("addMetadata('@:build(nx.macro.NXLibraryPatches.glesSamplerState())', 'openfl.display3D.textures.TextureBase')");
   }
 
   function configureOutputDir()

@@ -121,7 +121,37 @@ static volatile u64 nx_drv_lastQueueTick = 0;
 static volatile int nx_drv_legacy = 0;
 static volatile int nx_drv_injectMs = 0;
 
+// Audio thread priority (INC-54). SDL creates its audio thread with the lowest priority an application may use
+// (0x3B), the same as the hxcpp GC workers and the video prefetch thread, so a collection can hold it past its two
+// 23 ms buffers (an audible gap). nx_drv_prioRequest = 1 moves it to 0x2B on core 1: 0x2B also outranks the main
+// thread (0x2C), so it must not share core 0. The audio thread applies it itself in WaitDevice, because it starts
+// before the game reads its options.
+static volatile int nx_drv_prioRequest = 0;
+static int nx_drv_prioApplied = 0;
+static volatile int nx_drv_prioDefault = -1, nx_drv_prioNow = -1, nx_drv_coreNow = -1;
+static volatile u32 nx_drv_prioRc = 0;
+
 static inline int nx_tickMs(u64 ticks) { return (int)(armTicksToNs(ticks) / 1000000ULL); }
+
+static void nx_updateThreadPriority(void)
+{
+  if (nx_drv_prioDefault < 0)
+  {
+    s32 p = 0;
+    if (R_SUCCEEDED(svcGetThreadPriority(&p, CUR_THREAD_HANDLE))) nx_drv_prioDefault = p;
+    nx_drv_prioNow = nx_drv_prioDefault;
+  }
+  if (nx_drv_prioRequest == 1 && !nx_drv_prioApplied)
+  {
+    nx_drv_prioApplied = 1;
+    Result rc = svcSetThreadCoreMask(CUR_THREAD_HANDLE, 1, 1u << 1);
+    if (R_SUCCEEDED(rc)) rc = svcSetThreadPriority(CUR_THREAD_HANDLE, 0x2B);
+    nx_drv_prioRc = rc;
+    s32 p = 0;
+    if (R_SUCCEEDED(svcGetThreadPriority(&p, CUR_THREAD_HANDLE))) nx_drv_prioNow = p;
+  }
+  nx_drv_coreNow = (int)svcGetCurrentProcessorNumber();
+}
 
 static int nx_findFreeBuffer(struct SDL_PrivateAudioData *h)
 {
@@ -286,6 +316,7 @@ static void NXAUDIO_PlayDevice(SDL_AudioDevice *dev)
 
 static void NXAUDIO_WaitDevice(SDL_AudioDevice *dev)
 {
+  nx_updateThreadPriority();
   if (nx_drv_legacy) return;
   struct SDL_PrivateAudioData *h = dev->hidden;
   u64 start = armGetSystemTick();
@@ -335,6 +366,10 @@ static void NXAUDIO_CloseDevice(SDL_AudioDevice *dev)
 static void NXAUDIO_ThreadInit(SDL_AudioDevice *dev)
 {
   (void)dev;
+  // Runs on a new SDL audio thread, which starts at SDL default priority: forget what was applied to an earlier one.
+  nx_drv_prioApplied = 0;
+  nx_drv_prioDefault = -1;
+  nx_updateThreadPriority();
 }
 
 static SDL_bool NXAUDIO_Init(SDL_AudioDriverImpl *impl)
@@ -386,9 +421,40 @@ class NXAudioDriver
     var maxWait:Int = untyped __cpp__('nx_drv_maxWaitMs');
     var sinceQueue:Int = untyped __cpp__('(nx_drv_lastQueueTick == 0) ? -1 : (int)(armTicksToNs(armGetSystemTick() - nx_drv_lastQueueTick) / 1000000ULL)');
     var legacy:Int = untyped __cpp__('nx_drv_legacy');
-    return 'drv=nx${legacy != 0 ? "-LEGACY" : ""} ${freq}Hz/${channels}ch/${samples} opened=$opened queued=$queued underruns=$underruns restarts=$restarts watchdog=$watchdog maxWait=${maxWait}ms lastQueue=${sinceQueue}ms';
+    return 'drv=nx${legacy != 0 ? "-LEGACY" : ""} ${freq}Hz/${channels}ch/${samples} opened=$opened queued=$queued underruns=$underruns'
+      + ' restarts=$restarts watchdog=$watchdog maxWait=${maxWait}ms lastQueue=${sinceQueue}ms ${threadPriority()}';
     #else
     return 'drv=n/a';
+    #end
+  }
+
+  /**
+   * Asks the SDL audio thread to move to priority 0x2B on core 1 (INC-54). It takes effect at the thread's next
+   * buffer and cannot be undone without a restart. Off by default until a long console session confirms it helps.
+   */
+  public static function setHighThreadPriority(enabled:Bool):Void
+  {
+    #if (switch && cpp)
+    untyped __cpp__('nx_drv_prioRequest = {0} ? 1 : 0', enabled);
+    #end
+  }
+
+  /**
+   * Audio thread priority and core for the logs, e.g. 'prio=0x2B(default 0x3B) core=1'.
+   */
+  public static function threadPriority():String
+  {
+    #if (switch && cpp)
+    var now:Int = untyped __cpp__('nx_drv_prioNow');
+    if (now < 0) return 'prio=?';
+    var def:Int = untyped __cpp__('nx_drv_prioDefault');
+    var core:Int = untyped __cpp__('nx_drv_coreNow');
+    var rc:Int = untyped __cpp__('(int)nx_drv_prioRc');
+    var defaultNote:String = (now != def) ? '(default 0x${StringTools.hex(def)})' : '';
+    var rcNote:String = (rc != 0) ? ' rc=0x${StringTools.hex(rc)}' : '';
+    return 'prio=0x${StringTools.hex(now)}$defaultNote core=$core$rcNote';
+    #else
+    return 'prio=n/a';
     #end
   }
 
