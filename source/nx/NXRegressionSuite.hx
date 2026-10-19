@@ -146,7 +146,7 @@ class NXRegressionSuite
    * plus the heap state afterwards: the heaviest week sets the memory the game must always keep available, and the
    * second round shows whether a long session still finds its large blocks (INC-49, INC-42).
    */
-  public static function startMemoryBudget():Void
+  public static function startMemoryBudget(rounds:Int = 2):Void
   {
     captureSongFrames = false;
     skipConversations = true;
@@ -171,7 +171,7 @@ class NXRegressionSuite
     ];
     memoryFloors = new Map<String, Float>();
     var weeks:Array<String> = ["tutorial", "week1", "week2", "week3", "week4", "week5", "week6", "week7", "weekend1", "sserafim"];
-    for (round in 1...3)
+    for (round in 1...(rounds + 1))
     {
       for (week in weeks)
       {
@@ -198,11 +198,11 @@ class NXRegressionSuite
     }
     steps.push(
       {
-        name: "Round 2 vs Round 1: no memory growth at the end of the round",
+        name: "Each round vs the previous one: no memory growth at the end of the round",
         covers: "GC / purge leaks",
         timeout: 5,
         enter: () -> {},
-        poll: () -> compareRounds(150.0, "sserafim")
+        poll: () -> compareRounds(150.0, "sserafim", rounds)
       });
     results = [];
     index = -1;
@@ -2388,7 +2388,7 @@ class NXRegressionSuite
    * fonts, the GC growing to its working size), so round 1 vs round 2 there measures warm-up, not leaks (MEMORY_BUDGET:
    * the floor climbs from 415 to 795 MB during round 1, then stays at 790-840 MB through round 2).
    */
-  static function compareRounds(maxGrowthMb:Float, endLabel:String):Null<Bool>
+  static function compareRounds(maxGrowthMb:Float, endLabel:String, rounds:Int = 2):Null<Bool>
   {
     for (label => r2 in memoryFloors)
     {
@@ -2397,19 +2397,22 @@ class NXRegressionSuite
       if (r1 == null) continue;
       trace('[AUTOTEST] Round floors ${label.substr(3)}: round 1 = ${Math.round(r1)} MB, round 2 = ${Math.round(r2)} MB (warm-up included, not checked)');
     }
-    var r1End:Null<Float> = memoryFloors.get('R1-$endLabel');
-    var r2End:Null<Float> = memoryFloors.get('R2-$endLabel');
-    if (r1End == null || r2End == null)
+    for (round in 2...(rounds + 1))
     {
-      failReason = 'missing end-of-round memory floor for $endLabel';
-      return false;
-    }
-    var growth:Float = r2End - r1End;
-    trace('[AUTOTEST] Leak check (end of round, $endLabel): round 1 = ${Math.round(r1End)} MB, round 2 = ${Math.round(r2End)} MB, growth = ${Math.round(growth)} MB (limit $maxGrowthMb MB)');
-    if (growth > maxGrowthMb)
-    {
-      failReason = 'native memory grew ${Math.round(growth)} MB in one round (end of round, $endLabel; limit $maxGrowthMb MB)';
-      return false;
+      var before:Null<Float> = memoryFloors.get('R${round - 1}-$endLabel');
+      var after:Null<Float> = memoryFloors.get('R$round-$endLabel');
+      if (before == null || after == null)
+      {
+        failReason = 'missing end-of-round memory floor for $endLabel (round $round)';
+        return false;
+      }
+      var growth:Float = after - before;
+      trace('[AUTOTEST] Leak check (end of round, $endLabel): round ${round - 1} = ${Math.round(before)} MB, round $round = ${Math.round(after)} MB, growth = ${Math.round(growth)} MB (limit $maxGrowthMb MB)');
+      if (growth > maxGrowthMb)
+      {
+        failReason = 'native memory grew ${Math.round(growth)} MB in round $round (end of round, $endLabel; limit $maxGrowthMb MB)';
+        return false;
+      }
     }
     return true;
   }

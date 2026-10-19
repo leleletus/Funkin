@@ -58,7 +58,7 @@ class NXAutoTest
     stepState = 0;
     hasTriggeredEndSong = false;
     trace('[AUTOTEST] ========================================');
-    trace('[AUTOTEST] ACTIVATED on the console (L+R): ' + currentScenario);
+    trace('[AUTOTEST] ACTIVATED on the console (button combo): ' + currentScenario);
     trace('[AUTOTEST] ========================================');
     NXDevOverlay.show('AUTO $currentScenario: starting...');
     FlxG.signals.postUpdate.add(onPostUpdate);
@@ -180,7 +180,7 @@ class NXAutoTest
       }
       else if (scenario.indexOf("MEMORY_BUDGET") != -1)
       {
-        NXRegressionSuite.startMemoryBudget();
+        NXRegressionSuite.startMemoryBudget(scenario.indexOf("_X3") != -1 ? 3 : 2);
       }
       else if (scenario.indexOf("SOAK") != -1)
       {
@@ -295,7 +295,7 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1 || currentScenario.indexOf("MEMORY_BUDGET") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+    var globalTimeout:Float = (currentScenario.indexOf("MEMORY_BUDGET") != -1) ? 7200.0 : (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
       || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {

@@ -313,22 +313,32 @@ class NXPerformance
   static var autoPlayTriggered:Bool = false;
 
   /**
-   * Test builds: holding L+R for 3 s starts the PLAYTHROUGH run (Weekend 1, Week 7 and LE SSERAFIM in Story
-   * Mode, then Freeplay: Pico -> 2Hot, Boyfriend -> Spaghetti), all played to the end with botplay.
+   * Test builds: holding L+R or ZL+ZR for 3 s starts the run set in nx_devtools.cfg (combo_lr / combo_zlzr; empty or
+   * off = the combo does nothing). The repo cfg uses L+R for MEMORY_BUDGET_X3 (every Story week three times in a row,
+   * memory budget per week, ~30 min) and ZL+ZR for PLAYTHROUGH (Weekend 1, Week 7, LE SSERAFIM and two Freeplay songs
+   * played to the end with botplay).
    */
   static function checkAutoPlayCombo():Void
   {
-    var held:Bool = false;
+    var shoulders:Bool = false;
+    var triggers:Bool = false;
     try
     {
       if (NXMain.nxController != null)
-        held = NXMain.nxController.isPressed(nx.controls.NXControlButton.L) && NXMain.nxController.isPressed(nx.controls.NXControlButton.R);
+      {
+        shoulders = NXMain.nxController.isPressed(nx.controls.NXControlButton.L) && NXMain.nxController.isPressed(nx.controls.NXControlButton.R);
+        triggers = NXMain.nxController.isPressed(nx.controls.NXControlButton.ZL) && NXMain.nxController.isPressed(nx.controls.NXControlButton.ZR);
+      }
       else if (FlxG.gamepads != null)
-        held = FlxG.gamepads.anyPressed(LEFT_SHOULDER) && FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+      {
+        shoulders = FlxG.gamepads.anyPressed(LEFT_SHOULDER) && FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+        triggers = FlxG.gamepads.anyPressed(LEFT_TRIGGER) && FlxG.gamepads.anyPressed(RIGHT_TRIGGER);
+      }
     }
     catch (e:Dynamic) {}
 
-    if (!held)
+    var scenario:String = shoulders ? NXDevTools.comboScenario('lr') : (triggers ? NXDevTools.comboScenario('zlzr') : '');
+    if (shoulders == triggers || scenario == '') // neither, all four at once, or not enabled in nx_devtools.cfg
     {
       autoPlayHold = 0.0;
       autoPlayTriggered = false;
@@ -343,8 +353,8 @@ class NXPerformance
         NXDevOverlay.show('AUTO: a run is already active', 3.0);
         return;
       }
-      NXDeepTrace.logButtonEvent('L+R', 'held 3s: starting PLAYTHROUGH');
-      NXAutoTest.startRuntime('PLAYTHROUGH');
+      NXDeepTrace.logButtonEvent(shoulders ? 'L+R' : 'ZL+ZR', 'held 3s: starting $scenario');
+      NXAutoTest.startRuntime(scenario);
     }
   }
   #end

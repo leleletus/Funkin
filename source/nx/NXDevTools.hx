@@ -16,6 +16,8 @@ package nx;
  *   single_copy_decode=true  # false = lime's stock double-copy PNG decode, for A/B memory runs (INC-49)
  *   ordered_release=true     # false = Build 25 post-switch texture release (hash order, copies parked), A/B (INC-49)
  *   banded_upload=true       # false = OpenFL's single glTexImage2D (Mesa stages the whole image), A/B (INC-49)
+ *   combo_lr=MEMORY_BUDGET_X3   # run started by holding L+R for 3 s (empty or off = nothing)
+ *   combo_zlzr=PLAYTHROUGH      # run started by holding ZL+ZR for 3 s (empty or off = nothing)
  *
  * Automated tests (NXAutoTest) always run with botplay on. The botplay state is never saved, so a
  * save made with a test build cannot carry it into a release build.
@@ -27,6 +29,8 @@ class NXDevTools
   static var cfgBotplayToggle:Bool = true;
   static var cfgBotplayStart:Bool = false;
   static var cfgHeapCapMb:Int = 0;
+  static var cfgComboLR:String = '';
+  static var cfgComboZLZR:String = '';
   static var botplayOverride:Null<Bool> = null;
 
   /**
@@ -67,6 +71,10 @@ class NXDevTools
               NXTextureMemory.orderedRelease = value;
             case 'banded_upload':
               NXTextureUpload.enabled = value;
+            case 'combo_lr':
+              cfgComboLR = comboValue(raw);
+            case 'combo_zlzr':
+              cfgComboZLZR = comboValue(raw);
             default:
           }
         }
@@ -77,7 +85,7 @@ class NXDevTools
       source = 'defaults (nx_devtools.cfg unreadable: $e)';
     }
     #end
-    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} from $source');
+    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} combo_lr=${cfgComboLR == "" ? "off" : cfgComboLR} combo_zlzr=${cfgComboZLZR == "" ? "off" : cfgComboZLZR} from $source');
     #if switch
     NXDeepTrace.writeEntry('MEMORY', '[HEAP] boot: ${NXPerformance.describeHeapBounds()} | ${NXPerformance.describeHeap()}');
     // Citron's heap is ~98 MB larger than the console's: heap_cap_mb lets long-session tests run with the console's ceiling.
@@ -88,6 +96,20 @@ class NXDevTools
   /**
    * Whether the R3 botplay shortcut works in songs.
    */
+  static function comboValue(raw:String):String
+  {
+    return (raw == '' || raw == 'off' || raw == 'false' || raw == 'none') ? '' : raw.toUpperCase();
+  }
+
+  /**
+   * Run that a held button combo starts on the console ('lr' or 'zlzr'), as set in nx_devtools.cfg; '' = none.
+   */
+  public static function comboScenario(combo:String):String
+  {
+    init();
+    return (combo == 'lr') ? cfgComboLR : cfgComboZLZR;
+  }
+
   public static function botplayToggleAllowed():Bool
   {
     init();
