@@ -419,6 +419,11 @@ class NXDeepTrace
     return;
     #end
     #if sys
+    // Serialized: the video prefetch and image decode threads log too, and concurrent appends lost lines.
+    // Created on first use (the INIT lines, on the main thread, before any worker thread exists).
+    if (writeLock == null) writeLock = new sys.thread.Mutex();
+    var lock:sys.thread.Mutex = writeLock;
+    lock.acquire();
     try
     {
       if (logFilePath == null)
@@ -439,6 +444,11 @@ class NXDeepTrace
       f.close();
     }
     catch (e:Dynamic) {}
+    lock.release();
     #end
   }
+
+  #if sys
+  static var writeLock:Null<sys.thread.Mutex> = null;
+  #end
 }

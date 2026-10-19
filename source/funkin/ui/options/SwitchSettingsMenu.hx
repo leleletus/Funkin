@@ -102,32 +102,35 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
 
   function createPrefItems():Void
   {
-    createPrefItemCheckbox('Stage Shaders', 'Habilita efectos visuales avanzados y shaders de lluvia/escenario en Switch.', function(value:Bool):Void {
+    createPrefItemCheckbox('Stage Shaders', 'When enabled, stage shaders and visual effects such as rain are displayed.', function(value:Bool):Void {
       Preferences.switchEnableShaders = value;
     }, Preferences.switchEnableShaders);
 
-    createPrefItemCheckbox('Show Loading Screen', 'Muestra la pantalla de carga grafica entre canciones. Desactivado para transiciones directas 1:1 como PC.', function(value:Bool):Void {
+    createPrefItemCheckbox('Show Loading Screen', 'When enabled, a loading screen is shown between songs. When disabled, songs load directly, like on PC.', function(value:Bool):Void {
       Preferences.switchShowLoadingScreen = value;
     }, Preferences.switchShowLoadingScreen);
 
-    createPrefItemCheckbox('Verbose Audio Telemetry', 'Registra telemetria detallada de audio OpenAL y drift en los logs de la tarjeta SD.', function(value:Bool):Void {
+    #if NX_DEV_TOOLS
+    // Test builds only: public builds write no logs (INC-47), and the internal resolution is not implemented yet (INC-39).
+    createPrefItemCheckbox('Verbose Audio Telemetry', 'When enabled, detailed OpenAL audio and drift telemetry is written to the SD card logs.', function(value:Bool):Void {
       Preferences.switchVerboseAudioLog = value;
     }, Preferences.switchVerboseAudioLog);
 
-    createPrefItemEnum('Resolution Mode', 'Ajusta la resolucion de renderizado (720p es nativa portatil y optima para Tegra X1).', [
-      "720p Fijo" => "720p",
-      "Dinamico / Docked" => "Docked",
-      "540p Rendimiento" => "540p"
+    createPrefItemEnum('Resolution Mode', 'Rendering resolution (720p is native in handheld mode).', [
+      "Fixed 720p" => "720p",
+      "Dynamic / Docked" => "Docked",
+      "540p Performance" => "540p"
     ], function(key:String, value:String):Void {
       Preferences.switchResolutionMode = value;
     }, switch (Preferences.switchResolutionMode)
       {
-        case "540p": "540p Rendimiento";
-        case "Docked": "Dinamico / Docked";
-        default: "720p Fijo";
+        case "540p": "540p Performance";
+        case "Docked": "Dynamic / Docked";
+        default: "Fixed 720p";
       });
+    #end
 
-    createPrefItemCheckbox('Note Splashes', 'Efectos de particulas al golpear notas Sick. Desactivar reduce llamadas de dibujado.', function(value:Bool):Void {
+    createPrefItemCheckbox('Note Splashes', 'When enabled, particle effects appear when hitting Sick notes. Disabling them can improve performance.', function(value:Bool):Void {
       Preferences.switchNoteSplashes = value;
     }, Preferences.switchNoteSplashes);
   }

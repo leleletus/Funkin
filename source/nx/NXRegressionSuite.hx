@@ -479,6 +479,8 @@ class NXRegressionSuite
    * CUTSCENE_SKIP: every kind of cutscene handled exactly like upstream, with real SDL button presses:
    * - Video cutscenes (Weekend 1, Week 7): A does nothing; + opens the pause menu, "Restart Cutscene" plays it
    *   again from the start, "Skip Cutscene" skips it.
+   * - "Restart Cutscene" on a later sheet of Ugh: sheet 0 comes back from the prefetch thread, and again with every
+   *   prefetch declined (loaded on the main thread).
    * - Spaghetti's in-engine cutscene: the first A shows "Skip [ A ]", the second A skips it.
    * - Week 6 dialogue: A completes the line, A again shows the next one; + opens "Skip Dialogue".
    */
@@ -508,6 +510,24 @@ class NXRegressionSuite
           poll: () -> pauseAndQuitToMenu(StoryMenuState)
         });
     }
+    steps.push(
+      {
+        name: "Story Mode week7: Restart Cutscene on a later sheet, from the prefetch thread and with no room for a prefetch",
+        covers: "Cutscene skip",
+        timeout: 150,
+        enter: () -> launchStory("week7"),
+        poll: () -> videoRestartLaterSheet("ugh")
+      });
+    steps.push(
+      {
+        name: 'Pause -> exit to the Story menu',
+        covers: "Setup",
+        timeout: 40,
+        enter: () -> {
+          NXVideoPlayer.testDeclinePrefetch = false;
+        },
+        poll: () -> pauseAndQuitToMenu(StoryMenuState)
+      });
     steps.push(
       {
         name: "Story Mode Week 6: dialogue (A completes / advances, + -> Skip Dialogue)",
@@ -677,6 +697,131 @@ class NXRegressionSuite
           mark = now();
         }
       case 9:
+        if (songPlaying())
+        {
+          trace('[AUTOTEST] Skip Cutscene: $songId playing ${Math.round((now() - mark) * 10) / 10}s later');
+          return true;
+        }
+        if (now() - mark > 15.0)
+        {
+          failReason = 'Skip Cutscene did not start $songId (${describeState()})';
+          return false;
+        }
+    }
+    return null;
+  }
+
+  static var restartLoadsBefore:Int = 0;
+
+  /**
+   * "Restart Cutscene" pressed on a later sheet, twice. First sheet 0 comes back from the prefetch thread; then,
+   * with every prefetch declined (as on a tight heap), it must be loaded on the main thread instead of leaving the
+   * video frozen behind a closed pause menu (latent in Build 29). Ends with "Skip Cutscene".
+   */
+  static function videoRestartLaterSheet(songId:String):Null<Bool>
+  {
+    var result:Null<Bool> = videoRestartLaterSheetPoll(songId);
+    if (result != null) NXVideoPlayer.testDeclinePrefetch = false;
+    return result;
+  }
+
+  static function videoRestartLaterSheetPoll(songId:String):Null<Bool>
+  {
+    switch (phase)
+    {
+      case 0:
+        if (songIs(songId) && NXVideoPlayer.isCutscenePlaying()) phase = 1;
+        failReason = 'waiting for the $songId video cutscene (${describeState()})';
+      case 1, 6:
+        if (NXVideoPlayer.isCutscenePlaying() && NXVideoPlayer.sheetCount() < 2)
+        {
+          failReason = 'the $songId video has a single sheet; this step needs a later one';
+          return false;
+        }
+        failReason = 'the $songId video never reached a later sheet (sheet ${NXVideoPlayer.sheetIndex()} of ${NXVideoPlayer.sheetCount()})';
+        if (NXVideoPlayer.isCutscenePlaying() && NXVideoPlayer.sheetIndex() >= 1)
+        {
+          if (phase == 6)
+          {
+            NXVideoPlayer.testDeclinePrefetch = true;
+            restartLoadsBefore = NXVideoPlayer.restartMainThreadLoads;
+          }
+          trace('[AUTOTEST] $songId video on sheet ${NXVideoPlayer.sheetIndex()} of ${NXVideoPlayer.sheetCount()}'
+            + (phase == 6 ? ', every prefetch declined from now on' : '') + '. Pressing +');
+          NXInputInject.tap(NXInputInject.SWITCH_PLUS);
+          phase++;
+          mark = now();
+        }
+      case 2, 7, 11:
+        var pause = findPauseSubState();
+        if (pause != null && now() - mark >= 1.0)
+        {
+          phase++;
+          mark = now();
+        }
+        else if (pause == null && now() - mark > 2.0)
+        {
+          failReason = '+ did not open the pause menu during the video';
+          return false;
+        }
+      case 3, 8:
+        var chosen = choosePauseEntry("Restart Cutscene");
+        if (chosen == false) return false;
+        if (chosen == true)
+        {
+          phase++;
+          mark = now();
+        }
+      case 4, 9:
+        var audioTime:Float = @:privateAccess NXVideoPlayer.currentAudio?.time ?? -1;
+        var pending:Bool = @:privateAccess NXVideoPlayer.restartPending;
+        var back:Bool = NXVideoPlayer.isCutscenePlaying() && findPauseSubState() == null && NXVideoPlayer.sheetIndex() == 0 && !pending
+          && audioTime >= 0 && audioTime <= 2500;
+        if (back)
+        {
+          var direct:Int = NXVideoPlayer.restartMainThreadLoads - restartLoadsBefore;
+          trace('[AUTOTEST] Restart Cutscene: sheet 0 playing again ${Math.round((now() - mark) * 10) / 10}s later, audio ${Math.round(audioTime)}ms'
+            + (phase == 9 ? ', loaded on the main thread $direct time(s)' : ' (from the prefetch thread)'));
+          if (phase == 4)
+          {
+            phase = 6;
+            mark = now();
+          }
+          else
+          {
+            if (direct < 1)
+            {
+              failReason = 'with every prefetch declined, sheet 0 came back without the main-thread load';
+              return false;
+            }
+            NXVideoPlayer.testDeclinePrefetch = false;
+            phase = 10;
+            mark = now();
+          }
+        }
+        else if (now() - mark > 10.0)
+        {
+          failReason = 'Restart Cutscene on a later sheet left the video stuck (sheet ${NXVideoPlayer.sheetIndex()}, audio ${Math.round(audioTime)}ms, '
+            + 'restart pending $pending, prefetch declined ${NXVideoPlayer.testDeclinePrefetch})';
+          return false;
+        }
+      case 10:
+        // Same settle time as the first video step before + reopens the pause menu.
+        if (now() - mark >= 1.5)
+        {
+          NXInputInject.tap(NXInputInject.SWITCH_PLUS);
+          phase = 11;
+          mark = now();
+        }
+      case 12:
+        var chosen = choosePauseEntry("Skip Cutscene");
+        if (chosen == false) return false;
+        if (chosen == true)
+        {
+          phase = 13;
+          mark = now();
+        }
+      case 13:
         if (songPlaying())
         {
           trace('[AUTOTEST] Skip Cutscene: $songId playing ${Math.round((now() - mark) * 10) / 10}s later');
@@ -1353,6 +1498,7 @@ class NXRegressionSuite
   static function finish(success:Bool):Void
   {
     running = false;
+    NXVideoPlayer.testDeclinePrefetch = false;
     trace('[AUTOTEST] ===== REGRESSION_SUITE SUMMARY =====');
     for (line in results)
       trace('[AUTOTEST] $line');

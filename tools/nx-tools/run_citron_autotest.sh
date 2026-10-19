@@ -6,6 +6,11 @@ set -e
 
 SCENARIO="${1:-CUTSCENE_DARNELL}"
 TIMEOUT_SEC="${2:-150}"
+# PUBLIC_SMOKE: for public builds (no -DNX_DEV_TOOLS, so no autotests and no log). No autotest.cfg is written;
+# it passes if Citron is still running after TIMEOUT_SEC with no native crash and nothing was written under logs/.
+# Always launch Citron through this script: it sets APPIMAGELAUNCHER_DISABLE=1 and kills the whole process tree.
+SMOKE=0
+[ "$SCENARIO" = "PUBLIC_SMOKE" ] && SMOKE=1
 
 CITRON_BIN="/home/djvemo/Applications/citron_nightly-308bc267c-linux-x86_64-use-nopgo_f1ac8aeaee5c67403a7d350daea956eb.AppImage"
 NRO_PATH="/home/djvemo/Funkin/export/release/switch/bin/Funkin.nro"
@@ -36,9 +41,15 @@ else
 fi
 
 # 2. Configurar archivo de prueba en SDMC
-echo "$SCENARIO" > "$CFG_FILE"
-echo "$SCENARIO" > "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
-echo "[AUTOTEST-RUNNER] Prepared autotest scenario '$SCENARIO' at $CFG_FILE (Start line: $START_LINE)"
+if [ "$SMOKE" = "1" ]; then
+    rm -f "$CFG_FILE" "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
+    SMOKE_STAMP=$(mktemp)
+    echo "[AUTOTEST-RUNNER] Public build smoke test: no autotest.cfg; pass = still running after ${TIMEOUT_SEC}s, no native crash, nothing written under logs/"
+else
+    echo "$SCENARIO" > "$CFG_FILE"
+    echo "$SCENARIO" > "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
+    echo "[AUTOTEST-RUNNER] Prepared autotest scenario '$SCENARIO' at $CFG_FILE (Start line: $START_LINE)"
+fi
 
 # Citron se lanza a traves del wrapper binfmt de AppImageLauncher: el emulador real es un proceso
 # nieto (/tmp/.mount_citro*/bin/citron, ~10 GB RSS). Matar solo $! lo dejaba huerfano, por eso se
@@ -93,7 +104,7 @@ while [ "$ELAPSED" -lt "$TIMEOUT_SEC" ]; do
         break
     fi
 
-    if [ -f "$LOG_FILE" ]; then
+    if [ "$SMOKE" = "0" ] && [ -f "$LOG_FILE" ]; then
         NEW_LINES=$(tail -n +"$START_LINE" "$LOG_FILE" 2>/dev/null || true)
 
         if echo "$NEW_LINES" | grep -q "COMPLETED SUCCESSFULLY"; then
@@ -119,6 +130,18 @@ while [ "$ELAPSED" -lt "$TIMEOUT_SEC" ]; do
         break
     fi
 done
+
+if [ "$SMOKE" = "1" ] && [ "$STATUS" = "TIMEOUT" ]; then
+    WRITTEN=$(find "$SDMC_DIR/logs" -newer "$SMOKE_STAMP" -type f 2>/dev/null || true)
+    if [ -n "$WRITTEN" ]; then
+        echo "[AUTOTEST-RUNNER] The public build wrote under logs/:"
+        echo "$WRITTEN"
+        STATUS="WROTE_LOGS"
+    else
+        STATUS="SUCCESS"
+    fi
+fi
+[ -n "${SMOKE_STAMP:-}" ] && rm -f "$SMOKE_STAMP"
 
 echo "[AUTOTEST-RUNNER] Test run finished with status: $STATUS (Elapsed: ${ELAPSED}s)"
 echo "--------------------------------------------------"

@@ -223,7 +223,8 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     }
     if (this.advancePrompt != null)
     {
-      this.advancePrompt.kill();
+      // Destroyed, not killed: the reference is dropped here, and a killed FlxText keeps its text graphic cached.
+      this.advancePrompt.destroy();
       this.advancePrompt = null;
     }
     this.clear();

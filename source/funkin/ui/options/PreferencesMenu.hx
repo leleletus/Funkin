@@ -174,7 +174,7 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     #end
 
     #if switch
-    createPrefItemButton('Nintendo Switch', 'Ajustes dedicados de hardware, rendimiento y telemetria de Nintendo Switch.', function() {
+    createPrefItemButton('Nintendo Switch', 'Nintendo Switch hardware and performance settings.', function() {
       codex.switchPage(SwitchSettings);
     });
     #end

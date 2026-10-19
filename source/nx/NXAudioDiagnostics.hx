@@ -153,6 +153,8 @@ class NXAudioDiagnostics
       frameDropsCount++;
     }
 
+    #if NX_DEV_TOOLS
+    // Test builds only: public builds write nothing to the SD card, even with the option saved from a test build (INC-47).
     var now:Float = Sys.time();
     if (now - lastTelemetryTime >= TELEMETRY_INTERVAL)
     {
@@ -162,6 +164,7 @@ class NXAudioDiagnostics
         logTelemetry();
       }
     }
+    #end
   }
 
   static function logTelemetry():Void

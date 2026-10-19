@@ -58,10 +58,25 @@ class NXVideoPlayer
   static var prefetchGen:Int = 0;
   #end
 
-  static function prefetchNextSheet(nextIndex:Int):Void
+  /**
+   * CUTSCENE_SKIP sets this to make every prefetch decline as if there were no room for two sheets. Declared in
+   * every build because the test classes compile everywhere; it only has an effect in test builds.
+   */
+  public static var testDeclinePrefetch:Bool = false;
+
+  /**
+   * How many restarts loaded sheet 0 on the main thread because no prefetch was coming for it (CUTSCENE_SKIP).
+   */
+  public static var restartMainThreadLoads(default, null):Int = 0;
+
+  /**
+   * Decodes sheet `nextIndex` on a background thread. Returns false when no prefetch is coming for it (no room for
+   * two sheets, or the cutscene is not playing), so a caller waiting for that sheet must load it itself.
+   */
+  static function prefetchNextSheet(nextIndex:Int):Bool
   {
     #if sys
-    if (nextIndex >= totalSheets || !isPlaying) return;
+    if (nextIndex >= totalSheets || !isPlaying) return false;
 
     if (prefetchMutex == null) prefetchMutex = new sys.thread.Mutex();
 
@@ -69,7 +84,7 @@ class NXVideoPlayer
     if (isPrefetching || prefetchedSheetIndex == nextIndex)
     {
       prefetchMutex.release();
-      return;
+      return true;
     }
     #if switch
     // Prefetch only with room for this sheet and the next one: on a tight heap the decode thread and the main thread
@@ -77,11 +92,15 @@ class NXVideoPlayer
     // (hxcpp "Memory Exhausted", console 2026-10-19 03:26, 2hot cutscene). Skipped, the next sheet is decoded on the
     // main thread at the switch instead (a short hitch, no crash).
     var sheetBytes:Float = (activeBitmapData != null) ? activeBitmapData.width * 4.0 * activeBitmapData.height : 0.0;
-    if (sheetBytes > 0 && nx.NXPerformance.getLargestAllocatableMB() * 1048576.0 < 2.0 * sheetBytes + 16.0 * 1048576.0)
+    var noRoom:Bool = sheetBytes > 0 && nx.NXPerformance.getLargestAllocatableMB() * 1048576.0 < 2.0 * sheetBytes + 16.0 * 1048576.0;
+    #if NX_DEV_TOOLS
+    if (testDeclinePrefetch) noRoom = true;
+    #end
+    if (noRoom)
     {
       prefetchMutex.release();
       trace('[NXVideoPlayer] Prefetch of sheet $nextIndex skipped: no room for two sheets');
-      return;
+      return false;
     }
     #end
     isPrefetching = true;
@@ -176,8 +195,36 @@ class NXVideoPlayer
         }
       }
     });
+    return true;
+    #else
+    return false;
     #end
   }
+
+  #if sys
+  /**
+   * Frees a decoded sheet waiting in the prefetch slot. Call with prefetchMutex held.
+   */
+  static function releasePrefetchedLocked():Void
+  {
+    if (prefetchedImage != null)
+    {
+      if (prefetchedImage.buffer != null)
+      {
+        if (prefetchedImage.buffer.data != null)
+        {
+          prefetchedImage.buffer.data.buffer = null;
+        }
+        prefetchedImage.buffer.data = null;
+      }
+      prefetchedImage.data = null;
+      prefetchedImage.buffer = null;
+    }
+    prefetchedImage = null;
+    prefetchedXml = null;
+    prefetchedSheetIndex = -1;
+  }
+  #end
 
   static function isStalePrefetch(gen:Int):Bool
   {
@@ -865,9 +912,16 @@ class NXVideoPlayer
   static var restartPending:Bool = false;
 
   /**
+   * Set once a restart has asked the prefetch thread for sheet 0. If sheet 0 is still missing after that (the
+   * prefetch was declined for lack of room, or its decode failed), updateRestart() loads it on the main thread.
+   */
+  static var restartPrefetchAsked:Bool = false;
+
+  /**
    * Plays the active cutscene again from the beginning ("Restart Cutscene" in the pause menu) and resumes
-   * it, like upstream's restartVideo(). Never blocks the main thread: on sheet 0 it only rewinds the audio;
-   * on a later sheet, sheet 0 is decoded by the prefetch thread and playback restarts once it is ready.
+   * it, like upstream's restartVideo(). On sheet 0 it only rewinds the audio; on a later sheet, sheet 0 is
+   * decoded by the prefetch thread and playback restarts once it is ready (on the main thread, with a short
+   * hitch, when there is no room for a prefetch).
    */
   public static function restart():Bool
   {
@@ -885,6 +939,7 @@ class NXVideoPlayer
     }
     catch (e:Dynamic) {}
     restartPending = true;
+    restartPrefetchAsked = false;
     trace('[NXVideoPlayer] Restart: waiting for sheet 0 of $currentVideoName from the prefetch thread');
     return true;
   }
@@ -907,7 +962,8 @@ class NXVideoPlayer
   }
 
   /**
-   * Restart in progress: schedule sheet 0 and switch to it as soon as the prefetch thread has it.
+   * Restart in progress: schedule sheet 0 and switch to it as soon as the prefetch thread has it. If no prefetch
+   * is coming for it, load it here instead of leaving the video frozen.
    */
   static function updateRestart():Void
   {
@@ -919,8 +975,19 @@ class NXVideoPlayer
     prefetchMutex.release();
     if (!ready)
     {
-      if (!busy) prefetchNextSheet(0);
-      return;
+      if (busy) return;
+      if (!restartPrefetchAsked)
+      {
+        restartPrefetchAsked = true;
+        if (prefetchNextSheet(0)) return;
+      }
+      // Declined (no room for two sheets) or failed: drop any other sheet waiting in the prefetch slot and decode
+      // sheet 0 on this thread below (loadAndPlaySheet falls back to a direct load).
+      prefetchMutex.acquire();
+      releasePrefetchedLocked();
+      prefetchMutex.release();
+      restartMainThreadLoads++;
+      trace('[NXVideoPlayer] Restart: no prefetch for sheet 0, loading it on the main thread');
     }
     #end
     currentSheetIndex = 0;
@@ -969,22 +1036,7 @@ class NXVideoPlayer
     if (prefetchMutex != null)
     {
       prefetchMutex.acquire();
-      if (prefetchedImage != null)
-      {
-        if (prefetchedImage.buffer != null)
-        {
-          if (prefetchedImage.buffer.data != null)
-          {
-            prefetchedImage.buffer.data.buffer = null;
-          }
-          prefetchedImage.buffer.data = null;
-        }
-        prefetchedImage.data = null;
-        prefetchedImage.buffer = null;
-      }
-      prefetchedImage = null;
-      prefetchedXml = null;
-      prefetchedSheetIndex = -1;
+      releasePrefetchedLocked();
       isPrefetching = false;
       prefetchGen++;
       prefetchMutex.release();
