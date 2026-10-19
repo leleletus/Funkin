@@ -644,6 +644,14 @@ class PauseSubState extends MusicBeatSubState
     {
       resume(this);
     }
+    #if switch
+    else if (controls.BACK_P)
+    {
+      // Nintendo convention: B leaves the menu (Change Difficulty goes back to the main list).
+      if (currentMode == PauseMode.Difficulty) switchMode(this, PauseMode.Standard);
+      else resume(this);
+    }
+    #end
   }
 
   function handleTouchInputs():Void

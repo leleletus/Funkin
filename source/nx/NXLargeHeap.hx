@@ -1,7 +1,7 @@
 package nx;
 
 /**
- * Separate region for large blocks (INC-49, INC-42).
+ * Separate region for large and medium blocks (INC-49, INC-42, INC-53).
  *
  * newlib's malloc (dlmalloc 2.6) has no mmap threshold: on Switch every block, small or large, comes from the same
  * sbrk arena. After a long session the arena was full of holes: ~2.2 GB free in SOAK but no hole of 91-168 MiB,
@@ -9,9 +9,13 @@ package nx;
  *
  * This class replaces the public allocator entry points (malloc, free, realloc, calloc, memalign, aligned_alloc,
  * valloc, pvalloc, malloc_usable_size, reallocf) at link time, like NXAudioDriver replaces SDL's audio driver.
- * Requests of 2 MiB or more (textures and GPU staging from Mesa, decoded images, audio buffers, large GC objects)
+ * Requests of 128 KiB or more (textures and GPU staging from Mesa, decoded images, audio buffers, large GC objects)
  * get a span of 64 KiB granules from a region at the top of the heap that only large blocks use, so freed blocks
- * coalesce again. Everything else keeps using newlib (its _r implementations are untouched). The region grows
+ * coalesce again. 128 KiB and not 2 MiB (Build 29): flixel-animate bakes ~400 masked frames while LE SSERAFIM loads,
+ * and Mesa frees their temporary textures only after the next present, so ~700 MB of 150 KB-1 MB blocks piled up in
+ * newlib in one frame; the GC blocks allocated meanwhile stayed between them and newlib was left with ~970 MB of
+ * holes no larger than 42 MB (console, 2026-10-19). In the region the burst coalesces again when it is freed; the
+ * GC blocks (1 MiB, long-lived) stay in newlib. Everything else keeps using newlib (its _r implementations are untouched). The region grows
  * downwards and gives its bottom back to newlib when it frees, moving fake_heap_end (libnx's sbrk reads it on
  * every call), and always leaves newlib 128 MiB to grow. If the region cannot serve a large request, newlib does,
  * as before; if newlib cannot serve a small one, the region does.
@@ -34,7 +38,7 @@ extern "C" {
 }
 
 #define NXL_GRANULE ((uintptr_t)64 << 10)
-#define NXL_MIN_REQUEST ((size_t)2 << 20)
+#define NXL_MIN_REQUEST ((size_t)128 << 10)
 #define NXL_NEWLIB_MARGIN ((uintptr_t)128 << 20)
 #define NXL_MAGIC 0x31454752414C584EULL
 

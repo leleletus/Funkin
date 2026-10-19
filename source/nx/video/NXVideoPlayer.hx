@@ -71,6 +71,19 @@ class NXVideoPlayer
       prefetchMutex.release();
       return;
     }
+    #if switch
+    // Prefetch only with room for this sheet and the next one: on a tight heap the decode thread and the main thread
+    // (uploading the current sheet) both need a sheet-sized block, and a failed large allocation aborts the game
+    // (hxcpp "Memory Exhausted", console 2026-10-19 03:26, 2hot cutscene). Skipped, the next sheet is decoded on the
+    // main thread at the switch instead (a short hitch, no crash).
+    var sheetBytes:Float = (activeBitmapData != null) ? activeBitmapData.width * 4.0 * activeBitmapData.height : 0.0;
+    if (sheetBytes > 0 && nx.NXPerformance.getLargestAllocatableMB() * 1048576.0 < 2.0 * sheetBytes + 16.0 * 1048576.0)
+    {
+      prefetchMutex.release();
+      trace('[NXVideoPlayer] Prefetch of sheet $nextIndex skipped: no room for two sheets');
+      return;
+    }
+    #end
     isPrefetching = true;
     var gen:Int = prefetchGen;
     prefetchMutex.release();
