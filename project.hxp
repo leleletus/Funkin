@@ -1183,6 +1183,9 @@ class Project extends HXProject
   {
     // This macro allows addition of new functionality to existing Flixel. -->
     addHaxeMacro("addMetadata('@:build(funkin.util.macro.FlxMacro.buildFlxBasic())', 'flixel.FlxBasic')");
+
+    // Switch: decode images with one full-size block instead of two (INC-49). See source/nx/NXImageDecode.hx.
+    if (isSwitch()) addHaxeMacro("addMetadata('@:build(nx.macro.NXLibraryPatches.singleCopyImageDecode())', 'lime.graphics.Image')");
   }
 
   function configureOutputDir()

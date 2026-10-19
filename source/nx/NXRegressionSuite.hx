@@ -64,6 +64,7 @@ class NXRegressionSuite
    */
   public static function start(firstStep:Int = 1):Void
   {
+    captureSongFrames = true;
     steps = buildSteps();
     results = [];
     index = Std.int(Math.max(0, firstStep - 1)) - 1;
@@ -82,6 +83,7 @@ class NXRegressionSuite
    */
   public static function startSoak():Void
   {
+    captureSongFrames = true;
     steps = [];
     memoryFloors = new Map<String, Float>();
     for (round in 1...3)
@@ -304,6 +306,7 @@ class NXRegressionSuite
    */
   public static function startPlaythrough():Void
   {
+    captureSongFrames = true;
     fullLength = true;
     steps = [];
     for (week in ["weekend1", "week7", "sserafim"])
@@ -391,6 +394,7 @@ class NXRegressionSuite
    */
   public static function startCutsceneSkip():Void
   {
+    captureSongFrames = true;
     fullLength = false;
     steps = [];
     for (entry in [["weekend1", "darnell"], ["week7", "ugh"]])
@@ -680,13 +684,208 @@ class NXRegressionSuite
   }
 
   /**
+   * INC49_REPRO: replays the console session that crashed in INC-49 (Build 22, log 12:04-12:18): Story LE SSERAFIM
+   * three times picked from the Story menu (cutscene watched in runs 1-2, skipped with A in run 3; Results held
+   * so that END_SONG -> next state takes ~8.4 / 4.2 / 75.4 s like the console; four HOME/Sleep suspensions of
+   * 7.6/8/16/19.2 s at music 144.2/148.9/158.8/161.6 s in run 3), then Story Week 7, whose Ugh PlayState.create
+   * decodes gfTankmen.png (128 MiB). The console heap (~3110 MB) is applied here, so Citron replays the same ceiling.
+   */
+  public static function startInc49Repro():Void
+  {
+    fullLength = true;
+    captureSongFrames = false;
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] INC49_REPRO ${NXPerformance.capHeap(INC49_HEAP_CAP_MB)}');
+    steps = [
+      {
+        name: "Console heap ceiling applied",
+        covers: "Setup",
+        timeout: 5,
+        enter: () -> {},
+        poll: () -> {
+          var mb:Float = NXPerformance.getHeapTotalMB();
+          if (mb > INC49_HEAP_CAP_MB + 1)
+          {
+            failReason = 'heap is ${Math.round(mb)} MB, the replay needs the console ceiling (${INC49_HEAP_CAP_MB} MB)';
+            return false;
+          }
+          return true;
+        }
+      }
+    ];
+    var holds:Array<Float> = [6.2, 2.0, 73.2];
+    for (run in 1...4)
+    {
+      steps.push(
+        {
+          name: 'Story Mode LE SSERAFIM run $run${run == 3 ? " (cutscene skipped, 4 suspensions)" : ""}',
+          covers: "INC-49 replay",
+          timeout: 900,
+          enter: () -> {
+            suspendIndex = 0;
+            skipTaps = 0;
+            cutsceneSeenAt = -1.0;
+            introSongStarted = false;
+            launchStoryLikePlayer("sserafim");
+          },
+          poll: () -> (run == 3) ? playSpaghettiWithSuspends(holds[2]) : playStoryWeek("sserafim", run, holds[run - 1])
+        });
+      steps.push(
+        {
+          name: 'Memory after LE SSERAFIM run $run',
+          covers: "Memory",
+          timeout: 20,
+          enter: () -> {},
+          poll: () -> logCheckpoint('after spaghetti $run')
+        });
+    }
+    steps.push(
+      {
+        name: "Story Mode Week 7: Ugh loads (INC-49 crash site) and plays",
+        covers: "INC-49",
+        timeout: 600,
+        enter: () -> launchStoryLikePlayer("week7"),
+        poll: () -> waitSongPlaying("ugh", 10.0)
+      });
+    steps.push(
+      {
+        name: "Memory with Ugh playing",
+        covers: "Memory",
+        timeout: 20,
+        enter: () -> {},
+        poll: () -> logCheckpoint('ugh playing')
+      });
+    results = [];
+    index = -1;
+    running = true;
+    trace('[AUTOTEST] INC49_REPRO: ${steps.length} steps');
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] INC49_REPRO start: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()}');
+    nextStep();
+  }
+
+  static inline final INC49_HEAP_CAP_MB:Int = 3110;
+  // Music positions of the four suspensions in the console log ([PAUSE] lines 552/758/1064/1169).
+  static final SUSPEND_AT_MUSIC_MS:Array<Float> = [144219, 148886, 158847, 161586];
+  static final SUSPEND_SECONDS:Array<Float> = [7.6, 8.0, 16.0, 19.2];
+  static var suspendIndex:Int = 0;
+  static var skipTaps:Int = 0;
+  static var cutsceneSeenAt:Float = -1.0;
+  static var skipGameTime:Float = 0.0;
+  static var introSongStarted:Bool = false;
+  static var pauseSeenAt:Float = -1.0;
+
+  /**
+   * Third Spaghetti of INC49_REPRO: skip the cutscene like the console (A ~3.9 s in, A again once the prompt is
+   * fully shown), suspend four times at the logged music positions, resume ~1 s after each pause menu opens, then
+   * finish the week through the normal driver.
+   */
+  static function playSpaghettiWithSuspends(resultsHold:Float):Null<Bool>
+  {
+    var ps = PlayState.instance;
+    var pause = findPauseSubState();
+    if (pause != null)
+    {
+      if (pauseSeenAt < 0) pauseSeenAt = now();
+      if (now() - pauseSeenAt > 1.0)
+      {
+        trace('[AUTOTEST] Resuming after suspension ${suspendIndex}');
+        @:privateAccess PauseSubState.resume(pause);
+        pauseSeenAt = -1.0;
+      }
+      failReason = 'pause menu after a suspension';
+      return null;
+    }
+    pauseSeenAt = -1.0;
+    if (ps != null && songIs("spaghetti"))
+    {
+      // Only the intro cutscene is skipped: Spaghetti also has an ending cutscene ("See you") the console watched.
+      if (songPlaying()) introSongStarted = true;
+      if (ps.isInCutscene && !introSongStarted)
+      {
+        if (cutsceneSeenAt < 0) cutsceneSeenAt = now();
+        if (skipTaps == 0 && now() - cutsceneSeenAt >= 3.9)
+        {
+          if (!NXInputInject.tap(NXInputInject.SWITCH_A))
+          {
+            failReason = 'no controller connected to skip the cutscene';
+            return false;
+          }
+          skipTaps = 1;
+          skipGameTime = 0.0;
+          trace('[AUTOTEST] Cutscene skip: first A');
+        }
+        else if (skipTaps >= 1)
+        {
+          skipGameTime += FlxG.elapsed;
+          var prompt = findSkipText();
+          var promptShown:Bool = prompt != null && prompt.alpha >= 0.999;
+          // Second A once the prompt tween (0.5 s) has finished; retry every 2 s of game time if the cutscene goes on.
+          // canSkipCutscene turns true 0.5 s after the first A (FlxTimer), when the prompt tween also ends.
+          if ((skipTaps == 1 && promptShown && skipGameTime >= 0.65) || (skipTaps == 1 && skipGameTime >= 1.0)
+            || (skipTaps >= 2 && skipGameTime >= 2.0))
+          {
+            if (skipTaps >= 4)
+            {
+              failReason = 'the Spaghetti cutscene did not end after ${skipTaps} A presses';
+              return false;
+            }
+            NXInputInject.tap(NXInputInject.SWITCH_A);
+            skipTaps++;
+            skipGameTime = 0.0;
+            trace('[AUTOTEST] Cutscene skip: A #$skipTaps');
+          }
+        }
+      }
+      var music = FlxG.sound.music;
+      if (songPlaying() && music != null && suspendIndex < SUSPEND_AT_MUSIC_MS.length && music.time >= SUSPEND_AT_MUSIC_MS[suspendIndex])
+      {
+        var seconds:Float = SUSPEND_SECONDS[suspendIndex];
+        trace('[AUTOTEST] Suspension ${suspendIndex + 1}: ${seconds}s at music ${Math.round(music.time)}ms');
+        suspendIndex++;
+        simulateFocusLoss(true);
+        Sys.sleep(seconds);
+        simulateFocusGain(true);
+        return null;
+      }
+    }
+    return playStoryWeek("sserafim", 3, resultsHold);
+  }
+
+  /**
+   * Picks a level in the open Story menu like a player (cursor moved to it, difficulty Hard, selectLevel), so the
+   * menu's own transition runs. Falls back to launching it directly when the menu is not open or the level is locked.
+   */
+  static function launchStoryLikePlayer(levelId:String):Void
+  {
+    @:privateAccess StoryMenuState.rememberedLevelId = levelId;
+    @:privateAccess StoryMenuState.rememberedDifficulty = "hard";
+    if (Std.isOfType(FlxG.state, StoryMenuState) && FlxG.state.subState == null)
+    {
+      var menu:StoryMenuState = cast FlxG.state;
+      var levels:Array<String> = @:privateAccess menu.levelList;
+      var target:Int = levels.indexOf(levelId);
+      var current:Int = levels.indexOf(@:privateAccess menu.currentLevelId);
+      var level = LevelRegistry.instance.fetchEntry(levelId);
+      if (target >= 0 && current >= 0 && level != null && level.isUnlocked())
+      {
+        @:privateAccess menu.changeLevel(target - current);
+        @:privateAccess menu.currentDifficultyId = "hard";
+        trace('[AUTOTEST] Story menu: selecting $levelId (Hard) like a player');
+        @:privateAccess menu.selectLevel();
+        return;
+      }
+    }
+    trace('[AUTOTEST] Story menu not usable for $levelId, launching it directly');
+    launchStory(levelId);
+  }
+
+  /**
    * Logs memory and heap state (PLAYTHROUGH checkpoints never fail, they leave evidence in the log).
    */
   static function logCheckpoint(label:String):Null<Bool>
   {
     if (now() - mark < 2.0) return null;
     NXDeepTrace.logMemorySnapshot('PLAYTHROUGH $label', false);
-    NXDeepTrace.writeEntry('MEMORY', '[HEAP] $label: ${NXPerformance.describeHeap()}');
+    NXDeepTrace.writeEntry('MEMORY', '[HEAP] $label: ${NXPerformance.describeHeap()} | decode ${NXImageDecode.describe()}');
     return true;
   }
 
@@ -1676,6 +1875,13 @@ class NXRegressionSuite
   static var pendingVisualCheck:String = "";
   static var songVisualRequested:Bool = false;
   static var visualRetries:Int = 0;
+  static var resultsOpenedAt:Float = -1.0;
+
+  /**
+   * Whether driveStorySong captures a frame of each song (visual check). INC49_REPRO turns it off: the console
+   * session it replays did not read back the framebuffer.
+   */
+  static var captureSongFrames:Bool = true;
 
   static function resetWeekTracking():Void
   {
@@ -1684,13 +1890,14 @@ class NXRegressionSuite
     songPhase = 0;
     cutsceneMark = -1.0;
     pendingVisualCheck = "";
+    resultsOpenedAt = -1.0;
   }
 
   /**
    * Plays a whole Story Mode week: every cutscene runs 2 s, every song 3 s, then Results are accepted.
    * Each song is checked for a visible stage (stage alive/visible, camGame visible, real frame not black).
    */
-  static function playStoryWeek(levelId:String, round:Int):Null<Bool>
+  static function playStoryWeek(levelId:String, round:Int, resultsHold:Float = 0.0):Null<Bool>
   {
     if (phase == 0)
     {
@@ -1704,7 +1911,8 @@ class NXRegressionSuite
     var results = findResults();
     if (results != null)
     {
-      if (now() - mark > 1.5)
+      if (resultsOpenedAt < 0) resultsOpenedAt = now();
+      if (now() - resultsOpenedAt >= resultsHold && now() - mark > 1.5)
       {
         tapAccept();
         mark = now();
@@ -1712,6 +1920,7 @@ class NXRegressionSuite
       failReason = 'Results open, accepting';
       return null;
     }
+    resultsOpenedAt = -1.0;
 
     if (Std.isOfType(FlxG.state, StoryMenuState) && weekSongs.length > 0)
     {
@@ -1782,9 +1991,12 @@ class NXRegressionSuite
             failReason = 'black stage in ${ps.currentSong.id}: stage=${stage != null} visible=${stage?.visible} alive=${stage?.alive} camGame=${ps.camGame.visible}/${ps.camGame.alpha}';
             return false;
           }
-          pendingVisualCheck = 'soak_r${round}_${ps.currentSong.id}';
-          NXAutoTest.lastCaptureName = "";
-          @:privateAccess NXAutoTest.requestFrameCapture(pendingVisualCheck);
+          if (captureSongFrames)
+          {
+            pendingVisualCheck = 'soak_r${round}_${ps.currentSong.id}';
+            NXAutoTest.lastCaptureName = "";
+            @:privateAccess NXAutoTest.requestFrameCapture(pendingVisualCheck);
+          }
         }
         if (fullLength)
         {

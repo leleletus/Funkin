@@ -98,25 +98,7 @@ class LoadingState extends MusicBeatSubState
             FunkinMemory.cacheNoteStyle(noteStyle);
           }
 
-          if (playParams.targetSong.songName == "2hot")
-          {
-            var spritesToCache = [
-              "wked1_cutscene_1_can",
-              "spraypaintExplosionEZ",
-              "SpraypaintExplosion",
-              "CanImpactParticle",
-              "spraycanAtlas/spritemap1"
-            ];
-            for (sprite in spritesToCache)
-            {
-              var path = Paths.image(sprite, "weekend1");
-              funkin.FunkinMemory.cacheTexture(path);
-              if (path.endsWith('spritemap1.png') #if FEATURE_COMPRESSED_TEXTURES || path.endsWith('spritemap1.astc') #end)
-              {
-                openfl.Assets.getBitmapData(path, true);
-              }
-            }
-          }
+          // 2Hot sprites are not preloaded on Switch: see the note in the direct path below (INC-32 / INC-49).
         }
       }
       onLoad();
@@ -396,6 +378,11 @@ class LoadingState extends MusicBeatSubState
           "shot4"
         ];
 
+        // Switch: these textures were decoded here while Lit Up or Freeplay were still alive, then destroyed by
+        // purgeCache(true) in preStateSwitch before PlayState exists, and 2hot.hxc caches the ones it needs again in
+        // onCreate after the pre-create flush. Decoding them here only stacked ~157 MB of pixels plus a second
+        // 90.8 MiB decode of spraycanAtlas on a fragmented heap: the INC-32 hardware crash site (INC-49).
+        #if !switch
         for (sprite in spritesToCache)
         {
           trace('Queueing $sprite to preload.');
@@ -412,6 +399,7 @@ class LoadingState extends MusicBeatSubState
           // return '${path} successfuly loaded.';
           // }, true);
         }
+        #end
 
         for (sound in soundsToCache)
         {

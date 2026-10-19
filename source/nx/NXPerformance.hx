@@ -9,7 +9,117 @@ import nx.NXMain;
 @:cppInclude("switch.h")
 @:cppInclude("malloc.h")
 @:cppFileCode('
-extern "C" { extern char* fake_heap_start; extern char* fake_heap_end; }
+#include <malloc.h>
+#include <reent.h>
+#include <stdio.h>
+extern "C" {
+  extern char* fake_heap_start;
+  extern char* fake_heap_end;
+  // newlib malloc state (dlmalloc 2.6.x): bins, peak arena and top padding. Read only, under __malloc_lock.
+  extern void* __malloc_av_[];
+  extern unsigned long __malloc_max_sbrked_mem;
+  extern unsigned long __malloc_top_pad;
+  extern struct mallinfo __malloc_current_mallinfo; // .arena = bytes obtained from sbrk (sbrked_mem)
+}
+
+struct nx_mchunk { size_t prev_size; size_t size; struct nx_mchunk *fd; struct nx_mchunk *bk; };
+
+struct nx_heapstat
+{
+  double total, used, freeAll, top, untouched, largestHole, allocBound, peakArena, start, end, brk;
+  int n16, n64, n128, n256, walked, truncated;
+};
+
+// Last probe result, read field by field from Haxe (main thread only).
+static struct nx_heapstat nx_hs;
+
+// Never allocates: one pass over the free bins and the top chunk, all under the (recursive) malloc lock, so every
+// number in a [HEAP] line comes from the same heap state. The old probe (malloc/free binary search) was removed by
+// the compiler and always reported 3071 MB.
+#define NX_WALK_CAP 200000
+static void nx_heapProbe(struct nx_heapstat *st)
+{
+  __malloc_lock(_REENT);
+  struct nx_mchunk *top = (struct nx_mchunk *)__malloc_av_[2];
+  size_t topSize = top->size & ~(size_t)3;
+  char *brk = (char *)top + topSize;
+  size_t arena = __malloc_current_mallinfo.arena;
+  size_t largest = 0, binSum = 0;
+  int n16 = 0, n64 = 0, n128 = 0, n256 = 0, walked = 0, truncated = 0;
+  // Bin 1 (last remainder) first, then from bin 126 (every free chunk of 512 KiB or more, sorted largest first)
+  // down to bin 2: if the walk is capped, only small-chunk statistics are lost.
+  for (int k = 0; k < 126 && !truncated; k++)
+  {
+    int i = (k == 0) ? 1 : 127 - k;
+    struct nx_mchunk *bin = (struct nx_mchunk *)((char *)&__malloc_av_[2 * i + 2] - 2 * sizeof(size_t));
+    for (struct nx_mchunk *p = bin->fd; p != bin; p = p->fd)
+    {
+      if (walked >= NX_WALK_CAP) { truncated = 1; break; }
+      walked++;
+      size_t s = p->size & ~(size_t)3;
+      binSum += s;
+      if (s > largest) largest = s;
+      if (s >= ((size_t)16 << 20)) n16++;
+      if (s >= ((size_t)64 << 20)) n64++;
+      if (s >= ((size_t)128 << 20)) n128++;
+      if (s >= ((size_t)256 << 20)) n256++;
+    }
+  }
+  size_t freeAll = topSize + binSum;
+  size_t used = arena > freeAll ? arena - freeAll : 0;
+  if (truncated)
+  {
+    // Partial sum: take the exact totals from newlib (the lock is recursive).
+    struct mallinfo mi = mallinfo();
+    freeAll = mi.fordblks;
+    used = mi.uordblks;
+  }
+  unsigned long topPad = __malloc_top_pad;
+  unsigned long peak = __malloc_max_sbrked_mem;
+  char *heapStart = fake_heap_start;
+  char *heapEnd = fake_heap_end;
+  __malloc_unlock(_REENT);
+
+  size_t untouched = (heapEnd > brk) ? (size_t)(heapEnd - brk) : 0;
+  // malloc_extend_top asks sbrk for nb + top_pad + MINSIZE without counting the old top, so the bound is a MAX.
+  size_t fromTop = topSize > 32 ? topSize - 32 : 0;
+  size_t fromSbrk = untouched > (topPad + 4096 + 64) ? ((untouched - topPad - 64) & ~(size_t)0xfff) - 32 : 0;
+  size_t bound = largest;
+  if (fromTop > bound) bound = fromTop;
+  if (fromSbrk > bound) bound = fromSbrk;
+  bound = bound > 64 ? bound - 64 : 0; // _memalign_r(32, n) overhead
+  if (bound > 0x7fffffffUL) bound = 0x7fffffffUL;
+
+  st->total = (double)(heapEnd - heapStart);
+  st->used = (double)used;
+  st->freeAll = (double)freeAll;
+  st->top = (double)topSize;
+  st->untouched = (double)untouched;
+  st->largestHole = (double)largest;
+  st->allocBound = (double)bound;
+  st->peakArena = (double)peak;
+  st->start = (double)(size_t)heapStart;
+  st->end = (double)(size_t)heapEnd;
+  st->brk = (double)(size_t)brk;
+  st->n16 = n16; st->n64 = n64; st->n128 = n128; st->n256 = n256; st->walked = walked; st->truncated = truncated;
+}
+
+// Test builds: lower the heap ceiling (libnx _sbrk_r re-reads fake_heap_end on every call) to emulate the
+// console heap in Citron. Only allowed while the arena is well below the new ceiling.
+static int nx_capHeap(size_t capBytes)
+{
+  // Under the malloc lock: every _sbrk_r call runs under it, so the margin check and the new ceiling are atomic
+  // with respect to heap growth.
+  __malloc_lock(_REENT);
+  char *newEnd = fake_heap_start + capBytes;
+  if (newEnd >= fake_heap_end) { __malloc_unlock(_REENT); return 1; }
+  struct nx_mchunk *top = (struct nx_mchunk *)__malloc_av_[2];
+  char *brk = (char *)top + (top->size & ~(size_t)3);
+  if (newEnd < brk + ((size_t)256 << 20)) { __malloc_unlock(_REENT); return 2; }
+  fake_heap_end = newEnd;
+  __malloc_unlock(_REENT);
+  return 0;
+}
 ')
 #end
 #end
@@ -435,48 +545,92 @@ class NXPerformance
   public static function describeHeap():String
   {
     #if (switch && cpp)
-    var total:Float = 0;
-    var arena:Float = 0;
-    var used:Float = 0;
-    var holes:Float = 0;
-    var untouched:Float = 0;
-    untyped __cpp__('
-      struct mallinfo mi = mallinfo();
-      // newlib grows its arena contiguously from fake_heap_start with sbrk, so whatever lies above the
-      // arena has never been handed out yet.
-      {0} = (double)(fake_heap_end - fake_heap_start);
-      {1} = (double)mi.arena;
-      {2} = (double)mi.uordblks;
-      {3} = (double)mi.fordblks;
-      {4} = (double)(fake_heap_end - fake_heap_start) - (double)mi.arena;
-    ', total, arena, used, holes, untouched);
-    var mb = (v:Float) -> Math.round(v / 104857.6) / 10;
-    return 'heap ${mb(total)} MB | in use ${mb(used)} MB | free holes ${mb(holes)} MB | untouched ${mb(untouched)} MB | arena ${mb(arena)} MB';
+    untyped __cpp__('nx_heapProbe(&nx_hs)');
+    var total:Float = untyped __cpp__('nx_hs.total');
+    var used:Float = untyped __cpp__('nx_hs.used');
+    var freeAll:Float = untyped __cpp__('nx_hs.freeAll');
+    var top:Float = untyped __cpp__('nx_hs.top');
+    var untouched:Float = untyped __cpp__('nx_hs.untouched');
+    var largestHole:Float = untyped __cpp__('nx_hs.largestHole');
+    var allocBound:Float = untyped __cpp__('nx_hs.allocBound');
+    var peakArena:Float = untyped __cpp__('nx_hs.peakArena');
+    var n16:Int = untyped __cpp__('nx_hs.n16');
+    var n64:Int = untyped __cpp__('nx_hs.n64');
+    var n128:Int = untyped __cpp__('nx_hs.n128');
+    var n256:Int = untyped __cpp__('nx_hs.n256');
+    var walked:Int = untyped __cpp__('nx_hs.walked');
+    var truncated:Bool = untyped __cpp__('nx_hs.truncated != 0');
+    var mb = (x:Float) -> Math.round(x / 104857.6) / 10;
+    // "free in bins" excludes the top chunk (mallinfo fordblks includes it).
+    return 'heap ${mb(total)} MB | in use ${mb(used)} MB | free in bins ${mb(freeAll - top)} MB (largest hole ${mb(largestHole)} MB, holes >=16/64/128/256 MB: $n16/$n64/$n128/$n256, $walked chunks${truncated ? " TRUNCATED" : ""})'
+      + ' | top ${mb(top)} MB | untouched ${mb(untouched)} MB | max single alloc ~${mb(allocBound)} MB | peak arena ${mb(peakArena)} MB';
     #else
     return 'heap n/a';
     #end
   }
 
   /**
-   * Largest single block malloc can currently return, in MB (binary search with malloc/free).
-   * Compared with free memory it shows heap fragmentation: decoding a 4096x4096 texture needs one
-   * contiguous 64 MB block even when much more memory is free in smaller holes.
+   * Total heap size in MB (fake_heap_end - fake_heap_start), e.g. to check that a heap cap is in effect.
+   */
+  public static function getHeapTotalMB():Float
+  {
+    #if (switch && cpp)
+    untyped __cpp__('nx_heapProbe(&nx_hs)');
+    var total:Float = untyped __cpp__('nx_hs.total');
+    return total / (1024.0 * 1024.0);
+    #else
+    return 0.0;
+    #end
+  }
+
+  /**
+   * Absolute heap bounds, for placing pointers from crash reports inside the arena.
+   */
+  public static function describeHeapBounds():String
+  {
+    #if (switch && cpp)
+    var text:String = '';
+    untyped __cpp__('
+      nx_heapProbe(&nx_hs); // reads the bounds under the malloc lock
+      char buf[160];
+      snprintf(buf, sizeof(buf), "fake_heap_start %p fake_heap_end %p brk %p", (void *)(size_t)nx_hs.start, (void *)(size_t)nx_hs.end, (void *)(size_t)nx_hs.brk);
+      {0} = ::String::create(buf);
+    ', text);
+    return text;
+    #else
+    return 'n/a';
+    #end
+  }
+
+  /**
+   * Test builds: caps the heap at `mb` MB (emulates the smaller console heap in Citron). Returns a log line.
+   */
+  public static function capHeap(mb:Int):String
+  {
+    #if (switch && cpp)
+    var rc:Int = untyped __cpp__('nx_capHeap((size_t){0} << 20)', mb);
+    return switch (rc)
+    {
+      case 0: 'heap capped at $mb MB (${describeHeapBounds()})';
+      case 1: 'heap cap $mb MB ignored: the heap is already that small';
+      default: 'heap cap $mb MB refused: the arena is too close to it';
+    }
+    #else
+    return 'n/a';
+    #end
+  }
+
+  /**
+   * Largest single block malloc can currently return, in MB, computed without allocating (largest free bin
+   * chunk, top chunk, or untouched heap). Decoding a 8192x4096 texture needs one contiguous 128 MB block even
+   * when much more memory is free in smaller holes.
    */
   public static function getLargestAllocatableMB():Float
   {
     #if (switch && cpp)
-    var largest:Float = 0;
-    untyped __cpp__('
-      size_t lo = 0, hi = (size_t)3072 * 1024 * 1024;
-      while (hi - lo > (size_t)1024 * 1024)
-      {
-        size_t mid = lo + (hi - lo) / 2;
-        void *p = malloc(mid);
-        if (p) { free(p); lo = mid; } else { hi = mid; }
-      }
-      {0} = (double)lo;
-    ', largest);
-    return largest / (1024.0 * 1024.0);
+    untyped __cpp__('nx_heapProbe(&nx_hs)');
+    var bound:Float = untyped __cpp__('nx_hs.allocBound');
+    return bound / (1024.0 * 1024.0);
     #else
     return 0.0;
     #end

@@ -156,6 +156,14 @@ class NXAutoTest
       {
         NXRegressionSuite.startCutsceneSkip();
       }
+      else if (scenario.indexOf("INC49_REPRO") != -1)
+      {
+        NXRegressionSuite.startInc49Repro();
+      }
+      else if (scenario.indexOf("DECODE_PARITY") != -1)
+      {
+        runDecodeParity();
+      }
       else if (scenario.indexOf("AUDIO_DRIVER_STALL") != -1)
       {
         NXRegressionSuite.startAudioDriverStall(scenario.indexOf("LEGACY") != -1);
@@ -277,7 +285,7 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+    var globalTimeout:Float = (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
       || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {
@@ -286,7 +294,8 @@ class NXAutoTest
     }
 
     if (currentScenario.indexOf("REGRESSION") != -1 || currentScenario.indexOf("SOAK") != -1 || currentScenario.indexOf("AUDIO_STARVE") != -1
-      || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1 || currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("CUTSCENE_SKIP") != -1)
+      || currentScenario.indexOf("AUDIO_DRIVER_STALL") != -1 || currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("CUTSCENE_SKIP") != -1
+      || currentScenario.indexOf("INC49_REPRO") != -1)
     {
       NXRegressionSuite.update();
     }
@@ -827,6 +836,74 @@ class NXAutoTest
         else passTest();
       });
     });
+  }
+
+  /**
+   * DECODE_PARITY: decodes every shipped PNG variant (and the 128 MiB / 91 MiB sheets that crashed, plus a video
+   * sheet from bytes) with lime's stock call and with nx.NXImageDecode, and requires identical pixels and that the
+   * new path really used a single block (INC-49).
+   */
+  @:access(lime._internal.backend.native.NativeCFFI)
+  static function runDecodeParity():Void
+  {
+    #if (switch && lime_cffi)
+    var files:Array<String> = [
+      'assets/week6/images/pixelNoteHoldCover.png', 'assets/images/charSelect/barThing/spritemap1.png',
+      'assets/week6/images/weeb/pixelUI/dialogueBox-evilNew.png', 'assets/week1/lol.png',
+      'assets/shared/images/resultScreen/rankText/rankTextPERFECT.png', 'assets/week6/images/weeb/pixelUI/dialogueBox-evil.png',
+      'assets/images/freeplay/ref.png', 'assets/images/icons/icon-face.png', 'assets/week1/opensauceforever.png',
+      'assets/week6/images/weeb/petals.png', 'assets/shared/images/characters/gfTankmen.png',
+      'assets/weekend1/images/spraycanAtlas/spritemap1.png', 'assets/videos/converted/2hotCutscene_0.png'
+    ];
+    var failures:Array<String> = [];
+    var checked:Int = 0;
+    inline function empty() return new lime.graphics.ImageBuffer(new lime.utils.UInt8Array(haxe.io.Bytes.alloc(0)));
+    function compare(label:String, a:lime.graphics.ImageBuffer, b:lime.graphics.ImageBuffer):Void
+    {
+      checked++;
+      if (a == null || b == null)
+      {
+        failures.push('$label: null result (stock ${a != null}, nx ${b != null})');
+        return;
+      }
+      if (a.width != b.width || a.height != b.height || a.bitsPerPixel != b.bitsPerPixel)
+      {
+        failures.push('$label: size ${a.width}x${a.height}/${a.bitsPerPixel} vs ${b.width}x${b.height}/${b.bitsPerPixel}');
+        return;
+      }
+      var ab:haxe.io.Bytes = a.data.buffer;
+      var bb:haxe.io.Bytes = b.data.buffer;
+      if (a.data.byteLength != b.data.byteLength || ab.compare(bb) != 0) failures.push('$label: pixels differ (${a.data.byteLength} vs ${b.data.byteLength} bytes)');
+      else trace('[AUTOTEST] DECODE_PARITY ok: $label ${a.width}x${a.height}');
+    }
+    for (file in files)
+    {
+      var path:String = 'romfs:/' + file;
+      var stockFile:lime.graphics.ImageBuffer = lime._internal.backend.native.NativeCFFI.lime_image_load_file(path, empty());
+      var nxFile:lime.graphics.ImageBuffer = NXImageDecode.loadFile(path);
+      compare('file ' + file, stockFile, nxFile);
+      stockFile = null;
+      nxFile = null;
+      cpp.vm.Gc.run(true);
+      if (file.indexOf('gfTankmen') != -1) continue; // 128 MiB: the file path already covers it, keep bytes runs small
+      var bytes = sys.io.File.getBytes(path);
+      var stockBytes:lime.graphics.ImageBuffer = lime._internal.backend.native.NativeCFFI.lime_image_load_bytes(bytes, empty());
+      var nxBytes:lime.graphics.ImageBuffer = NXImageDecode.loadBytes(bytes);
+      compare('bytes ' + file, stockBytes, nxBytes);
+      stockBytes = null;
+      nxBytes = null;
+      bytes = null;
+      cpp.vm.Gc.run(true);
+    }
+    var stats:String = NXImageDecode.describe();
+    trace('[AUTOTEST] DECODE_PARITY: $checked comparisons, ${failures.length} failures, $stats');
+    if (failures.length > 0) failTest('DECODE_PARITY: ' + failures.join(' | '));
+    else if (NXImageDecode.missed > 0) failTest('DECODE_PARITY: pixels match but ${NXImageDecode.missed} decodes still copied ($stats)');
+    else if (NXImageDecode.singleCopy < files.length) failTest('DECODE_PARITY: single-copy path not used ($stats)');
+    else passTest();
+    #else
+    failTest('DECODE_PARITY needs the Switch build');
+    #end
   }
 
   static function passTest():Void
