@@ -80,6 +80,12 @@ class NXHaptics
   static final MIN_SEGMENT_SECONDS:Float = 0.03;
 
   /**
+   * HD Rumble felt too strong at the game's amplitudes (0.5 per note, mobile values), most of all with the console
+   * on a table: every pulse is scaled by this. "Haptics Intensity" in the options still multiplies on top.
+   */
+  static final OUTPUT_SCALE:Float = 0.6;
+
+  /**
    * Segments still to play: [duration s, amplitude, sharpness].
    */
   static var queue:Array<Array<Float>> = [];
@@ -165,7 +171,7 @@ class NXHaptics
   static function send(amplitude:Float, sharpness:Float):Void
   {
     #if (switch && cpp)
-    var result:Int = untyped __cpp__('nx_vibSend((float){0}, (float){1})', amplitude, sharpness);
+    var result:Int = untyped __cpp__('nx_vibSend((float){0}, (float){1})', amplitude * OUTPUT_SCALE, sharpness);
     if (result == 0 && amplitude > 0) sentCount++;
 
     var device:String = describeDevice();

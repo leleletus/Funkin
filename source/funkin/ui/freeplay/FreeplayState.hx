@@ -2972,7 +2972,14 @@ class FreeplayState extends MusicBeatSubState
     if (grpCapsules.countLiving() > 0 && !prepForNewRank && uiStateMachine.canInteract())
     {
       FlxG.sound.music?.pause();
+      #if switch
+      // The preview decodes part of the song on the main thread (FlxPartialSound): only for the song the player
+      // stops on, not for every song scrolled past (stutter down to ~40 FPS when scrolling on the console).
+      nxLastSelectionChange = haxe.Timer.stamp();
+      FlxTimer.wait(NX_PREVIEW_DELAY, playCurSongPreview.bind(currentCapsule));
+      #else
       FlxTimer.wait(FADE_IN_DELAY, playCurSongPreview.bind(currentCapsule));
+      #end
       currentCapsule.selected = true;
 
       // switchBackingImage(currentCapsule.freeplayData);
@@ -2984,8 +2991,18 @@ class FreeplayState extends MusicBeatSubState
     dispatchEvent(new CapsuleScriptEvent(CAPSULE_SELECTED, currentCapsule, currentDifficulty, currentVariation));
   }
 
+  #if switch
+  static inline final NX_PREVIEW_DELAY:Float = 0.6;
+
+  var nxLastSelectionChange:Float = 0;
+  #end
+
   public function playCurSongPreview(?daSongCapsule:SongMenuItem):Void
   {
+    #if switch
+    if (daSongCapsule != null && daSongCapsule != currentCapsule) return;
+    if (haxe.Timer.stamp() - nxLastSelectionChange < NX_PREVIEW_DELAY - 0.05) return;
+    #end
     if (daSongCapsule == null) daSongCapsule = currentCapsule;
 
     var previewVolume:Float = 0.7;

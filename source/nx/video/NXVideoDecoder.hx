@@ -314,6 +314,16 @@ static int nxv_finished(void)
   return done;
 }
 
+/** Frames decoded and waiting (0 while a seek is pending). */
+static int nxv_queued(void)
+{
+  if (!nxv_isOpen || nxv.seekRequest) return 0;
+  mutexLock(&nxv.lock);
+  int queued = nxv.count - nxv.held;
+  mutexUnlock(&nxv.lock);
+  return queued;
+}
+
 static void nxv_seekStart(void)
 {
   if (!nxv_isOpen) return;
@@ -426,6 +436,18 @@ class NXVideoDecoder
     return untyped __cpp__('nxv_finished()') == 1;
     #else
     return true;
+    #end
+  }
+
+  /**
+   * Decoded frames waiting in the queue (0 while a seek is still pending).
+   */
+  public static function queued():Int
+  {
+    #if (switch && cpp && NX_NATIVE_VIDEO)
+    return untyped __cpp__('nxv_queued()');
+    #else
+    return 0;
     #end
   }
 

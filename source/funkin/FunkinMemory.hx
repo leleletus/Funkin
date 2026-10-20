@@ -260,6 +260,15 @@ class FunkinMemory
         {
           atlasKeysToPurge.push(atlasKey);
         }
+        #if switch
+        // INC-61: also any atlas no sprite uses any more (0.8.3 Pico atlases stayed cached after their songs:
+        // explosion-death 146 MB, death 45 MB...). An atlas in use has a parent with useCount > 0.
+        else
+        {
+          var cached = animate.FlxAnimateFrames._cachedAtlases.get(atlasKey);
+          if (cached == null || cached.parent == null || cached.parent.useCount <= 0) atlasKeysToPurge.push(atlasKey);
+        }
+        #end
       }
       for (ak in atlasKeysToPurge)
       {

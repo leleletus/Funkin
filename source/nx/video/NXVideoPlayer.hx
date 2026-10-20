@@ -83,6 +83,73 @@ class NXVideoPlayer
   static var nativeLastLog:Float = 0;
 
   /**
+   * The audio (the clock) waits until the decoder has frames ready and the main thread runs smoothly: a cutscene
+   * starts while the new state is still uploading its textures (~0.8 s of long frames before Ugh on the console),
+   * which showed black with the audio running and then fast-forwarded the video to catch up.
+   */
+  static var nativeAwaitingStart:Bool = false;
+  static var nativeSmoothFrames:Int = 0;
+  static var nativeWaitSince:Float = 0;
+  static var nativeLastStamp:Float = 0;
+
+  static inline final NATIVE_START_SMOOTH_FRAMES:Int = 5;
+  static inline final NATIVE_START_QUEUED:Int = 3;
+  static inline final NATIVE_START_TIMEOUT:Float = 4.0;
+
+  static function awaitNativeStart():Void
+  {
+    nativeAwaitingStart = true;
+    nativeSmoothFrames = 0;
+    nativeWaitSince = haxe.Timer.stamp();
+    nativeLastStamp = nativeWaitSince;
+  }
+
+  /**
+   * Before the audio starts: show the first frame and start the clock once the decoder is ahead and the last
+   * frames were all short.
+   */
+  static function updateNativeStart():Void
+  {
+    var now:Float = haxe.Timer.stamp();
+    nativeSmoothFrames = (now - nativeLastStamp < 0.025) ? nativeSmoothFrames + 1 : 0;
+    nativeLastStamp = now;
+    uploadNativeFrame(0.0);
+    var waited:Float = now - nativeWaitSince;
+    if ((nativeSmoothFrames >= NATIVE_START_SMOOTH_FRAMES && NXVideoDecoder.queued() >= NATIVE_START_QUEUED)
+      || waited >= NATIVE_START_TIMEOUT)
+    {
+      nativeAwaitingStart = false;
+      lastValidAudioSec = 0.0;
+      lastWallTimestamp = now;
+      try
+      {
+        if (currentAudio != null) currentAudio.play(true, 0);
+      }
+      catch (e:Dynamic)
+      {
+        trace('[NXVideoPlayer] Warning: native video could not start its audio: ' + e);
+      }
+      trace('[NXVideoPlayer] Native video starts after ${Math.round(waited * 1000)} ms (${NXVideoDecoder.queued()} frames ready'
+        + (waited >= NATIVE_START_TIMEOUT ? ', waited the maximum' : '') + ')');
+    }
+  }
+
+  static function uploadNativeFrame(clock:Float):Void
+  {
+    if (!NXVideoDecoder.acquire(clock)) return;
+    var context = FlxG.stage.context3D;
+    @:privateAccess
+    {
+      context.__bindGLTexture2D(nativeLuma.__textureID);
+      NXVideoDecoder.upload(0, nativeLuma.__format);
+      context.__bindGLTexture2D(nativeChroma.__textureID);
+      NXVideoDecoder.upload(1, nativeChroma.__format);
+      context.__bindGLTexture2D(null);
+    }
+    if (currentSprite != null) currentSprite.dirty = true;
+  }
+
+  /**
    * The official video file for `videoName` in RomFS (assets/videos/native), or null.
    */
   static function nativeVideoPath(videoName:String):Null<String>
@@ -168,19 +235,7 @@ class NXVideoPlayer
    */
   static function updateNative(elapsedSec:Float):Void
   {
-    if (NXVideoDecoder.acquire(elapsedSec))
-    {
-      var context = FlxG.stage.context3D;
-      @:privateAccess
-      {
-        context.__bindGLTexture2D(nativeLuma.__textureID);
-        NXVideoDecoder.upload(0, nativeLuma.__format);
-        context.__bindGLTexture2D(nativeChroma.__textureID);
-        NXVideoDecoder.upload(1, nativeChroma.__format);
-        context.__bindGLTexture2D(null);
-      }
-      if (currentSprite != null) currentSprite.dirty = true;
-    }
+    uploadNativeFrame(elapsedSec);
     if (haxe.Timer.stamp() - nativeLastLog >= 5)
     {
       nativeLastLog = haxe.Timer.stamp();
@@ -208,6 +263,7 @@ class NXVideoPlayer
     if (nativeLuma != null) nativeLuma.dispose();
     nativeLuma = null;
     nativeMode = false;
+    nativeAwaitingStart = false;
   }
   #end
 
@@ -780,6 +836,10 @@ class NXVideoPlayer
           if (currentAudio != null)
           {
             FlxG.sound.list.add(currentAudio);
+            #if NX_NATIVE_VIDEO
+            if (nativeMode) awaitNativeStart();
+            else
+            #end
             currentAudio.play();
           }
         }
@@ -976,6 +1036,13 @@ class NXVideoPlayer
       updateRestart();
       return;
     }
+    #if NX_NATIVE_VIDEO
+    if (nativeMode && nativeAwaitingStart)
+    {
+      updateNativeStart();
+      return;
+    }
+    #end
 
     var elapsedSec:Float = 0.0;
     if (currentAudio != null && currentAudio.playing)
@@ -1070,6 +1137,15 @@ class NXVideoPlayer
     isPaused = false;
     // The wall-clock fallback must not count the time spent in the pause menu.
     lastWallTimestamp = haxe.Timer.stamp();
+    #if NX_NATIVE_VIDEO
+    if (nativeAwaitingStart)
+    {
+      // Still waiting to start: keep the audio stopped and measure smooth frames again.
+      nativeSmoothFrames = 0;
+      nativeLastStamp = lastWallTimestamp;
+      return;
+    }
+    #end
     try
     {
       if (currentAudio != null && !currentAudio.playing) currentAudio.resume();
@@ -1102,8 +1178,15 @@ class NXVideoPlayer
     #if NX_NATIVE_VIDEO
     if (nativeMode)
     {
+      // Same start as a new cutscene: the audio waits at 0 until the decoder has the first frames again.
       NXVideoDecoder.seekStart();
-      restartFromBeginning();
+      try
+      {
+        if (currentAudio != null) currentAudio.pause();
+      }
+      catch (e:Dynamic) {}
+      lastValidAudioSec = 0.0;
+      awaitNativeStart();
       trace('[NXVideoPlayer] Restart: native video back to the start of $currentVideoName');
       return true;
     }

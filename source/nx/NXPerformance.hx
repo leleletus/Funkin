@@ -12,6 +12,15 @@ import nx.NXMain;
 #include <malloc.h>
 #include <reent.h>
 #include <stdio.h>
+#include <switch.h>
+
+// CPU time of the calling thread in ms (firmware 13.0.0+), or -1.
+static double nx_threadCpuMs(void)
+{
+  u64 ticks = 0;
+  if (R_FAILED(svcGetInfo(&ticks, InfoType_ThreadTickCount, CUR_THREAD_HANDLE, (u64)-1))) return -1.0;
+  return (double)armTicksToNs(ticks) / 1000000.0;
+}
 extern "C" {
   extern char* fake_heap_start;
   extern char* fake_heap_end;
@@ -437,21 +446,47 @@ class NXPerformance
   static var perfFrames:Int = 0;
   static var perfWorstFrameMs:Float = 0.0;
   static var perfSlowFrames:Int = 0;
+  static var perfCpuStart:Float = -1.0;
+  static var perfWhere:String = '';
   static final PERF_WINDOW_SECONDS:Float = 5.0;
 
+  static function mainThreadCpuMs():Float
+  {
+    #if (switch && cpp)
+    return untyped __cpp__('nx_threadCpuMs()');
+    #else
+    return -1.0;
+    #end
+  }
+
   /**
-   * Gameplay performance telemetry written to deep_engine_trace.log every 5 s while a song is running:
-   * average FPS, worst frame and frames slower than 20 ms (below ~50 FPS), with the active resolution.
+   * Performance telemetry written to deep_engine_trace.log every 5 s while a song is running, and in menus (e.g.
+   * Freeplay): average FPS, worst frame, frames slower than 20 ms (below ~50 FPS) and the main thread's CPU time
+   * per frame. CPU per frame close to the frame time = the main thread is the limit; much lower = it waits for
+   * the GPU (or the vsync).
    */
   static function updatePerfTelemetry():Void
   {
     var ps = funkin.play.PlayState.instance;
     var now:Float = haxe.Timer.stamp();
-    if (ps == null || ps.subState != null || @:privateAccess ps.startingSong || ps.isInCutscene)
+    var where:String;
+    if (ps != null)
+    {
+      if (ps.subState != null || @:privateAccess ps.startingSong || ps.isInCutscene) where = '';
+      else where = '${ps.currentSong?.id}@${Math.round(funkin.Conductor.instance.songPosition / 1000)}s';
+    }
+    else
+    {
+      var state = FlxG.state;
+      where = (state == null) ? '' : Type.getClassName(Type.getClass(state)).split('.').pop();
+      if (state != null && state.subState != null) where += '/' + Type.getClassName(Type.getClass(state.subState)).split('.').pop();
+    }
+    var windowKey:String = (ps != null) ? 'song' : where;
+    if (where == '' || (perfWindowStart >= 0 && windowKey != perfWhere))
     {
       perfWindowStart = -1.0;
       perfLastFrame = -1.0;
-      return;
+      if (where == '') return;
     }
     if (perfWindowStart < 0)
     {
@@ -460,6 +495,8 @@ class NXPerformance
       perfFrames = 0;
       perfWorstFrameMs = 0.0;
       perfSlowFrames = 0;
+      perfCpuStart = mainThreadCpuMs();
+      perfWhere = windowKey;
       return;
     }
     var frameMs:Float = (now - perfLastFrame) * 1000.0;
@@ -473,13 +510,17 @@ class NXPerformance
     {
       var window = lime.app.Application.current?.window;
       var res:String = (window != null) ? '${window.width}x${window.height}' : '?';
-      NXDeepTrace.writeEntry('PERF', '[${ps.currentSong?.id}@${Math.round(funkin.Conductor.instance.songPosition / 1000)}s] avg ${Math.round(perfFrames / elapsed * 10) / 10} FPS'
+      var cpuNow:Float = mainThreadCpuMs();
+      var cpu:String = (perfCpuStart < 0 || cpuNow < 0 || perfFrames == 0) ? '?' : '${Math.round((cpuNow - perfCpuStart) / perfFrames * 10) / 10}';
+      NXDeepTrace.writeEntry('PERF', '[$where] avg ${Math.round(perfFrames / elapsed * 10) / 10} FPS'
         + ' | worst frame ${Math.round(perfWorstFrameMs * 10) / 10} ms | slow frames (>20 ms): $perfSlowFrames/$perfFrames'
+        + ' | main thread CPU $cpu ms/frame | antialiasing ${funkin.Preferences.switchAntialiasing ? "on" : "off"}'
         + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | ${describeHeap()}');
       perfWindowStart = now;
       perfFrames = 0;
       perfWorstFrameMs = 0.0;
       perfSlowFrames = 0;
+      perfCpuStart = cpuNow;
     }
   }
 

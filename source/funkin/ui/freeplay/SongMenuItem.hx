@@ -738,6 +738,10 @@ class SongMenuItem extends FlxSpriteGroup
 
   function set_forceHighlight(value:Bool):Bool
   {
+    #if switch
+    // Set on every capsule at each selection change; restyling unchanged ones costs main-thread time on the console.
+    if (value == forceHighlight) return forceHighlight;
+    #end
     // cute one liners, lol!
     forceHighlight = value;
     updateSelected();
