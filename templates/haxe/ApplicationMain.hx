@@ -51,7 +51,9 @@ class ApplicationMain
     #end
 
     ::if (WIN_ORIENTATION != "auto")::
+    #if !switch // The Switch lime fork has no System.setHint (and the screen never rotates).
     lime.system.System.setHint("ORIENTATIONS", ::if (WIN_ORIENTATION == "portrait")::"Portrait PortraitUpsideDown"::else::"LandscapeLeft LandscapeRight"::end::);
+    #end
     ::end::
 
     final appMeta:Map<String, String> = [];
@@ -76,7 +78,9 @@ class ApplicationMain
     var attributes:lime.ui.WindowAttributes = {
       allowHighDPI: ::allowHighDPI::,
       alwaysOnTop: ::alwaysOnTop::,
+      #if !switch // Not in the Switch lime fork's WindowAttributes.
       transparent: ::transparent::,
+      #end
       borderless: ::borderless::,
       element: null,
       frameRate: ::fps::,

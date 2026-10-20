@@ -160,7 +160,8 @@ class FunkinDebugDisplay extends Sprite
     addChild(infoDisplay);
   }
 
-  override function __enterFrame(deltaTime:Float):Void
+  // The Switch openfl fork still passes the frame time as an Int.
+  override function __enterFrame(deltaTime:#if switch Int #else Float #end):Void
   {
     var currentTime:Float = Lib.getTimer();
 

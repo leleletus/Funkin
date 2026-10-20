@@ -998,7 +998,12 @@ class FunkinPreloader extends FlxBasePreloader
    */
   function isLandscapeFlipped():Bool
   {
+    #if switch
+    // The Switch lime fork has no Display.orientation; the screen never rotates anyway.
+    return false;
+    #else
     return lime.app.Application.current.window.display.orientation == LANDSCAPE_FLIPPED;
+    #end
   }
 
   function immediatelyStartGame():Void

@@ -1798,7 +1798,7 @@ class FreeplayState extends MusicBeatSubState
 
     handleDirectionalInput(elapsed);
 
-    final wheelAmount:Int = Math.round(FlxMath.bound(FlxG.mouse.deltaWheel.y, -1, 1));
+    final wheelAmount:Int = Math.round(FlxMath.bound(#if switch FlxG.mouse.wheel #else FlxG.mouse.deltaWheel.y #end, -1, 1)); // The Switch flixel fork has no deltaWheel.
 
     if (wheelAmount != 0)
     {

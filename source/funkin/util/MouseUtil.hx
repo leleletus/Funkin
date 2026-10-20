@@ -49,6 +49,7 @@ class MouseUtil
    */
   public static function mouseWheelZoom():Void
   {
-    if (FlxG.mouse.wheel != 0) FlxG.camera.zoom += FlxG.mouse.deltaWheel.y * (0.1 * FlxG.camera.zoom);
+    // The Switch flixel fork has no FlxMouse.deltaWheel.
+    if (FlxG.mouse.wheel != 0) FlxG.camera.zoom += #if switch FlxG.mouse.wheel #else FlxG.mouse.deltaWheel.y #end * (0.1 * FlxG.camera.zoom);
   }
 }
