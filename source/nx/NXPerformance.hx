@@ -377,8 +377,8 @@ class NXPerformance
   static var shortcutDone:Bool = false;
 
   /**
-   * Test builds, during a song: holding only L for 3 s moves on (skips the cutscene that is playing, otherwise ends
-   * the song as if it had finished, so Story mode goes to the next song); holding only R for 3 s plays the song again
+   * Test builds, during a song: holding only R for 3 s moves on (skips the cutscene that is playing, otherwise ends
+   * the song as if it had finished, so Story mode goes to the next song); holding only L for 3 s plays the song again
    * from a fresh load, so a Story song with a cutscene starts from its cutscene. Not during automated runs.
    */
   static function checkSongShortcuts():Void
@@ -417,22 +417,22 @@ class NXPerformance
     shortcutDone = true;
     try
     {
-      if (button == 'L')
+      if (button == 'R')
       {
         if (nx.video.NXVideoPlayer.isCutscenePlaying())
         {
-          NXDeepTrace.logButtonEvent('L', 'held 3s: skipping the cutscene');
+          NXDeepTrace.logButtonEvent('R', 'held 3s: skipping the cutscene');
           nx.video.NXVideoPlayer.finishCutscene();
         }
         else
         {
-          NXDeepTrace.logButtonEvent('L', 'held 3s: ending ${ps.currentSong?.id}');
+          NXDeepTrace.logButtonEvent('R', 'held 3s: ending ${ps.currentSong?.id}');
           ps.endSong(true);
         }
       }
       else
       {
-        NXDeepTrace.logButtonEvent('R', 'held 3s: loading ${ps.currentSong?.id} again from the start');
+        NXDeepTrace.logButtonEvent('L', 'held 3s: loading ${ps.currentSong?.id} again from the start');
         nx.video.NXVideoPlayer.stop();
         @:privateAccess funkin.ui.transition.LoadingState.loadPlayState(funkin.play.PlayState.lastParams);
       }

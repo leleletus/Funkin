@@ -146,6 +146,7 @@ class NXInstaller
   {
     NXInstaller.stage = stage;
     onReady = ready;
+    registerRomfsFonts();
     var assets:String = assetsDir();
     var started:Float = haxe.Timer.stamp();
     var loaded:Bool = untyped __cpp__('nxinst_load({0}.utf8_str()) != 0', MANIFEST);
@@ -180,7 +181,6 @@ class NXInstaller
       ready();
       return;
     }
-    registerScreenFont();
     showScreen();
     showOffer();
     syncLabels();
@@ -256,29 +256,30 @@ class NXInstaller
     }
   }
 
-  static inline final SCREEN_FONT:String = 'romfs:/assets/fonts/NotoSans-Regular.ttf';
-
   static var screenFont:Null<String> = null;
 
   /**
-   * The installer's own font, OpenFL's Noto Sans (SIL OFL), read from the .nro's RomFS. lime registers the same font
-   * with a path under the asset root (the SD card), where it doesn't exist; OpenFL skips a registered font that fails
-   * to load and takes the next one with the same name, so this one is used, and the SD card gets no extra files.
+   * OpenFL's Noto fonts (SIL OFL) ship in the .nro's RomFS. lime registers them with a path under the asset root (the
+   * SD card), where they don't exist; OpenFL skips a registered font that fails to load and takes the next one with the
+   * same name, so these copies are used, both by this screen and by the game (Switch has no system fonts), and the SD
+   * card gets no extra files.
    */
-  static function registerScreenFont():Void
+  static function registerRomfsFonts():Void
   {
-    try
+    if (!sys.FileSystem.exists('romfs:/assets/fonts')) return;
+    for (name in sys.FileSystem.readDirectory('romfs:/assets/fonts'))
     {
-      var font:Null<openfl.text.Font> = openfl.text.Font.fromFile(SCREEN_FONT);
-      if (font != null && font.fontName != null)
+      try
       {
+        var font:Null<openfl.text.Font> = openfl.text.Font.fromFile('romfs:/assets/fonts/' + name);
+        if (font == null || font.fontName == null) continue;
         openfl.text.Font.registerFont(font);
-        screenFont = font.fontName;
+        if (name == 'NotoSans-Regular.ttf') screenFont = font.fontName;
       }
-    }
-    catch (e:Dynamic)
-    {
-      log('screen: could not load $SCREEN_FONT: $e');
+      catch (e:Dynamic)
+      {
+        log('fonts: could not load romfs:/assets/fonts/$name: $e');
+      }
     }
   }
 

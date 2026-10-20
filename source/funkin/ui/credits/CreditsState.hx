@@ -41,6 +41,8 @@ class CreditsState extends MusicBeatState
   static final CREDITS_FONT = 'Consolas';
   #elseif mac
   static final CREDITS_FONT = 'Menlo';
+  #elseif switch
+  static final CREDITS_FONT = 'Noto Mono'; // Switch has no system fonts: OpenFL's monospaced Noto, shipped in the .nro
   #else
   static final CREDITS_FONT = "Courier New";
   #end

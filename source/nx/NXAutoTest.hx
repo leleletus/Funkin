@@ -150,6 +150,10 @@ class NXAutoTest
       {
         startHapticsProbe();
       }
+      else if (scenario.indexOf("CREDITS") != -1)
+      {
+        startCreditsCheck();
+      }
       else if (scenario.indexOf("PLAYTHROUGH") != -1)
       {
         NXRegressionSuite.startPlaythrough();
@@ -1128,6 +1132,30 @@ class NXAutoTest
     #else
     failTest('UPLOAD_PARITY needs the Switch build');
     #end
+  }
+
+  /**
+   * CREDITS: opens the credits and, after a few seconds, checks that their data loaded and that the scrolling lines
+   * are drawn with real glyphs (a missing font leaves every line empty and the screen black, INC-65).
+   */
+  static function startCreditsCheck():Void
+  {
+    FlxG.switchState(() -> new funkin.ui.credits.CreditsState());
+    // haxe.Timer, not FlxTimer: state switches clear flixel's timers.
+    haxe.Timer.delay(function() {
+      var data = funkin.ui.credits.CreditsDataHandler.CREDITS_DATA;
+      var entries:Int = data == null ? -1 : data.entries.length;
+      var lines:Int = 0;
+      var drawn:Int = 0;
+      FlxG.state.forEachOfType(flixel.text.FlxText, function(text:flixel.text.FlxText) {
+        lines++;
+        if (text.text.length > 0 && text.textField.textWidth > 0) drawn++;
+      }, true);
+      trace('[AUTOTEST] [CREDITS] entries $entries, text lines $lines, drawn with glyphs $drawn, font ${@:privateAccess funkin.ui.credits.CreditsState.CREDITS_FONT}');
+      if (entries <= 0) failTest('credits data did not load');
+      else if (drawn == 0) failTest('credits text has no glyphs (font missing)');
+      else passTest();
+    }, 8000);
   }
 
   static function passTest():Void
