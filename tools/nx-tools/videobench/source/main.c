@@ -9,6 +9,9 @@
  *   decode-t2  2 threads (frame threading), original encode
  *   decode-fd-t2
  *   rgba       1 thread, original encode, plus sws_scale to RGBA (what an RGBA upload path would cost)
+ *   original, original-t2, original-t3
+ *              the official files as shipped (MKV, VP9, HEVC 1080p), 1/2/3 threads: can the asset installer
+ *              play what it downloads without converting it on the console?
  *
  * One [VIDEOBENCH] line per video and mode in sdmc:/switch/Friday-Night-Funkin/logs/videobench.log
  * (pulled by deploy_switch.sh --logs-only). The bench thread runs on core 2.
@@ -17,7 +20,7 @@
  *   make                       console NRO (Funkin-videobench.nro), copied by deploy_switch.sh --bench
  *   make TARGET=Funkin-videobench-citron BUILD=build-citron DEFINES="-DBENCH_NO_CONSOLE -DBENCH_CITRON"
  *                              for run_citron_autotest.sh VIDEO_BENCH: Citron segfaults with the libnx text
- *                              console, and it only runs the first mode to check the frame counts
+ *                              console, and it only runs one mode per file set to check the frame counts
  *   cc on the host (see docs/SWITCH_SESSION_GUIDE.md) to compare frame counts with ffprobe
  */
 #include <errno.h>
@@ -32,6 +35,7 @@
 
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
+#include <libavutil/cpu.h>
 #include <libavutil/imgutils.h>
 #include <libswscale/swscale.h>
 
@@ -49,6 +53,9 @@
 static const char *VIDEOS[] = {"ughCutscene", "gunsCutscene", "stressCutscene", "stressPicoCutscene",
                                "darnellCutscene", "2hotCutscene", "blazinCutscene"};
 #define VIDEO_COUNT (sizeof(VIDEOS) / sizeof(VIDEOS[0]))
+// The files exactly as the official assets ship them (what the asset installer would download): Week 7 in MKV,
+// Darnell VP9 720p, 2Hot HEVC 1080p, the rest H.264 720p.
+static const char *ORIGINAL_EXT[] = {".mkv", ".mkv", ".mkv", ".mkv", ".mp4", ".mp4", ".mp4"};
 
 typedef struct
 {
@@ -64,12 +71,11 @@ static const Mode MODES[] = {
     {"decode-t2", ".mp4", 2, 0},
     {"decode-fd-t2", ".fd.mp4", 2, 0},
     {"rgba", ".mp4", 1, 1},
+    {"original", ".orig", 1, 0},
+    {"original-t2", ".orig", 2, 0},
+    {"original-t3", ".orig", 3, 0},
 };
-#ifdef BENCH_CITRON
-#define MODE_COUNT 1 // Citron only checks that every video decodes to the end; its timings are not valid
-#else
 #define MODE_COUNT (sizeof(MODES) / sizeof(MODES[0]))
-#endif
 
 typedef struct
 {
@@ -332,13 +338,21 @@ static void *benchMain(void *unused)
   for (size_t m = 0; m < MODE_COUNT && !stopRequested; m++)
   {
     const Mode *mode = &MODES[m];
+#ifdef BENCH_CITRON
+    // Citron only checks that every file decodes to the end (its timings are not valid): one mode per file set.
+    if (strcmp(mode->name, "decode") != 0 && strcmp(mode->name, "decode-fd") != 0 && strcmp(mode->name, "original") != 0) continue;
+    // Citron's dynarmic has no vector SQRSHL, which the HEVC NEON code uses (2Hot crashed there): plain C for the
+    // originals. The console runs the NEON code.
+    av_force_cpu_flags(strcmp(mode->name, "original") == 0 ? 0 : -1);
+#endif
     int totalFrames = 0;
     double totalMs = 0, worstRatio = 1e9;
     const char *worstVideo = "-";
     for (size_t v = 0; v < VIDEO_COUNT && !stopRequested; v++)
     {
       char path[256];
-      snprintf(path, sizeof(path), "%s%s%s", VIDEO_DIR, VIDEOS[v], mode->suffix);
+      snprintf(path, sizeof(path), "%s%s%s%s", VIDEO_DIR, VIDEOS[v], mode->suffix,
+               strcmp(mode->suffix, ".orig") == 0 ? ORIGINAL_EXT[v] : "");
       BenchResult r;
       runOne(path, mode, &r);
       double fps = (r.wallMs > 0) ? r.frames * 1000.0 / r.wallMs : 0;
@@ -397,7 +411,7 @@ int main(int argc, char **argv)
   logFile = fopen(LOG_DIR "/videobench.log", "a");
   time_t wall = time(NULL);
   out("[VIDEOBENCH] ===== %s", ctime(&wall));
-  out("Decoding the 7 cutscenes in 5 modes (about 10 minutes). Keep the console awake (touch the screen now and then, or turn off auto-sleep); + exits when done.");
+  out("Decoding the 7 cutscenes in 8 modes (about 10 minutes). Keep the console awake (touch the screen now and then, or turn off auto-sleep); + exits when done.");
 
 #ifdef __SWITCH__
   Thread thread;

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Builds the minimal FFmpeg used by the Switch video player: LGPL 2.1+, H.264 decoder, MP4 demuxer,
-# swscale and nothing else (~2 MB, against ~34 MB of heap for devkitPro's GPL switch-ffmpeg).
+# Builds the minimal FFmpeg used by the Switch video player: LGPL 2.1+, H.264, HEVC and VP9 decoders, MP4 and
+# Matroska demuxers, swscale and nothing else (~3 MB, against ~34 MB of heap for devkitPro's GPL switch-ffmpeg).
+# HEVC, VP9 and Matroska are there for the official files as they ship (2Hot is HEVC 1080p, Darnell VP9, Week 7 MKV).
 #
 #   ./tools/nx-tools/build_ffmpeg_nx.sh          # build if missing or outdated
 #   ./tools/nx-tools/build_ffmpeg_nx.sh --force  # rebuild from a clean tree
@@ -29,7 +30,7 @@ CONFIGURE_FLAGS=(
   --disable-avdevice --disable-avfilter --disable-swresample --disable-postproc --disable-network
   --disable-zlib --disable-bzlib --disable-iconv --disable-lzma
   --enable-pthreads --enable-swscale
-  --enable-decoder=h264 --enable-parser=h264 --enable-demuxer=mov --enable-protocol=file
+  --enable-decoder=h264,hevc,vp9 --enable-parser=h264,hevc,vp9 --enable-demuxer=mov,matroska --enable-protocol=file
   --extra-cflags="-D__SWITCH__ -D_GNU_SOURCE -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec -ffunction-sections -fdata-sections -I$DEVKITPRO/libnx/include"
   --extra-ldflags="-fPIE -L$DEVKITPRO/libnx/lib"
 )
@@ -59,7 +60,8 @@ make install > /dev/null
 for lib in avcodec avformat avutil swscale; do
   [[ -f "$WORK/lib/lib${lib}_nx.a" ]] || { echo "[build_ffmpeg_nx] missing lib${lib}_nx.a" >&2; exit 1; }
 done
-if ! strings "$WORK/lib/libavcodec_nx.a" | grep -q "LGPL version 2.1 or later"; then
+# grep -c reads everything: with pipefail, grep -q would end strings with SIGPIPE and fail the check.
+if ! strings "$WORK/lib/libavcodec_nx.a" | grep -c "LGPL version 2.1 or later" > /dev/null; then
   echo "[build_ffmpeg_nx] libavcodec_nx.a is not LGPL" >&2
   exit 1
 fi

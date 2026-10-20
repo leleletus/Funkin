@@ -84,6 +84,8 @@ if [ "$BENCH" = "1" ]; then
     if [ "$T" = "ftp" ]; then
         curl -s -S -T "$BENCH_NRO" "$FTP_URL/switch/Funkin-videobench.nro" || { log "Upload failed"; exit 1; }
     else
+        # DBI cannot overwrite a file over MTP: remove the previous bench first.
+        timeout 60 kioclient --noninteractive remove "$MTP_ROOT/switch/Funkin-videobench.nro" > /dev/null 2>&1 || true
         kioclient --noninteractive --overwrite copy "$BENCH_NRO" "$MTP_ROOT/switch/Funkin-videobench.nro" || { log "Upload failed"; exit 1; }
     fi
     log "Done. Run 'Funkin-videobench' from the homebrew menu (about 10 min), then: deploy_switch.sh --logs-only"

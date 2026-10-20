@@ -3,6 +3,7 @@
 # H.264 1280x720 MP4 without audio, as the Switch player would play them.
 #   <name>.mp4     H.264 sources remuxed as they are; 2Hot (HEVC 1080p) and Darnell (VP9) re-encoded (CRF 18)
 #   <name>.fd.mp4  every video re-encoded with x264 "-tune fastdecode" (no CABAC, no deblocking)
+#   <name>.orig.*  the official file as it is (video track only, same container)
 # Output (not versioned): export/nx-generated/videobench/romfs/
 set -euo pipefail
 
@@ -28,7 +29,9 @@ for name in "${NAMES[@]}"; do
   if [[ ! -f "$OUT/$name.fd.mp4" ]]; then
     ffmpeg -y -v error -i "$src" -map 0:v:0 -vf scale=1280:720:flags=lanczos "${X264[@]}" -tune fastdecode -an -movflags +faststart "$OUT/$name.fd.mp4"
   fi
-  for f in "$OUT/$name.mp4" "$OUT/$name.fd.mp4"; do
+  orig="$OUT/$name.orig.${src##*.}"
+  [[ -f "$orig" ]] || ffmpeg -y -v error -i "$src" -map 0:v:0 -c:v copy -an "$orig"
+  for f in "$OUT/$name.mp4" "$OUT/$name.fd.mp4" "$orig"; do
     printf '[videobench] %-32s %6s  %s frames\n' "$(basename "$f")" "$(du -h "$f" | cut -f1)" \
       "$(ffprobe -v error -select_streams v:0 -count_frames -show_entries stream=nb_read_frames -of csv=p=0 "$f")"
   done
