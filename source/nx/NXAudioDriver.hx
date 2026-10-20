@@ -430,7 +430,7 @@ class NXAudioDriver
 
   /**
    * Asks the SDL audio thread to move to priority 0x2B on core 1 (INC-54). It takes effect at the thread's next
-   * buffer and cannot be undone without a restart. Off by default until a long console session confirms it helps.
+   * buffer and cannot be undone without a restart. On in every build since Build 35 (INC-54: 940 audio gaps -> 1).
    */
   public static function setHighThreadPriority(enabled:Bool):Void
   {

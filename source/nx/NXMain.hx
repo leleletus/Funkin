@@ -119,6 +119,12 @@ class NXMain
   public static function init()
   {
     #if switch
+    // INC-54: SDL's audio thread at 0x2B on core 1 (940 audio gaps -> 1 in the same long console session).
+    // Test builds set it in NXDevTools.init from nx_devtools.cfg (audio_thread_priority, high by default), since the
+    // audio thread applies the request at its next buffer and it cannot be undone.
+    #if !NX_DEV_TOOLS
+    NXAudioDriver.setHighThreadPriority(true);
+    #end
     nx.NXDeepTrace.init();
     nxController = new NXController();
     #end

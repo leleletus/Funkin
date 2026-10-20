@@ -16,6 +16,7 @@ package nx;
  *   single_copy_decode=true  # false = lime's stock double-copy PNG decode, for A/B memory runs (INC-49)
  *   ordered_release=true     # false = Build 25 post-switch texture release (hash order, copies parked), A/B (INC-49)
  *   banded_upload=true       # false = OpenFL's single glTexImage2D (Mesa stages the whole image), A/B (INC-49)
+ *   audio_thread_priority=high  # default = SDL's own audio thread priority (0x3B), A/B (INC-54)
  *   combo_lr=MEMORY_BUDGET_X3   # run started by holding L+R for 3 s (empty or off = nothing)
  *   combo_zlzr=PLAYTHROUGH      # run started by holding ZL+ZR for 3 s (empty or off = nothing)
  *
@@ -31,7 +32,7 @@ class NXDevTools
   static var cfgHeapCapMb:Int = 0;
   static var cfgComboLR:String = '';
   static var cfgComboZLZR:String = '';
-  static var cfgAudioThreadHigh:Bool = false;
+  static var cfgAudioThreadHigh:Bool = true;
   static var botplayOverride:Null<Bool> = null;
 
   /**
@@ -77,7 +78,7 @@ class NXDevTools
             case 'combo_zlzr':
               cfgComboZLZR = comboValue(raw);
             case 'audio_thread_priority':
-              cfgAudioThreadHigh = (raw == 'high');
+              cfgAudioThreadHigh = (raw != 'default');
             default:
           }
         }
