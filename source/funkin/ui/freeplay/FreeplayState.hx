@@ -2995,7 +2995,8 @@ class FreeplayState extends MusicBeatSubState
       FlxG.sound.music?.pause();
       #if switch
       // The preview decodes part of the song on the main thread (FlxPartialSound): only for the song the player
-      // stops on, not for every song scrolled past (stutter down to ~40 FPS when scrolling on the console).
+      // stops on, not for every song scrolled past (stutter down to ~40 FPS when scrolling on the console). It is decoded
+      // off the main thread by nx.NXPreviewAudio.
       nxLastSelectionChange = haxe.Timer.stamp();
       FlxTimer.wait(NX_PREVIEW_DELAY, playCurSongPreview.bind(currentCapsule));
       #else
@@ -3013,7 +3014,7 @@ class FreeplayState extends MusicBeatSubState
   }
 
   #if switch
-  static inline final NX_PREVIEW_DELAY:Float = 0.6;
+  static inline final NX_PREVIEW_DELAY:Float = 0.5;
 
   var nxLastSelectionChange:Float = 0;
   #end

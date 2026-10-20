@@ -183,6 +183,10 @@ class InputUtil
    */
   public static inline function getButtonName(id:Int, gamepad:FlxGamepad):String
   {
+    #if switch
+    var switchName:Null<String> = getSwitchButtonName(id);
+    if (switchName != null) return switchName;
+    #end
     return switch (gamepad.getInputLabel(id))
     {
       case null, '':
@@ -191,6 +195,33 @@ class InputUtil
         shortenButtonName(label);
     }
   }
+
+  #if switch
+  /**
+   * The name printed on the Switch controller. SDL maps its buttons by position, like an Xbox pad, so the
+   * physical A is the game's B, X its Y, and the other way round; only the names shown change.
+   */
+  static function getSwitchButtonName(id:Int):Null<String>
+  {
+    return switch (id)
+    {
+      case FlxGamepadInputID.A: "B";
+      case FlxGamepadInputID.B: "A";
+      case FlxGamepadInputID.X: "Y";
+      case FlxGamepadInputID.Y: "X";
+      case FlxGamepadInputID.BACK: "Minus";
+      case FlxGamepadInputID.START: "Plus";
+      case FlxGamepadInputID.GUIDE: "Home";
+      case FlxGamepadInputID.LEFT_SHOULDER: "L";
+      case FlxGamepadInputID.RIGHT_SHOULDER: "R";
+      case FlxGamepadInputID.LEFT_TRIGGER: "ZL";
+      case FlxGamepadInputID.RIGHT_TRIGGER: "ZR";
+      case FlxGamepadInputID.LEFT_STICK_CLICK: "L Stick";
+      case FlxGamepadInputID.RIGHT_STICK_CLICK: "R Stick";
+      default: null;
+    }
+  }
+  #end
 
   static function shortenButtonName(name:Null<String>):String
   {

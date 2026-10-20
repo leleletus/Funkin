@@ -102,6 +102,10 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
 
   function createPrefItems():Void
   {
+    createPrefItemCheckbox('Antialiasing', 'When enabled, scaled and rotated sprites have smooth edges. Disabling it can improve performance slightly. Applies to what loads next.', function(value:Bool):Void {
+      Preferences.switchAntialiasing = value;
+    }, Preferences.switchAntialiasing);
+
     createPrefItemCheckbox('Stage Shaders', 'When enabled, stage shaders and visual effects such as rain are displayed.', function(value:Bool):Void {
       Preferences.switchEnableShaders = value;
     }, Preferences.switchEnableShaders);
@@ -111,24 +115,12 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
     }, Preferences.switchShowLoadingScreen);
 
     #if NX_DEV_TOOLS
-    // Test builds only: public builds write no logs (INC-47), and the internal resolution is not implemented yet (INC-39).
+    // Test builds only: public builds write no logs (INC-47).
     createPrefItemCheckbox('Verbose Audio Telemetry', 'When enabled, detailed OpenAL audio and drift telemetry is written to the SD card logs.', function(value:Bool):Void {
       Preferences.switchVerboseAudioLog = value;
     }, Preferences.switchVerboseAudioLog);
-
-    createPrefItemEnum('Resolution Mode', 'Rendering resolution (720p is native in handheld mode).', [
-      "Fixed 720p" => "720p",
-      "Dynamic / Docked" => "Docked",
-      "540p Performance" => "540p"
-    ], function(key:String, value:String):Void {
-      Preferences.switchResolutionMode = value;
-    }, switch (Preferences.switchResolutionMode)
-      {
-        case "540p": "540p Performance";
-        case "Docked": "Dynamic / Docked";
-        default: "Fixed 720p";
-      });
     #end
+    // No "Resolution Mode": it had no effect (INC-39, the game draws at the screen resolution).
 
     createPrefItemCheckbox('Note Splashes', 'When enabled, particle effects appear when hitting Sick notes. Disabling them can improve performance.', function(value:Bool):Void {
       Preferences.switchNoteSplashes = value;

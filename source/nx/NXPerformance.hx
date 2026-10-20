@@ -196,6 +196,7 @@ class NXPerformance
   {
     #if switch
     lastDockedState = NXMain.IS_DOCKED;
+    NXClocks.init();
     applyResolutionMode(Preferences.switchResolutionMode);
     updatePerfHud();
     NXTextureMemory.init();
@@ -224,6 +225,7 @@ class NXPerformance
   public static function update():Void
   {
     #if switch
+    NXClocks.update();
     var currentDocked:Bool = NXMain.IS_DOCKED;
     if (currentDocked != lastDockedState)
     {
@@ -239,6 +241,7 @@ class NXPerformance
     logGamepadInput();
     NXDevOverlay.update();
     checkAutoPlayCombo();
+    checkSongShortcuts();
 
     // Universal HUD Toggle: L3 (Left Stick click) with unified single-source read and debounce cooldown
     var l3Pressed:Bool = false;
@@ -364,6 +367,79 @@ class NXPerformance
       }
       NXDeepTrace.logButtonEvent(shoulders ? 'L+R' : 'ZL+ZR', 'held 3s: starting $scenario');
       NXAutoTest.startRuntime(scenario);
+    }
+  }
+  #end
+
+  #if NX_DEV_TOOLS
+  static var shortcutHold:Float = 0.0;
+  static var shortcutButton:String = '';
+  static var shortcutDone:Bool = false;
+
+  /**
+   * Test builds, during a song: holding only L for 3 s moves on (skips the cutscene that is playing, otherwise ends
+   * the song as if it had finished, so Story mode goes to the next song); holding only R for 3 s plays the song again
+   * from a fresh load, so a Story song with a cutscene starts from its cutscene. Not during automated runs.
+   */
+  static function checkSongShortcuts():Void
+  {
+    var ps = funkin.play.PlayState.instance;
+    var l:Bool = false;
+    var r:Bool = false;
+    var others:Bool = false;
+    try
+    {
+      if (NXMain.nxController != null)
+      {
+        l = NXMain.nxController.isPressed(nx.controls.NXControlButton.L);
+        r = NXMain.nxController.isPressed(nx.controls.NXControlButton.R);
+        others = NXMain.nxController.isPressed(nx.controls.NXControlButton.ZL) || NXMain.nxController.isPressed(nx.controls.NXControlButton.ZR);
+      }
+      else if (FlxG.gamepads != null)
+      {
+        l = FlxG.gamepads.anyPressed(LEFT_SHOULDER);
+        r = FlxG.gamepads.anyPressed(RIGHT_SHOULDER);
+        others = FlxG.gamepads.anyPressed(LEFT_TRIGGER) || FlxG.gamepads.anyPressed(RIGHT_TRIGGER);
+      }
+    }
+    catch (e:Dynamic) {}
+
+    var button:String = (l && !r && !others) ? 'L' : ((r && !l && !others) ? 'R' : '');
+    if (button == '' || ps == null || ps.subState != null || NXAutoTest.isActive() || button != shortcutButton)
+    {
+      shortcutHold = 0.0;
+      shortcutDone = false;
+      shortcutButton = button;
+      return;
+    }
+    shortcutHold += FlxG.elapsed;
+    if (shortcutHold < 3.0 || shortcutDone) return;
+    shortcutDone = true;
+    try
+    {
+      if (button == 'L')
+      {
+        if (nx.video.NXVideoPlayer.isCutscenePlaying())
+        {
+          NXDeepTrace.logButtonEvent('L', 'held 3s: skipping the cutscene');
+          nx.video.NXVideoPlayer.finishCutscene();
+        }
+        else
+        {
+          NXDeepTrace.logButtonEvent('L', 'held 3s: ending ${ps.currentSong?.id}');
+          ps.endSong(true);
+        }
+      }
+      else
+      {
+        NXDeepTrace.logButtonEvent('R', 'held 3s: loading ${ps.currentSong?.id} again from the start');
+        nx.video.NXVideoPlayer.stop();
+        @:privateAccess funkin.ui.transition.LoadingState.loadPlayState(funkin.play.PlayState.lastParams);
+      }
+    }
+    catch (e:Dynamic)
+    {
+      NXDeepTrace.writeEntry('INPUT', 'Song shortcut $button failed: $e');
     }
   }
   #end
@@ -515,7 +591,7 @@ class NXPerformance
       NXDeepTrace.writeEntry('PERF', '[$where] avg ${Math.round(perfFrames / elapsed * 10) / 10} FPS'
         + ' | worst frame ${Math.round(perfWorstFrameMs * 10) / 10} ms | slow frames (>20 ms): $perfSlowFrames/$perfFrames'
         + ' | main thread CPU $cpu ms/frame | antialiasing ${funkin.Preferences.switchAntialiasing ? "on" : "off"}'
-        + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | ${describeHeap()}');
+        + ' | res $res | ${NXMain.IS_DOCKED ? "docked" : "handheld"} | ${NXClocks.describe()} | ${describeHeap()}');
       perfWindowStart = now;
       perfFrames = 0;
       perfWorstFrameMs = 0.0;

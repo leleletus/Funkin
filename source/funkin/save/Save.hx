@@ -137,7 +137,7 @@ class Save implements ConsoleClass
         },
         switchResolutionMode: '720p',
         switchEnableShaders: true,
-        switchAntialiasing: false,
+        switchAntialiasing: true,
         switchNoteSplashes: true,
         switchShowPerfHud: #if NX_DEV_TOOLS true #else false #end,
         switchVerboseAudioLog: false,
