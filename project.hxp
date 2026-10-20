@@ -1547,7 +1547,7 @@ class Project extends HXProject
     if (FEATURE_VIDEO_PLAYBACK.isEnabled(this) || isSwitch())
     {
       var shouldEmbedVideos = false;
-      addAssetLibrary("videos", shouldEmbedVideos, false);
+      addAssetLibrary("videos", shouldEmbedVideos, isSwitch() ? false : shouldPreload);
       var videoExclude = isSwitch() ? exclude.concat(["*.mp4", "*.mkv", "*.webm", "converted"]) : exclude;
       addAssetPath("assets/videos", "assets/videos", "videos", ["*"], videoExclude, shouldEmbedVideos, "assets");
       if (isSwitch()) addSwitchCutscenes(shouldEmbedVideos, exclude);

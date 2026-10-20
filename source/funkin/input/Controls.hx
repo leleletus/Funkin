@@ -963,9 +963,9 @@ class Controls extends FlxActionSet
     return switch (control)
     {
       case Control.ACCEPT:
-        [B];
+        #if switch [B] #else [A] #end; // Switch: SDL reports the right face button as B
       case Control.BACK:
-        [A];
+        #if switch [A] #else [B] #end;
       case Control.UI_UP:
         [DPAD_UP, LEFT_STICK_DIGITAL_UP];
       case Control.UI_DOWN:

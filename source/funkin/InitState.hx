@@ -149,7 +149,9 @@ class InitState extends FlxState
       funkin.mobile.util.FNFCUtil.init();
       #end
 
+      #if !switch // Only the chart editor uses these (~6 MB of bitmaps); it is not compiled on Switch.
       SongEventHelper.generateEaseGraphsBitmaps();
+      #end
 
       // This ain't a pixel art game! (most of the time)
       FlxSprite.defaultAntialiasing = true;

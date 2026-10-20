@@ -1310,35 +1310,27 @@ class PlayState extends MusicBeatSubState
       }
       #end
 
-      // Audio Watchdog: Evitar softlock cuando el audio se detiene o falla onComplete
+      #if switch
+      // Audio Watchdog: avoids a softlock when the music stalls or onComplete never fires (INC-09). It only acts on a
+      // real anomaly (music stopped, or its OpenAL source Stopped/Paused) after the last note, so songs with an
+      // instrumental outro still end through onComplete with their normal ending transition.
       if (!isSongEnd && !isGamePaused && !isInCutscene && !startingSong && lastChartNoteTime > 0)
       {
-        var noteCrossedThreshold:Bool = (Conductor.instance.songPosition >= (lastChartNoteTime + 2000.0));
-        var musicAnomaly:Bool = false;
-
-        if (FlxG.sound.music == null || !FlxG.sound.music.playing)
-        {
-          musicAnomaly = true;
-        }
-        #if switch
-        else
+        var musicAnomaly:Bool = (FlxG.sound.music == null || !FlxG.sound.music.playing);
+        if (!musicAnomaly)
         {
           var alState = nx.NXAudioDiagnostics.getOpenALSourceState(FlxG.sound.music);
-          if (alState == "Stopped" || alState == "Paused")
-          {
-            musicAnomaly = true;
-          }
+          musicAnomaly = (alState == "Stopped" || alState == "Paused");
         }
-        #end
-
         var notesCleared:Bool = (playerStrumline?.notes?.length == 0 && opponentStrumline?.notes?.length == 0);
+        var pastLastNote:Bool = Conductor.instance.songPosition >= lastChartNoteTime;
 
-        if (noteCrossedThreshold || (notesCleared && musicAnomaly && Conductor.instance.songPosition >= lastChartNoteTime))
+        if (musicAnomaly && pastLastNote && (notesCleared || Conductor.instance.songPosition >= lastChartNoteTime + 2000.0))
         {
           postSongWatchdogTimer += elapsed;
-          if (postSongWatchdogTimer >= 2.0 || noteCrossedThreshold)
+          if (postSongWatchdogTimer >= 2.0)
           {
-            trace('PlayState Audio Watchdog: Ultima nota cruzada hace >2.0s y musica anomala/sin onComplete. Despachando endSong(true)...');
+            trace('PlayState Audio Watchdog: music stopped or stalled for 2 s after the last note. Calling endSong(true).');
             endSong(true);
           }
         }
@@ -1347,6 +1339,7 @@ class PlayState extends MusicBeatSubState
           postSongWatchdogTimer = 0.0;
         }
       }
+      #end
     }
 
     var pauseButtonCheck:Bool = false;
@@ -2921,7 +2914,7 @@ class PlayState extends MusicBeatSubState
         FlxG.sound.music.pause();
         FlxG.sound.music.time = Math.max(0, startTimestamp);
         FlxG.sound.music.pitch = playbackRate;
-        FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
+        FlxG.sound.music.volume = #if switch (instrumentalVolume > 0) ? instrumentalVolume : 1.0 #else instrumentalVolume #end;
         FlxG.sound.music.onComplete = function() {
           #if switch
           if (nx.NXAudioDiagnostics.interceptPrematureSongCompletion()) return;
@@ -2935,8 +2928,8 @@ class PlayState extends MusicBeatSubState
     {
       if (!members.contains(vocals)) add(vocals);
       vocals.pitch = playbackRate;
-      vocals.playerVolume = (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0;
-      vocals.opponentVolume = (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0;
+      vocals.playerVolume = #if switch (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0 #else playerVocalsVolume #end;
+      vocals.opponentVolume = #if switch (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0 #else opponentVocalsVolume #end;
       vocals.play();
       vocals.pause();
       vocals.time = Math.max(0, startTimestamp);
@@ -3044,7 +3037,7 @@ class PlayState extends MusicBeatSubState
     }
 
     // Prevent the volume from being wrong.
-    FlxG.sound.music.volume = (instrumentalVolume > 0) ? instrumentalVolume : 1.0;
+    FlxG.sound.music.volume = #if switch (instrumentalVolume > 0) ? instrumentalVolume : 1.0 #else instrumentalVolume #end;
     if (FlxG.sound.music.fadeTween != null) FlxG.sound.music.fadeTween.cancel();
 
     if (vocals != null)
@@ -3054,8 +3047,8 @@ class PlayState extends MusicBeatSubState
 
       vocals.time = FlxG.sound.music.time;
       vocals.pitch = playbackRate;
-      vocals.playerVolume = (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0;
-      vocals.opponentVolume = (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0;
+      vocals.playerVolume = #if switch (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0 #else playerVocalsVolume #end;
+      vocals.opponentVolume = #if switch (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0 #else opponentVocalsVolume #end;
 
       // trace('STARTING SONG AT:');
       // trace('${FlxG.sound.music.time}');

@@ -134,6 +134,7 @@ class Paths implements ConsoleClass
 
   public static function videos(key:String, ?library:String):String
   {
+    #if switch
     final path:Path = new Path(key);
     var cleanFile:String = path.file;
     var ext:String = path.ext ?? Constants.EXT_VIDEO;
@@ -166,6 +167,16 @@ class Paths implements ConsoleClass
     }
 
     return getPath(nestedSubPath, BINARY, targetLib);
+    #else
+    final path:Path = new Path(key);
+
+    if (path.ext != null)
+    {
+      return getPath('videos/${path.file}.${path.ext}', BINARY, library ?? 'videos');
+    }
+
+    return getPath('videos/$key.${Constants.EXT_VIDEO}', BINARY, library ?? 'videos');
+    #end
   }
 
   public static function voices(song:String, ?suffix:String = ''):String
