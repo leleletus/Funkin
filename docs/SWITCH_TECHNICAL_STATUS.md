@@ -2,7 +2,7 @@
 
 Documento de referencia para entender cómo está montado el port, qué librerías usa frente a las oficiales, qué partes del juego oficial no funcionan igual en Switch y qué queda pendiente. Se revisa en cada actualización de V-Slice. Los cambios de contenido de cada versión oficial están en [`SWITCH_UPSTREAM_CHANGES.md`](SWITCH_UPSTREAM_CHANGES.md); el día a día (builds, incidencias, bitácora) sigue en [`SWITCH_PORT_TRACKER.md`](SWITCH_PORT_TRACKER.md).
 
-Última revisión: 2026-10-20, rama `feature/switch-merge-0.8.7` (Build 40, V-Slice 0.8.7).
+Última revisión: 2026-10-20, rama `nx-develop` (Build 41, V-Slice 0.8.7).
 
 ---
 
@@ -104,6 +104,8 @@ Qué se pierde por seguir en SDL2:
 | Marcas de tiempo de entrada en nanosegundos | `PreciseInputManager` convierte los milisegundos de SDL2 a nanosegundos. La precisión es de 1 ms, muy por debajo de las ventanas de acierto (las más estrechas, unos 45 ms). Además, Switch lee los mandos una vez por frame. |
 | Más mandos y dispositivos | No aplica: Switch usa los Joy-Con y el Pro Controller por su propio driver. |
 | "Unlocked Framerate" | Oculto en Switch: la pantalla va a 60 Hz. |
+
+**Rama del experimento:** `feature/switch-lime83-sdl3` (creada el 2026-10-20 desde la Build 41). `nx-develop` sigue con lime-nx/SDL2 hasta que esa rama pase Citron y la consola.
 
 **Cuándo replantearlo:** si devkitPro publica un paquete de SDL3 para Switch, si una versión futura del juego usa API de lime 8.3 que no se pueda guardar, o si FunkinCrew publica el motor nuevo de sus ramas de pruebas (`bgfx/public-playtest` para gráficos, `miniaudio/public-playtest` para audio). En cualquiera de esos casos, el plan es un lime propio sobre la versión de FunkinCrew con los cambios de Switch reaplicados (sección 8 del tracker).
 

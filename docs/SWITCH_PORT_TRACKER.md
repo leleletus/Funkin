@@ -1,6 +1,6 @@
 # Nintendo Switch Port Tracker & Master Control
 
-Documento maestro de trazabilidad, control de versiones y especificación técnica del port de **Friday Night Funkin'** para **Nintendo Switch** (`feature/switch-fixes-and-perf`).
+Documento maestro de trazabilidad, control de versiones y especificación técnica del port de **Friday Night Funkin'** para **Nintendo Switch** (rama principal `nx-develop`).
 
 > **REGLA DE ORO:** Este archivo DEBE leerse antes de realizar cualquier cambio en el código para no reintroducir regresiones superadas. Se actualiza en cada iteración de compilación.
 
@@ -49,7 +49,7 @@ Documento maestro de trazabilidad, control de versiones y especificación técni
 | **Build 38** | (sin tag, incluida en la 39) | — | **Citron: REGRESSION_SUITE 17/17, CUTSCENE_SKIP 9/9, build pública con `PUBLIC_SMOKE`.** | **1.** Vista previa de Freeplay leída y decodificada en un hilo de lime movido al núcleo 2 (`NXPreviewAudio`, solo la última petición termina, 3 en caché) y espera de 0.5 s. **2.** Antialiasing activado por defecto y con su opción en el submenú Nintendo Switch (afecta a todos los sprites). **3.** "Resolution Mode" fuera del menú (no hacía nada, INC-39). **4.** Nombres de botones de Switch en Controls (A/B y X/Y intercambiados respecto a Xbox, Minus/Plus, L/R/ZL/ZR, Home). **5.** Builds de prueba: mantener solo L 3 s salta la cinemática o termina la canción; solo R 3 s la recarga desde cero (con su cinemática en Story Mode). |
 | **Build 39** | `v0.8.3-nx-preview-3` | ver tag | **Citron: REGRESSION_SUITE 17/17, build pública con `PUBLIC_SMOKE` y sin cadenas de prueba. Pendiente: consola (Spaghetti en portátil con la GPU a 460.8 MHz).** | Velocidades dentro de lo que Nintendo permite a los juegos (`NXClocks`), siempre activas: portátil con la configuración 0x92220008 (CPU 1020, GPU 460.8, memoria 1331.2 MHz; por defecto una aplicación tiene la GPU a 307.2) y dock con 0x00010001 (CPU 1020, GPU 768, memoria 1600). Modo carga de CPU (1785 MHz, GPU al mínimo) desde cada cambio de pantalla hasta 1.5 s después. `[PERF]` anota las frecuencias reales. |
 | **Build 40** | `v0.8.7-nx-preview-1` | `f20829ce4` (el tag apunta a `b2db54361`, que además borra dos archivos sin uso en Switch) | **Primera build sobre V-Slice 0.8.7. Citron: REGRESSION_SUITE 17/17, CUTSCENE_SKIP 9/9, WEEKEND1_FULL, MEMORY_BUDGET, AUDIO_DRIVER_STALL y SOAK, todo a la primera; build pública con `PUBLIC_SMOKE` y sin cadenas de prueba. Build de pruebas en la consola (2026-10-20, con SwitchRPC v0.1.7 instalado y desactivado); pendiente la prueba.** | Salto 2 del Paso 2: fusión de v0.8.7 (406 commits, 23 archivos en conflicto, todos con los bloques de Switch conservados; detalle en el commit de fusión) más las Builds 38-39. Assets oficiales `724eba9de`; librerías del juego en los pines de 0.8.7 salvo FlxPartialSound (se queda en el de 0.8.3: el nuevo necesita `lime.media.AudioDecoder`). Los forks de Switch (lime-nx, openfl, flixel, hxcpp) siguen en sus commits: lo que el juego nuevo usa y no tienen se guarda solo en Switch (diálogos de archivo, orientación, `__enterFrame` con `Int`, `FlxMouse.deltaWheel`, `System.setHint` y `transparent` en la plantilla `ApplicationMain`, `FlxScreenGrab` fuera del `include`). Marcas de tiempo de entrada a milisegundos de SDL2 en `PreciseInputManager` (upstream pasó a SDL3) y la cámara nueva `camTransition` como `NXOverlayCamera`. |
-| **Build 41 (Actual)** | rama `feature/switch-merge-0.8.7` | `HEAD` | **Citron: REGRESSION_SUITE 17/17, CUTSCENE_SKIP 9/9, WEEKEND1_FULL. Mismo comportamiento en Switch que la Build 40.** | Paso B, aislamiento (fase 1): todo cambio de Switch en archivos del juego queda dentro de `#if switch` (con `#else` + el código oficial cuando lo sustituye). Antes 31 archivos cambiaban también PC/móvil/web (botplay con R3 o la tecla B, umbral de resincronización 85 ms, menú de Switch, `import.hx` global, depurador con Minus en cualquier mando, aviso "[Z/ENTER] to advance"...); ahora 0. Comprobador nuevo `tools/nx-tools/check_switch_isolation.py` (vista no-Switch contra `v0.8.7`, vista Switch contra otro commit, modo `--guard`); la prueba de tipos de PC da los mismos 13 errores que el código oficial con estas librerías. El arreglo del shader de post-efecto (división por cero) pasa a `nx/NXShaderFixes`, aplicado al crear el programa GL; la cabecera GLSL vuelve a ser la oficial. Se borran `PhillyStreets.hx` (sin uso), `Paths.video` (sin uso) y `GamepadDebugTogglePlugin` (solo se registraba fuera de Switch). |
+| **Build 41 (Actual)** | `nx-develop` | `d2ee25f47` | **Citron: REGRESSION_SUITE 17/17, CUTSCENE_SKIP 9/9, WEEKEND1_FULL. Mismo comportamiento en Switch que la Build 40.** | Paso B, aislamiento (fase 1): todo cambio de Switch en archivos del juego queda dentro de `#if switch` (con `#else` + el código oficial cuando lo sustituye). Antes 31 archivos cambiaban también PC/móvil/web (botplay con R3 o la tecla B, umbral de resincronización 85 ms, menú de Switch, `import.hx` global, depurador con Minus en cualquier mando, aviso "[Z/ENTER] to advance"...); ahora 0. Comprobador nuevo `tools/nx-tools/check_switch_isolation.py` (vista no-Switch contra `v0.8.7`, vista Switch contra otro commit, modo `--guard`); la prueba de tipos de PC da los mismos 13 errores que el código oficial con estas librerías. El arreglo del shader de post-efecto (división por cero) pasa a `nx/NXShaderFixes`, aplicado al crear el programa GL; la cabecera GLSL vuelve a ser la oficial. Se borran `PhillyStreets.hx` (sin uso), `Paths.video` (sin uso) y `GamepadDebugTogglePlugin` (solo se registraba fuera de Switch). |
 
 ---
 
@@ -202,39 +202,27 @@ Para garantizar sincronización fluida entre computadoras de desarrollo y evitar
 
 ### Mapeo de Remotos Git
 
-| Nombre Remoto | URL del Repositorio | Propósito | Rama de Trabajo |
-| :--- | :--- | :--- | :--- |
-| **`personal`** *(Principal)* | `https://github.com/leleletus/Funkin.git` | Fork personal de desarrollo activo de @djvemo / @leleletus. **Aquí se suben los avances locales y versiones compiladas**. | `feature/switch-fixes-and-perf` |
-| **`origin`** | `https://github.com/FunkinNXTeam/Funkin.git` | Repositorio central de la organización FunkinNXTeam. | `feature/switch-fixes-and-perf` / `nx-develop` |
-| **`upstream`** | `https://github.com/FunkinCrew/Funkin.git` | Repositorio oficial de Friday Night Funkin' (upstream base). | `main` |
+| Nombre Remoto | URL del Repositorio | Propósito |
+| :--- | :--- | :--- |
+| **`personal`** *(Principal)* | `https://github.com/leleletus/Funkin.git` | Fork de desarrollo activo de @djvemo / @leleletus. **Aquí se suben todas las ramas, etiquetas y builds.** |
+| **`origin`** | `https://github.com/FunkinNXTeam/Funkin.git` | Repositorio de la organización FunkinNXTeam. leleletus no tiene permiso de escritura; su `nx-develop-0.8.4` es la línea del equipo y no se toca. |
+| **`upstream`** | `https://github.com/FunkinCrew/Funkin.git` | Repositorio oficial de Friday Night Funkin' (etiquetas `vX.Y.Z` que se fusionan). |
 
-### Comandos de Despliegue y Sincronización Automática
+### Ramas (organizadas el 2026-10-20)
 
-1. **Subir cambios a GitHub personal (Recomendado):**
-   ```bash
-   git push personal feature/switch-fixes-and-perf
-   ```
-   *Si se ha reescrito o restaurado historial con commits limpios (como tras un rescate por reflog):*
-   ```bash
-   git push --force-with-lease personal feature/switch-fixes-and-perf
-   ```
+| Rama | Para qué | Regla |
+| :--- | :--- | :--- |
+| **`nx-develop`** | **Rama principal** (la predeterminada del fork; no hay `main` propia). Siempre compila y pasa Citron. | Cada build validada se sube aquí. Las fusiones de versiones oficiales y los pasos grandes se hacen aquí o en una rama corta que se fusiona y se borra. |
+| `feature/switch-performance` | Optimizaciones (resolución interna, GC, flixel-animate, memoria) que se prueban antes de pasar a `nx-develop`. Sustituye a `feature/switch-fixes-and-perf` (la línea de 0.8.1, ya contenida en `nx-develop`). | Se rebasa sobre `nx-develop` antes de empezar cada optimización. |
+| `feature/switch-lime83-sdl3` | Experimento: forks de lime/openfl/flixel/hxcpp en las versiones de 0.8.7 (lime 8.3 con SDL3; SDL3 para Switch de la rama `switch-sdl-3.4` de devkitPro). | Solo se fusiona a `nx-develop` cuando pase todas las pruebas de Citron y la consola. |
 
-2. **Actualizar el fork personal hacia la organización (`origin`):**
-   ```bash
-   git push origin feature/switch-fixes-and-perf
-   ```
+Lo que se borró el 2026-10-20 estaba todo contenido en `nx-develop`: `feature/switch-merge-0.8.7`, `feature/switch-upstream-0.8.7`, `feature/switch-fixes-and-perf`. La rama `backup/wip-nxvideoplayer-2026-10-12` (y su stash idéntico) queda como etiqueta `archive/wip-nxvideoplayer-2026-10-12`. Las builds de 0.8.1 y 0.8.3 siguen localizables por sus etiquetas (`v0.8.1-nx-*`, `v0.8.3-nx-*`).
 
-3. **Sincronizar otra PC desde el fork personal:**
-   ```bash
-   git fetch personal
-   git checkout feature/switch-fixes-and-perf
-   git pull personal feature/switch-fixes-and-perf
-   ```
+### Comandos de sincronización
 
-4. **Regla de Oro Anti-Desfase:**
-   - La rama local `feature/switch-fixes-and-perf` está configurada para rastrear `personal/feature/switch-fixes-and-perf`.
-   - Antes de iniciar sesión de trabajo en otra máquina: `git pull personal feature/switch-fixes-and-perf`.
-   - Al finalizar cada sesión de trabajo: `git push personal feature/switch-fixes-and-perf`.
+1. **Subir cambios:** `git push personal nx-develop` (y la rama de trabajo que corresponda). Las etiquetas: `git push personal <tag>`.
+2. **Otra PC:** `git fetch personal && git checkout nx-develop && git pull`. Las tres ramas locales siguen a su copia en `personal`.
+3. **Regla anti-desfase:** al empezar una sesión, `git pull`; al terminar, todo subido a `personal` (nada solo en local, tampoco stashes: si hace falta guardar algo a medias, una etiqueta `archive/...`).
 
 ---
 
@@ -368,7 +356,7 @@ Criterio de audio sano (pasos 10-16): dos muestras separadas 0.8 s con el source
 1. Validar en Citron (`WEEKEND1_PLAYLIST` / `WEEKEND1_FULL` y el escenario afectado) y actualizar este tracker.
    - Un `.nro` para el público se compila **sin** `-DNX_DEV_TOOLS` (sin botplay ni autotests, INC-46). Comprobar en `Funkin.elf`: `strings Funkin.elf | grep -c "Toggled Botplay"` debe dar 0.
    - La build pública se prueba en Citron con `./tools/nx-tools/run_citron_autotest.sh PUBLIC_SMOKE 90`. Citron se lanza siempre con ese script, nunca a mano: exporta `APPIMAGELAUNCHER_DISABLE=1` (sin ella, AppImageLauncher intercepta el arranque y muestra un error de registro) y cierra todo el árbol de procesos al terminar.
-2. Commit y push: `git push personal feature/switch-fixes-and-perf`.
+2. Commit y push: `git push personal nx-develop`.
 3. Tag anotado con la descripción de la build (Build N se publica como `v0.8.1-nx-preview-(N-2)`):
    ```bash
    git tag -a v0.8.1-nx-preview-15 -F notas.txt
