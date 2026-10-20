@@ -2,6 +2,8 @@ package nx.installer;
 
 import lime.ui.Gamepad;
 import lime.ui.GamepadButton;
+import openfl.display.Bitmap;
+import openfl.display.BitmapData;
 import openfl.display.Shape;
 import openfl.display.Sprite;
 import openfl.display.Stage;
@@ -178,8 +180,11 @@ class NXInstaller
       ready();
       return;
     }
+    registerScreenFont();
     showScreen();
     showOffer();
+    syncLabels();
+    log('screen: font "${textFont()}", title "${title.text}" measured ${Math.round(title.textWidth)}x${Math.round(title.textHeight)}');
     #if NX_DEV_TOOLS
     // Test builds: installer_autostart=true in nx_devtools.cfg starts the download without input (Citron runs).
     var cfg:String = nx.NXAssetRoot.ROOT + 'nx_devtools.cfg';
@@ -210,12 +215,16 @@ class NXInstaller
     bar = new Shape();
     bar.x = 60;
     bar.y = 590;
-    screen.addChild(title);
-    screen.addChild(body);
-    screen.addChild(footer);
     screen.addChild(bar);
-    screen.addChild(percentText);
-    screen.addChild(note);
+    // OpenFL only draws a TextField on screen with lime's Cairo backend, which Switch builds don't have; like FlxText,
+    // each text is drawn into a bitmap instead (see syncLabels).
+    for (field in [title, body, footer, percentText, note])
+    {
+      var image:Bitmap = new Bitmap();
+      labels.push({field: field, image: image, drawn: null});
+      screen.addChild(image);
+    }
+    syncLabels();
     stage.addChild(screen);
     stage.addEventListener(Event.ENTER_FRAME, onFrame);
     stage.addEventListener(KeyboardEvent.KEY_DOWN, onKey);
@@ -224,10 +233,68 @@ class NXInstaller
     Gamepad.onConnect.add(watchGamepad);
   }
 
+  static var labels:Array<{field:TextField, image:Bitmap, drawn:Null<String>}> = [];
+
+  /**
+   * Redraws the bitmap of every text whose content, position or visibility changed.
+   */
+  static function syncLabels():Void
+  {
+    for (label in labels)
+    {
+      var field:TextField = label.field;
+      label.image.visible = field.visible && field.text.length > 0;
+      label.image.x = field.x;
+      label.image.y = field.y;
+      if (!label.image.visible || label.drawn == field.text) continue;
+      var height:Int = Std.int(Math.max(1, Math.min(field.textHeight + 8, field.height)));
+      var bitmap:BitmapData = new BitmapData(Std.int(field.width), height, true, 0);
+      bitmap.draw(field);
+      if (label.image.bitmapData != null) label.image.bitmapData.dispose();
+      label.image.bitmapData = bitmap;
+      label.drawn = field.text;
+    }
+  }
+
+  static inline final SCREEN_FONT:String = 'romfs:/assets/fonts/NotoSans-Regular.ttf';
+
+  static var screenFont:Null<String> = null;
+
+  /**
+   * The installer's own font, OpenFL's Noto Sans (SIL OFL), read from the .nro's RomFS. lime registers the same font
+   * with a path under the asset root (the SD card), where it doesn't exist; OpenFL skips a registered font that fails
+   * to load and takes the next one with the same name, so this one is used, and the SD card gets no extra files.
+   */
+  static function registerScreenFont():Void
+  {
+    try
+    {
+      var font:Null<openfl.text.Font> = openfl.text.Font.fromFile(SCREEN_FONT);
+      if (font != null && font.fontName != null)
+      {
+        openfl.text.Font.registerFont(font);
+        screenFont = font.fontName;
+      }
+    }
+    catch (e:Dynamic)
+    {
+      log('screen: could not load $SCREEN_FONT: $e');
+    }
+  }
+
+  /**
+   * Embedded fonts are looked up by their exact registered name ("_sans" would find nothing).
+   */
+  static function textFont():String
+  {
+    return screenFont ?? '_sans';
+  }
+
   static function makeText(x:Float, y:Float, width:Float, size:Int, color:Int):TextField
   {
     var field:TextField = new TextField();
-    field.defaultTextFormat = new TextFormat('_sans', size, color);
+    field.embedFonts = true;
+    field.defaultTextFormat = new TextFormat(textFont(), size, color);
     field.x = x;
     field.y = y;
     field.width = width;
@@ -328,7 +395,7 @@ class NXInstaller
     note.visible = true;
     percentText.visible = true;
     percentText.text = '0 %';
-    body.y = 300;
+    body.y = 340;
     footer.text = 'Keep the console on and connected.     [+] Stop (continue later)';
     untyped __cpp__('memset((void *)&nxinst_progress, 0, sizeof(nxinst_progress))');
     var version:String = lime.app.Application.current.meta.get('version') ?? '?';
@@ -342,6 +409,7 @@ class NXInstaller
 
   static function onFrame(_:Event):Void
   {
+    syncLabels();
     if (mode != 'downloading') return;
     var state:Int = untyped __cpp__('nxinst_progress.state');
     var done:Float = untyped __cpp__('(double)nxinst_progress.bytes_done');
@@ -353,7 +421,10 @@ class NXInstaller
     var current:String = untyped __cpp__('::String(nxinst_progress.current)');
     var line:String = '${formatBytes(done)} of ${formatBytes(total)}  ·  $filesDone of $filesTotal files';
     if (rate > 0) line += '  ·  ${formatBytes(rate)}/s';
-    if (rate > 0 && total > done) line += '  ·  about ${formatTime((total - done) / rate)} left';
+    // Many small files come first, so neither bytes nor files alone give a fair estimate; average both fractions.
+    var fraction:Float = total > 0 && filesTotal > 0 ? (done / total + filesDone / filesTotal) / 2 : 0;
+    var elapsed:Float = haxe.Timer.stamp() - downloadStarted;
+    if (fraction > 0.02 && fraction < 1) line += '  ·  about ${formatTime(elapsed * (1 - fraction) / fraction)} left';
     if (waiting > 0)
     {
       var status:Int = untyped __cpp__('(int)nxinst_progress.http_status');

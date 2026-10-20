@@ -27,7 +27,11 @@ TITLE = "Friday Night Funkin' (unofficial port)"
 AUTHOR = 'FunkinNX port'
 
 # Everything the asset-less RomFS may contain (paths relative to the RomFS root).
-ALLOWED = re.compile(r'^(manifest/[A-Za-z0-9_-]+\.json|nx/assets-manifest\.tsv|LICENSE\.md|CHANGELOG\.md)$')
+ALLOWED = re.compile(r'^(manifest/[A-Za-z0-9_-]+\.json|nx/assets-manifest\.tsv|LICENSE\.md|CHANGELOG\.md|assets/fonts/Noto(Sans|Serif|Mono)-Regular\.ttf)$')
+
+# OpenFL's default fonts (SIL Open Font License, not FunkinCrew files): lime reads them from the asset root, which is the
+# SD card in this build, so the installer copies them there before the fonts are registered. Its own screen needs them.
+OPENFL_FONTS = ['NotoSans-Regular.ttf', 'NotoSerif-Regular.ttf', 'NotoMono-Regular.ttf']
 
 
 def game_version():
@@ -57,6 +61,12 @@ def main():
         if '"version":2' in text.replace(' ', '') and 'assets%2Fpreload%2F' not in text and name == 'default.json':
             sys.exit('[package_sd_build] the manifests use RomFS paths: this build was not made with -DNX_SD_ASSETS')
         shutil.copy2(os.path.join(manifests, name), os.path.join(staging, 'manifest', name))
+    os.makedirs(os.path.join(staging, 'assets', 'fonts'))
+    for name in OPENFL_FONTS:
+        source = os.path.join(built_romfs, 'assets', 'fonts', name)
+        if not os.path.exists(source):
+            sys.exit(f'[package_sd_build] missing OpenFL font {name} in the build')
+        shutil.copy2(source, os.path.join(staging, 'assets', 'fonts', name))
     for name in ('LICENSE.md', 'CHANGELOG.md'):
         if os.path.exists(os.path.join(ROOT, name)):
             shutil.copy2(os.path.join(ROOT, name), os.path.join(staging, name))
