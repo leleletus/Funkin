@@ -11,7 +11,6 @@ import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
 import flixel.util.FlxStringUtil;
 import funkin.audio.FunkinSound;
-import funkin.FunkinMemory;
 import funkin.data.story.level.LevelRegistry;
 import funkin.data.song.SongRegistry;
 import funkin.graphics.FunkinSprite;
@@ -673,7 +672,9 @@ class StoryMenuState extends MusicBeatState
           onComplete: function(_)
           {
             remove(oldBackground);
+            #if switch
             oldBackground.destroy();
+            #end
           }
         });
 

@@ -135,6 +135,7 @@ class Save implements ConsoleClass
             },
           },
         },
+        #if switch
         switchResolutionMode: '720p',
         switchEnableShaders: true,
         switchAntialiasing: true,
@@ -144,6 +145,7 @@ class Save implements ConsoleClass
         botplay: false,
         ghostTapping: true,
         switchShowLoadingScreen: false,
+        #end
       },
       #if mobile
       mobileOptions: {
@@ -783,14 +785,7 @@ class Save implements ConsoleClass
     #if switch
     flixel.util.FlxSave._SWITCH_SAVE_PATH = nx.NXMain.getSafeAppSubPath('saves');
     #end
-
-    // Sys.println('[SAVE] Binding save data for slot ' + slot + '...');
-
     FlxG.save.bind(Constants.SAVE_NAME + slot, Constants.SAVE_PATH);
-
-    // Sys.println('[SAVE] Save path: ' + FlxG.save.path);
-    // Sys.println('[SAVE] Save status: ' + FlxG.save.status);
-
     switch (FlxG.save.status)
     {
       case EMPTY:
@@ -829,16 +824,19 @@ class Save implements ConsoleClass
   {
     var msg = 'There was an error loading your save data in slot ${slot}.';
     msg += '\nPlease report this issue to the developers.';
-    // trace(msg);
     funkin.util.WindowUtil.showError("Save Data Failure", msg);
     // Don't touch that slot anymore.
     // Instead, load the next available slot.
     var nextSlot:Int = slot + 1;
+    #if switch
     if (nextSlot > 1000)
     {
       Sys.println('[SAVE] End of save data slots. Can\'t load any more.');
       throw "End of save data slots. Can't load any more.";
     }
+    #else
+    if (nextSlot > 1000) throw "End of save data slots. Can't load any more.";
+    #end
     return loadFromSlot(nextSlot);
   }
 
@@ -1251,6 +1249,7 @@ typedef SaveDataOptions =
       var previewOnSave:Bool;
     };
 
+  #if switch
   /**
    * Switch resolution mode ("720p", "Docked", "540p").
    * @default `"720p"`
@@ -1303,6 +1302,7 @@ typedef SaveDataOptions =
    * Whether loading screen is shown between songs in Story Mode on Switch (default: false).
    */
   var ?switchShowLoadingScreen:Bool;
+  #end
 
   var controls:
     {

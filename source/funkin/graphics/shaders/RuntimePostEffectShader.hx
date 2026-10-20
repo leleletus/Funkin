@@ -79,7 +79,7 @@ class RuntimePostEffectShader extends FlxRuntimeShader
 
 		// internally used to get the maximum `openfl_TextureCoordv`
 		vec2 bitmapCoordScale() {
-			return openfl_TextureCoordv / max(screenCoord, vec2(0.0001));
+			return openfl_TextureCoordv / screenCoord;
 		}
 
 		// internally used to compute bitmap coord
@@ -121,6 +121,9 @@ class RuntimePostEffectShader extends FlxRuntimeShader
 
   override function __createGLProgram(vertexSource:String, fragmentSource:String):GLProgram
   {
+    #if switch
+    fragmentSource = nx.NXShaderFixes.postEffectFragment(fragmentSource);
+    #end
     try
     {
       final res = super.__createGLProgram(vertexSource, fragmentSource);

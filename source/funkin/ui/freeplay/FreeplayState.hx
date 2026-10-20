@@ -14,7 +14,9 @@ import flixel.util.FlxColor;
 import openfl.filters.ShaderFilter;
 import flixel.util.FlxTimer;
 import funkin.audio.FunkinSound;
+#if switch
 import funkin.FunkinMemory;
+#end
 import funkin.data.freeplay.player.PlayerRegistry;
 import funkin.ui.freeplay.dj.BaseFreeplayDJ;
 import funkin.ui.freeplay.dj.AnimateAtlasFreeplayDJ;
@@ -1478,7 +1480,9 @@ class FreeplayState extends MusicBeatSubState
 
   function tryOpenCharSelect():Void
   {
+    #if switch
     if (uiStateMachine.currentState == Exiting) return;
+    #end
 
     // Check if we have ACCESS to character select!
     trace('Is Pico unlocked? ${PlayerRegistry.instance.fetchEntry('pico')?.isUnlocked()}');
@@ -1615,10 +1619,12 @@ class FreeplayState extends MusicBeatSubState
       }
     }
 
+    #if switch
     // Safety fallback: ensure fromCharSelect flag is always cleared even if tweens finish early or fail
     new flixel.util.FlxTimer().start(0.4, _ -> {
       fromCharSelect = false;
     });
+    #end
 
     // TODO: i have no fucking idea why the dj position is shitty when entering from char select
     // the easiest way is to just snap them back into place
@@ -1682,9 +1688,9 @@ class FreeplayState extends MusicBeatSubState
     }
     #end // ^<-- FEATURE_DEBUG_FUNCTIONS
 
+    #if switch
     // Universal and reliable R3 check for character select (single source on Switch)
     var r3Pressed:Bool = false;
-    #if switch
     if (nx.NXMain.nxController != null)
     {
       r3Pressed = nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.STICK_R);
@@ -1693,26 +1699,19 @@ class FreeplayState extends MusicBeatSubState
     {
       r3Pressed = FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK);
     }
-    #else
-    r3Pressed = (FlxG.gamepads != null && FlxG.gamepads.anyJustPressed(RIGHT_STICK_CLICK));
-    #end
 
     if (r3Pressed)
     {
-      #if switch
       nx.NXDeepTrace.logButtonEvent('R3', 'Freeplay Character Select requested');
-      #end
     }
 
     if (uiStateMachine.canInteract() || uiStateMachine.currentState == Idle)
     {
-      #if switch
       // On Switch, ignore physical Y button to prevent triggering unsupported actions / black screen
       if (nx.NXMain.nxController != null && nx.NXMain.nxController.isJustPressed(nx.controls.NXControlButton.Y))
       {
         // Ignore Y button
       }
-      #end
 
       var charSelectRequested:Bool = controls.FREEPLAY_CHAR_SELECT || r3Pressed;
 
@@ -1723,6 +1722,16 @@ class FreeplayState extends MusicBeatSubState
         fromCharSelect = false;
         tryOpenCharSelect();
       }
+    #else
+    if (uiStateMachine.canInteract())
+    {
+      if ((controls.FREEPLAY_CHAR_SELECT && !fromCharSelect #if FEATURE_TOUCH_CONTROLS
+        || (TouchUtil.pressAction(djHitbox, funnyCam, false) && !SwipeUtil.swipeAny) #end)
+        && !FlxG.debugger.visible)
+      {
+        tryOpenCharSelect();
+      }
+    #end
 
       if (controls.FREEPLAY_FAVORITE) favoriteSong();
       if (controls.FREEPLAY_JUMP_TO_TOP) changeSelection(-curSelected);
@@ -2252,11 +2261,19 @@ class FreeplayState extends MusicBeatSubState
 
   override public function destroy():Void
   {
+    #if switch
     clearPreviews();
     FunkinSound.emptyPartialQueue();
     FlxG.cameras.remove(funnyCam);
     FlxG.cameras.remove(rankCamera);
+    #end
     super.destroy();
+    #if !switch
+    // remove and destroy freeplay camera
+    FlxG.cameras.remove(funnyCam);
+    // Cancel all song preview timers just in case a preview loads after we exit.
+    clearPreviews();
+    #end
   }
 
   function goBack():Void
@@ -2858,7 +2875,11 @@ class FreeplayState extends MusicBeatSubState
           #if FEATURE_DEBUG_FUNCTIONS
           botPlayMode: FlxG.keys.pressed.SHIFT, mirrored: FlxG.keys.pressed.CONTROL,
           #else
+          #if switch
           botPlayMode: #if ENABLE_BOTPLAY true #else false #end,
+          #else
+          botPlayMode: false,
+          #end
           #end
           // TODO: Make these an option! It's currently only accessible via chart editor.
           // startTimestamp: 0.0,

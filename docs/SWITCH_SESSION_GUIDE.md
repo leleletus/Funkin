@@ -12,6 +12,7 @@ Actúa como **Lead C++/Haxe Engine Architect** del port de **Friday Night Funkin
    - El juego debe comportarse **1:1 idéntico al V-Slice oficial de PC** en mecánicas, visuales, shaders y cinemáticas. Ninguna optimización puede quitar efectos (lluvia, niebla, polvo, splashes, shaders).
    - Toda la lógica nueva de Switch va en `source/nx/` (`NXVideoPlayer`, `NXAutoTest`, `NXRegressionSuite`, `NXDeepTrace`, `NXPerformance`, `NXAudioDiagnostics`, `NXTextureMemory`).
    - Los cambios en el motor oficial (`source/funkin/...`) deben ser mínimos, sin hardcode y dentro de `#if switch ... #end`, para que `git merge upstream/main` siga limpio cuando FunkinCrew publique actualizaciones (Week 8).
+   - Antes de cada commit que toque `source/funkin/`, `Main.hx`, `import.hx` o `templates/`: `python3 tools/nx-tools/check_switch_isolation.py --summary` debe dar `0 also change other platforms` (en PC, móvil y web el juego compila igual que el oficial).
 2. **Lista negra**
    - **Prohibido** modificar los `.hxc` de `assets/preload/scripts/` (el parser HScript de Polymod falla con `Null<T>`, `#if` o accesos estáticos).
    - **Prohibido** hacer commits dentro del submódulo `assets`. Debe apuntar a un commit oficial de `FunkinCrew/Funkin.assets` (actual: `39d4b3f`). Los assets de Switch derivados (cinemáticas) se **generan** al compilar con `tools/nx-tools/prepare_switch_assets.py`; nunca se versionan ni se redistribuyen (la licencia de los assets lo prohíbe).

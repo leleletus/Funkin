@@ -1,4 +1,5 @@
-#if !macro
+// Global imports of the Switch port only; other platforms compile exactly as upstream.
+#if (switch && !macro)
 import cpp.*;
 
 // Nintendo Switch imports

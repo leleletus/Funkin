@@ -127,11 +127,6 @@ class Paths implements ConsoleClass
     return getPath('music/$key.${Constants.EXT_SOUND}', MUSIC, library);
   }
 
-  public static inline function video(key:String, ?library:String):String
-  {
-    return videos(key, library);
-  }
-
   public static function videos(key:String, ?library:String):String
   {
     #if switch

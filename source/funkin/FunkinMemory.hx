@@ -14,7 +14,11 @@ import lime.app.Promise;
  * Handles caching of textures and sounds for the game.
  * I did this hello, this can be improved later on and I have ideas on how, but for now this functions well enough. -Zack
  */
+#if switch
 @:nullSafety(Off)
+#else
+@:nullSafety
+#end
 class FunkinMemory
 {
   static var permanentCachedTextures:Map<String, FlxGraphic> = [];
@@ -41,6 +45,7 @@ class FunkinMemory
   static var purgeFilter:Array<String> = ['/week', '/characters', '/charSelect', '/results'];
   #end
 
+  #if switch
   static final STAGE_PURGE_PATTERNS:Array<String> = [
     "philly", "blazin", "picoBlazin", "darnellBlazin", "lightning", "skyBlur", "streetBlur",
     "erect", "spraycan", "Spraypaint", "CanImpact", "wked1_cutscene",
@@ -49,6 +54,7 @@ class FunkinMemory
     "evilSnowman", "spooky", "halloween", "bgTrees", "sserafim", "truck", "counter-stretch",
     "burger-cutscene", "front-stool", "back-tables", "back-stools"
   ];
+  #end
 
   /**
    * Caches textures that are always required.
@@ -117,6 +123,7 @@ class FunkinMemory
     permanentCacheSound(Paths.sound('missnote3', 'shared'));
   }
 
+  #if switch
   /**
    * Evaluates whether a graphic belongs to essential UI, fonts, Polymod scripts,
    * FlxBar elements, or permanent assets and must NEVER be destroyed.
@@ -293,6 +300,12 @@ class FunkinMemory
    * Clears the current texture and sound caches.
    * @param callGarbageCollector Whether to call the system's garbage collector after purging.
    */
+  #else
+  /**
+   * Clears the current texture and sound caches.
+   * @param callGarbageCollector Whether to call the system's garbage collector after purging.
+   */
+  #end
   public static inline function purgeCache(callGarbageCollector:Bool = false):Void
   {
     trace(' CLEARING CACHE '.bg_bright_lilac().bold() +  ' Disposing all cached textures, assets and sounds...');
@@ -302,8 +315,13 @@ class FunkinMemory
     preparePurgeSoundCache();
     purgeSoundCache();
     #if (cpp || neko || hl)
+    #if switch
     if (callGarbageCollector) cpp.vm.Gc.run(false);
+    #else
+    if (callGarbageCollector) funkin.util.MemoryUtil.collect(true);
     #end
+    #end
+  #if switch
   }
 
   /**
@@ -312,6 +330,7 @@ class FunkinMemory
   public static inline function purgeVRAMAggressive():Void
   {
     purgeCache(false);
+  #end
   }
 
   ///// TEXTURES /////
@@ -413,11 +432,13 @@ class FunkinMemory
       var graphic:Null<FlxGraphic> = previousCachedTextures.get(graphicKey);
       if (graphic != null)
       {
+        #if switch
         if (isProtectedGraphic(graphicKey, graphic))
         {
           previousCachedTextures.remove(graphicKey);
           continue;
         }
+        #end
 
         FlxG.bitmap.remove(graphic);
         graphic.persist = false;
@@ -709,11 +730,17 @@ class FunkinMemory
     {
       log('Cleaning asset $key');
       var obj:Null<FlxGraphic> = FlxG.bitmap.get(key);
+      #if switch
       if (obj != null && !obj.isDestroyed)
+      #else
+      if (obj != null)
+      #end
       {
+        #if switch
         if (obj.useCount > 0) continue;
         FlxG.bitmap.remove(obj);
         obj.persist = false;
+        #end
         obj.destroy();
       }
       FlxG.bitmap.removeKey(key);

@@ -374,11 +374,13 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     preferenceDesc.push(prefDesc);
   }
 
+  #if switch
   function createPrefItemButton(prefName:String, prefDesc:String, callback:Void->Void):Void
   {
     items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, callback, false, true);
     preferenceDesc.push(prefDesc);
   }
+  #end
 
   override function exit():Void
   {

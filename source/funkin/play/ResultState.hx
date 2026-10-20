@@ -828,6 +828,7 @@ class ResultState extends MusicBeatSubState
       }
     }
 
+    #if switch
     var gamepadConfirm:Bool = false;
     for (gamepad in FlxG.gamepads.getActiveGamepads())
     {
@@ -837,8 +838,9 @@ class ResultState extends MusicBeatSubState
         break;
       }
     }
+    #end
 
-    if (controls.PAUSE_P || controls.ACCEPT_P || controls.BACK_P || gamepadConfirm #if mobile || TouchUtil.pressAction() #end)
+    if (controls.PAUSE_P || controls.ACCEPT_P #if switch || controls.BACK_P || gamepadConfirm #end #if mobile || TouchUtil.pressAction() #end)
     {
       if (busy) return;
       if (_parentState is funkin.ui.debug.results.ResultsDebugSubState)

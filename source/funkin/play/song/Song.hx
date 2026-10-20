@@ -851,25 +851,28 @@ class SongDifficulty
 
   public function cacheInst(instrumental = ''):Void
   {
+    #if switch
     var path = getInstPath(instrumental);
     funkin.FunkinMemory.cacheSound(path);
-    #if switch
     // Fully prime sound into memory cache to prevent RomFS reading underruns
     openfl.utils.Assets.getSound(path, true);
+    #else
+    funkin.FunkinMemory.cacheSound(getInstPath(instrumental));
     #end
   }
 
   public function playInst(volume:Float = 1.0, instId:String = '', looped:Bool = false):Void
   {
     var suffix:String = (instId != '') ? '-$instId' : '';
-    var instPath:String = Paths.inst(this.song.id, suffix);
 
     #if switch
+    var instPath:String = Paths.inst(this.song.id, suffix);
     // Ensure the instrumental buffer is in memory before creating OpenAL audio source
     funkin.FunkinMemory.cacheSound(instPath);
-    #end
-
     FlxG.sound.music = FunkinSound.load(instPath, volume, looped, false, true, false, null, null, true);
+    #else
+    FlxG.sound.music = FunkinSound.load(Paths.inst(this.song.id, suffix), volume, looped, false, true, false, null, null, true);
+    #end
 
     // Workaround for a bug where FlxG.sound.music.update() was being called twice.
     FlxG.sound.list.remove(FlxG.sound.music);

@@ -688,6 +688,7 @@ class Preferences
   #end
   #end
 
+  #if switch
   /**
    * Resolution mode on Nintendo Switch.
    * @default `"720p"`
@@ -900,6 +901,7 @@ class Preferences
     }
     return value;
   }
+  #end
 }
 
 

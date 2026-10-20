@@ -1,5 +1,7 @@
 package funkin.ui.options;
 
+#if switch
+
 import flixel.FlxCamera;
 import flixel.FlxObject;
 import flixel.FlxSprite;
@@ -193,3 +195,4 @@ class SwitchSettingsMenu extends Page<OptionsState.OptionsMenuPageName>
     super.exit();
   }
 }
+#end

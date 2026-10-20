@@ -17,29 +17,31 @@ Documento de referencia para entender cómo está montado el port, qué librerí
 | Herramientas | `tools/nx-tools/` | Compilación de FFmpeg, despliegue, Citron, preparación de cinemáticas, sincronización de librerías | No lo toca la fusión |
 | Documentación | `docs/SWITCH_*.md` | Tracker, guía de sesión, este documento, cambios de versiones | — |
 
-### Medida de aislamiento (contra la etiqueta oficial `v0.8.7`)
+### Aislamiento (contra la etiqueta oficial `v0.8.7`)
 
-| | Archivos | Líneas añadidas |
-| :--- | ---: | ---: |
-| Total del port | 99 | 18.031 |
-| En carpetas propias (`source/nx/`, `tools/nx-tools/`, `docs/`) | 46 | 14.815 (82 %) |
-| **En archivos del juego oficial** | **53** | **3.216** (232 líneas originales quitadas o cambiadas) |
+Regla: en PC, móvil y web el juego tiene que compilar **exactamente** como el oficial. Todo cambio de Switch en un archivo del juego va dentro de `#if switch` (con `#else` + el código original cuando sustituye algo), y la lógica larga vive en `source/nx/`.
 
-Archivos del juego con más cambios: `PlayState` (711), `FunkinMemory` (271), `Preferences` (253), `CrashHandler` (223), `SwitchSettingsMenu` (195, archivo nuevo), `project.hxp` (169), `VideoCutscene` (167), `FunkinSound` (139), `FunkinCamera` (103).
+**Estado (2026-10-20, Build 41): fase 1 hecha.**
 
-La mayoría de esos cambios están dentro de `#if switch` y no afectan a PC, pero **hasta 33 bloques cambian código original sin guarda** (detectados con un filtro automático; confirmado al menos `VoicesGroup.set_time`, que sincroniza las voces de otra forma en todas las plataformas). Consecuencias:
+| | Antes (Build 40) | Ahora (Build 41) |
+| :--- | :--- | :--- |
+| Archivos del juego que también cambiaban otras plataformas | 31 | **0** |
+| Líneas oficiales quitadas o cambiadas | 232 | 42 (solo condiciones ampliadas, p. ej. `#if mobile` → `#if (mobile \|\| switch)`) |
+| Archivos fuera de las carpetas propias tocados | 53 | 51 (se borraron una clase sin uso y un plugin que solo se registraba fuera de Switch) |
 
-- El port **no se pierde** al actualizar: git conserva los cambios, y la fusión de 0.8.7 mantuvo todos los bloques de Switch (17/17 en `REGRESSION_SUITE`).
-- Pero **no es automático**: cada fusión trae conflictos donde FunkinCrew tocó las mismas líneas (17 archivos en 0.8.3, 23 en 0.8.7) y hay que resolverlos a mano.
+Cómo se comprueba (`tools/nx-tools/check_switch_isolation.py`):
 
-### Objetivo de aislamiento (pendiente B, sección 6)
+- `python3 tools/nx-tools/check_switch_isolation.py`: resuelve el preprocesador como una build que no es de Switch (`switch` y los defines `NX_`/`nx_` falsos, el resto sin tocar), quita comentarios y formato y compara cada archivo del juego con la etiqueta oficial. Tiene que salir `0 also change other platforms`. Los archivos que no son Haxe (`project.hxp`, `hmm.json`, `.gitignore`...) se listan para revisarlos a mano: `project.hxp` decide lo de Switch con `isSwitch()`.
+- `--switch-against <commit>`: compara la vista de Switch (`switch` verdadero) con otro commit, para comprobar que un cambio de organización no altera lo que compila Switch.
+- `--guard <archivo>...`: envuelve automáticamente cada bloque que también cambia otras plataformas en `#if switch` + `#else` + original. Los bloques que empiezan o terminan a medias de otro `#if` los deja para hacerlos a mano. Revisar siempre el resultado.
+- Prueba de tipos de PC (manual, hecha para la Build 41): `haxelib run lime display linux` da el hxml; con él, `haxe <hxml>` (sin las inclusiones de librerías) sobre el árbol del port y sobre `git archive v0.8.7 source` produce **los mismos 13 errores**, todos por API de lime 8.3/flixel 6.2 que los forks no tienen (`deltaWheel`, `MessageBoxType`, `Display.orientation`, diálogos de archivo). Ninguno viene del código de Switch.
 
-1. Llevar la lógica que hoy vive en archivos del juego a `source/nx/` y dejar en el juego una sola llamada por enganche, dentro de `#if switch` (ejemplo: `#if switch nx.NXPlayStateHooks.onSongStart(this); #end`).
-2. Donde se pueda, ni siquiera tocar el archivo: inyectar el cambio al compilar con una macro de construcción, como ya hacen los parches de `NXLibraryPatches` con lime y OpenFL. Si FunkinCrew cambia la función, la compilación falla y avisa.
-3. Poner detrás de `#if switch` los bloques sin guarda (o devolverlos al original si no hacen falta).
-4. Un comprobador en `tools/nx-tools/` que quite todos los bloques `#if switch` del juego y compare el resultado con la etiqueta oficial: debe salir idéntico. Se ejecuta antes de cada release y después de cada fusión.
+**Fase 2 (pendiente):** reducir los conflictos de fusión moviendo los bloques largos (`PlayState`, `FunkinMemory`, `FunkinSound`, `CrashHandler`, `VideoCutscene`) a clases de `source/nx/` con una llamada de una línea en el juego, o a parches de compilación por macro como `NXLibraryPatches`. No cambia el comportamiento; solo hace las fusiones más cortas.
 
-Con eso, una actualización futura se reduce a: fusionar (casi sin conflictos), compilar, arreglar los enganches que el compilador marque y validar.
+Consecuencias para las actualizaciones:
+
+- El port **no se pierde** al actualizar: git conserva los cambios y el comprobador avisa si algo de Switch se sale de sus guardas.
+- Todavía hay conflictos donde FunkinCrew toca las mismas líneas (17 archivos en 0.8.3, 23 en 0.8.7); la fase 2 los reduce.
 
 ---
 
@@ -152,9 +154,9 @@ Activas: Polymod (mods), FunkVis, Lag Adjustment, Newgrounds, menú de depuraci�
 | Paso | Qué | Detalle |
 | :--- | :--- | :--- |
 | **A** | Cerrar la Build 40 (0.8.7) | Terminar la validación en Citron (`MEMORY_BUDGET`, `AUDIO_DRIVER_STALL`, `SOAK`); `.nro` público con `PUBLIC_SMOKE` y la comprobación de `strings`; etiqueta `v0.8.7-nx-preview-1`. Prueba en consola: Freeplay, Spaghetti en portátil (GPU a 460,8 MHz), cinemáticas, antialiasing, memoria en sesión larga, nombres de botones, atajos L/R, relojes (460,8 MHz portátil, 768 MHz en dock) y el DJ con DARKEN. Instalar SwitchRPC v0.1.7 desactivado y, si sigue fallando, comentar en su issue #17. |
-| **B** | Aislar el código de Switch | Sección 1 (recomendado antes de C, aprovechando que el port ya está en 0.8.7). |
-| **C** | Instalador de assets | `.nro` público sin assets de FunkinCrew: al arrancar busca los assets oficiales en la SD; si no están, los descarga del GitHub oficial (el commit de la versión) o se copian a mano. |
-| **D** | Vídeo y audio nativos en la build pública | Reproductor FFmpeg (hoy solo en la build de desarrollo). El audio de las cinemáticas sale del propio contenedor: Vorbis en Week 7, AAC en Weekend 1. |
+| **B** | Aislar el código de Switch | Fase 1 hecha en la Build 41 (sección 1). Fase 2, reducir conflictos de fusión, pendiente. |
+| **C** | Instalador de assets | `.nro` público sin assets de FunkinCrew: al arrancar busca los assets oficiales en la SD; si no están, los descarga del GitHub oficial (el commit de la versión) o se copian a mano. Plan completo en `~/switch-builds/design/asset_installer_plan_2026-10-19.md` (pasos I1-I12). **Hecho (2026-10-20):** I5, `tools/nx-tools/gen_asset_manifest.py` (manifiesto por versión desde los manifiestos de lime de la build; 0.8.7 = 1939 archivos, 734 MB, idéntico al árbol de GitHub del commit `724eba9de`); I6a, núcleo del verificador en C (`source/nx/installer/nx_install_core.h`: manifiesto, comprobación rápida por tamaños, verificación completa SHA-256 con reparación de saltos de línea CRLF, estado), probado en el PC con `tools/nx-tools/installer-test/run_tests.py` (9/9). **Siguiente:** I3/I4 (raíz de assets en la SD), I1 (banco de red en consola; necesita `sudo pacman -S switch-curl`). |
+| **D** | Vídeo y audio nativos en la build pública | Reproductor FFmpeg (hoy solo en la build de desarrollo). El audio de las cinemáticas sale del propio contenedor: Vorbis en Week 7, AAC en Weekend 1. Los "vídeos nativos" de la build son los archivos oficiales sin convertir (mismo tamaño que `videos/videos/*` del repo), así que con el instalador basta con leerlos de la SD: D va justo después de C. |
 | **E** | ASTC | Rama aparte (`feature/switch-astc`) para comparar con la principal: conversión única en la consola tras la descarga; la decodificación por hardware necesita el ajuste de chipset de `libdrm_nouveau` (sección 4 de pendientes del tracker). Se compara memoria, tiempos de carga y fps con los mismos escenarios y solo se fusiona si mejora. |
 | **F** | Release pública | `.nro` sin assets adjunto (posible solo después de C). |
 | **G** | Rendimiento y táctil | Resolución interna real (INC-39), picos del GC, CPU de flixel-animate. Táctil en dos hitos: lector propio sin dedos fantasma (INC-52) y los controles táctiles de la versión de móvil (`FEATURE_TOUCH_CONTROLS`) solo en modo portátil, con opción en ajustes. |
@@ -168,6 +170,6 @@ Activas: Polymod (mods), FunkVis, Lag Adjustment, Newgrounds, menú de depuraci�
 2. Comparar `hmm.json` de la etiqueta nueva con el de la rama (tabla de la sección 2). Si cambian los pines de lime, openfl, flixel o hxcpp, listar sus commits nuevos y buscar API que el juego empiece a usar.
 3. Rama nueva desde la rama del port y `git merge vX.Y.Z`. Resolver conflictos conservando todos los bloques de Switch, y anotar en el mensaje de la fusión cada archivo en conflicto y cómo se resolvió.
 4. Compilar para Switch. Cada error por API que los forks no tienen se arregla guardado solo en Switch, y se anota en la sección 4 de este documento.
-5. Ejecutar el comprobador de aislamiento (cuando exista, pendiente B).
+5. `python3 tools/nx-tools/check_switch_isolation.py` tiene que dar 0 archivos que cambian otras plataformas; si no, `--guard` sobre los archivos que liste, revisar, y `--switch-against <commit anterior>` para confirmar que Switch no cambia.
 6. Validar en Citron: `REGRESSION_SUITE`, `CUTSCENE_SKIP`, `WEEKEND1_FULL`, `MEMORY_BUDGET`, `AUDIO_DRIVER_STALL`, `SOAK`; después, prueba en consola.
 7. Actualizar este documento (secciones 2, 4 y 6), el tracker (fila de build y bitácora) y la guía de sesión si cambia el método.

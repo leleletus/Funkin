@@ -1,7 +1,9 @@
 package funkin.play.cutscene.dialogue;
 
 import flixel.FlxSprite;
+#if switch
 import flixel.text.FlxText;
+#end
 import funkin.data.IRegistryEntry;
 import flixel.group.FlxSpriteGroup;
 import flixel.graphics.frames.FlxFramesCollection;
@@ -72,7 +74,9 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   var boxSprite:FlxSprite;
   var textDisplay:FunkinTypeText;
+  #if switch
   var advancePrompt:Null<FlxText> = null;
+  #end
   var text(default, set):String;
 
   function set_text(value:String):String
@@ -159,7 +163,9 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   public function setText(newText:String):Void
   {
+    #if switch
     if (advancePrompt != null) advancePrompt.visible = false;
+    #end
     textDisplay.prefix = '';
     textDisplay.resetText(newText);
     textDisplay.start();
@@ -167,7 +173,9 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
   public function appendText(newText:String):Void
   {
+    #if switch
     if (advancePrompt != null) advancePrompt.visible = false;
+    #end
     textDisplay.prefix = this.textDisplay.text;
     textDisplay.resetText(newText);
     textDisplay.start();
@@ -176,7 +184,9 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
   public function skip():Void
   {
     textDisplay.skip();
+    #if switch
     if (advancePrompt != null) advancePrompt.visible = true;
+    #end
   }
 
   /**
@@ -184,7 +194,11 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
    */
   function onTypingComplete():Void
   {
+    #if switch
     if (advancePrompt != null) advancePrompt.visible = true;
+    #else
+    // No save navigation? :(
+    #end
     if (typingCompleteCallback != null) typingCompleteCallback();
   }
 
@@ -220,12 +234,14 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
       this.textDisplay.kill();
       this.textDisplay = null;
     }
+    #if switch
     if (this.advancePrompt != null)
     {
       // Destroyed, not killed: the reference is dropped here, and a killed FlxText keeps its text graphic cached.
       this.advancePrompt.destroy();
       this.advancePrompt = null;
     }
+    #end
     this.clear();
   }
 
@@ -238,10 +254,12 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     this.globalOffsets = [0, 0];
     this.visible = true;
     this.alpha = 1.0;
+    #if switch
     if (this.advancePrompt != null)
     {
       this.advancePrompt.visible = false;
     }
+    #end
   }
 
   function loadAnimations():Void
@@ -314,13 +332,14 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
 
     add(textDisplay);
 
-    var promptLabel:String = #if switch "[A] to advance" #else "[Z/ENTER] to advance" #end;
-    advancePrompt = new FlxText(textDisplay.x, textDisplay.y + 115, _data.text.width, promptLabel, 16);
+    #if switch
+    advancePrompt = new FlxText(textDisplay.x, textDisplay.y + 115, _data.text.width, "[A] to advance", 16);
     advancePrompt.setFormat(_data.text.fontFamily, 16, FlxColor.WHITE, RIGHT, SHADOW, FlxColor.BLACK);
     advancePrompt.borderSize = 2;
     advancePrompt.visible = false;
     advancePrompt.zIndex = 400;
     add(advancePrompt);
+    #end
   }
 
   /**

@@ -327,7 +327,11 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
+      #if switch
       if (blackScreen != null) blackScreen.visible = false;
+      #else
+      blackScreen.visible = false;
+      #end
     }
     #end
 
@@ -335,7 +339,11 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
+      #if switch
       if (blackScreen != null) blackScreen.visible = false;
+      #else
+      blackScreen.visible = false;
+      #end
     }
     #end
   }
@@ -346,7 +354,11 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
+      #if switch
       if (blackScreen != null) blackScreen.visible = false;
+      #else
+      blackScreen.visible = false;
+      #end
     }
     #end
 
@@ -354,7 +366,11 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
+      #if switch
       if (blackScreen != null) blackScreen.visible = false;
+      #else
+      blackScreen.visible = false;
+      #end
     }
     #end
   }
@@ -398,7 +414,11 @@ class VideoCutscene
     #end
 
     #if html5
+    #if switch
     if (vid != null && PlayState.instance != null)
+    #else
+    if (vid != null)
+    #end
     {
       PlayState.instance.remove(vid);
     }
@@ -408,23 +428,37 @@ class VideoCutscene
     if (vid != null)
     {
       vid.stop();
+      #if switch
       if (PlayState.instance != null) PlayState.instance.remove(vid);
+      #else
+      PlayState.instance.remove(vid);
+      #end
     }
     #end
 
     #if (html5 || hxvlc)
+    #if switch
     if (vid != null)
     {
       vid.destroy();
       vid = null;
     }
+    #else
+    vid.destroy();
+    vid = null;
+    #end
     #end
 
+    #if switch
     if (PlayState.instance != null && PlayState.instance.camHUD != null)
     {
       PlayState.instance.camHUD.visible = true;
     }
+    #else
+    PlayState.instance.camHUD.visible = true;
+    #end
 
+    #if switch
     if (blackScreen != null)
     {
       FlxTween.tween(blackScreen, {alpha: 0}, transitionTime,
@@ -456,6 +490,24 @@ class VideoCutscene
       onVideoEnded.dispatch();
       onCutsceneFinish(cutsceneType);
     }
+    #else
+    FlxTween.tween(blackScreen, {alpha: 0}, transitionTime, {
+      ease: FlxEase.quadInOut,
+      onComplete: function(twn:FlxTween)
+      {
+        PlayState.instance.remove(blackScreen);
+        blackScreen = null;
+      }
+    });
+    FlxTween.tween(FlxG.camera, {zoom: PlayState.instance.stageZoom}, transitionTime, {
+      ease: FlxEase.quadInOut,
+      onComplete: function(twn:FlxTween)
+      {
+        onVideoEnded.dispatch();
+        onCutsceneFinish(cutsceneType);
+      }
+    });
+    #end
   }
 
   /**
@@ -467,9 +519,17 @@ class VideoCutscene
     switch (cutsceneType)
     {
       case CutsceneType.STARTING:
+        #if switch
         if (PlayState.instance != null) PlayState.instance.startCountdown();
+        #else
+        PlayState.instance.startCountdown();
+        #end
       case CutsceneType.ENDING:
+        #if switch
         if (PlayState.instance != null) PlayState.instance.endSong(true); // true = right goddamn now
+        #else
+        PlayState.instance.endSong(true); // true = right goddamn now
+        #end
       case CutsceneType.MIDSONG:
         // Do nothing.
     }
@@ -485,14 +545,22 @@ class VideoCutscene
     #end
 
     #if html5
+    #if switch
     if (vid != null && PlayState.instance != null) PlayState.instance.remove(vid);
+    #else
+    if (vid != null) PlayState.instance.remove(vid);
+    #end
     #end
 
     #if hxvlc
     if (vid != null)
     {
       vid.stop();
+      #if switch
       if (PlayState.instance != null) PlayState.instance.remove(vid);
+      #else
+      PlayState.instance.remove(vid);
+      #end
     }
     #end
 
@@ -506,7 +574,11 @@ class VideoCutscene
 
     if (blackScreen != null)
     {
+      #if switch
       if (PlayState.instance != null) PlayState.instance.remove(blackScreen);
+      #else
+      PlayState.instance.remove(blackScreen);
+      #end
       blackScreen = null;
     }
   }

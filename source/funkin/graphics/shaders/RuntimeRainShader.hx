@@ -118,12 +118,16 @@ class RuntimeRainShader extends RuntimePostEffectShader
 
   public function new()
   {
+    #if switch
     var fragSource:String = Assets.getText(Paths.frag('rain'));
     if (fragSource != null && fragSource.indexOf('precision') == -1)
     {
       fragSource = '#ifdef GL_ES\nprecision mediump float;\n#endif\n' + fragSource;
     }
     super(fragSource);
+    #else
+    super(Assets.getText(Paths.frag('rain')));
+    #end
     this.rainColor = 0xFF6680cc;
 
     #if switch

@@ -11,6 +11,7 @@ import flixel.FlxG.FlxRenderMethod;
 @:nullSafety
 class CrashHandler
 {
+  #if switch
   public static var LOG_FOLDER(get, never):String;
 
   static function get_LOG_FOLDER():String
@@ -21,6 +22,9 @@ class CrashHandler
     return 'logs';
     #end
   }
+  #else
+  public static final LOG_FOLDER = 'logs';
+  #end
 
   /**
    * Called before exiting the game when a standard error occurs, like a thrown exception.
@@ -58,10 +62,14 @@ class CrashHandler
   {
     try
     {
+      #if switch
       if (errorSignal != null)
       {
         errorSignal.dispatch(generateErrorMessage(error));
       }
+      #else
+      errorSignal.dispatch(generateErrorMessage(error));
+      #end
 
       try
       {
@@ -74,14 +82,22 @@ class CrashHandler
       }
       catch (e:Dynamic)
       {
+        #if switch
         trace('CrashHandler fallback: Error while logging error: ' + e);
+        #else
+        trace('Error while logging error: ' + e);
+        #end
       }
 
       displayError(error);
     }
     catch (e:Dynamic)
     {
+      #if switch
       trace('CrashHandler fallback: Error while handling crash: ' + e);
+      #else
+      trace('Error while handling crash: ' + e);
+      #end
     }
 
     #if sys
@@ -95,10 +111,14 @@ class CrashHandler
   {
     try
     {
+      #if switch
       if (criticalErrorSignal != null)
       {
         criticalErrorSignal.dispatch(message);
       }
+      #else
+      criticalErrorSignal.dispatch(message);
+      #end
 
       #if sys
       logErrorMessage(message, true);
@@ -111,7 +131,11 @@ class CrashHandler
     }
     catch (e:Dynamic)
     {
+      #if switch
       trace('CrashHandler fallback: Error while handling crash: ' + e);
+      #else
+      trace('Error while handling crash: $e');
+      #end
 
       trace('Message: $message');
     }
@@ -130,6 +154,7 @@ class CrashHandler
 
   static function displayErrorMessage(message:String):Void
   {
+    #if switch
     try
     {
       funkin.util.WindowUtil.showError("Fatal Uncaught Exception", message);
@@ -138,11 +163,15 @@ class CrashHandler
     {
       trace('CrashHandler fallback: ' + e);
     }
+    #else
+    funkin.util.WindowUtil.showError("Fatal Uncaught Exception", message);
+    #end
   }
 
   #if sys
   static function logError(error:UncaughtErrorEvent):Void
   {
+    #if switch
     try
     {
       logErrorMessage(generateErrorMessage(error));
@@ -151,14 +180,22 @@ class CrashHandler
     {
       trace('CrashHandler fallback: ' + e);
     }
+    #else
+    logErrorMessage(generateErrorMessage(error));
+    #end
   }
 
   static function logErrorMessage(message:String, critical:Bool = false):Void
   {
+    #if switch
     try
     {
       FileUtil.createDirIfNotExists(LOG_FOLDER);
+    #else
+    FileUtil.createDirIfNotExists(LOG_FOLDER);
+    #end
 
+      #if switch
       var report:String = buildCrashReport(message);
       var timestamp:String = try { DateUtil.generateTimestamp(); } catch (e:Dynamic) { 'unknown'; };
       sys.io.File.saveContent('$LOG_FOLDER/crash${critical ? '-critical' : ''}-$timestamp.log', report);
@@ -167,6 +204,9 @@ class CrashHandler
     {
       trace('CrashHandler fallback: ' + e);
     }
+      #else
+    sys.io.File.saveContent('$LOG_FOLDER/crash${critical ? '-critical' : ''}-${DateUtil.generateTimestamp()}.log', buildCrashReport(message));
+      #end
   }
   #end
 
@@ -187,21 +227,36 @@ class CrashHandler
     fullContents += '\n';
 
     var currentState:String = 'No state loaded';
+    #if switch
     try
+    #else
+    if (FlxG.game != null && FlxG.state != null)
+    #end
     {
+      #if switch
       if (FlxG.game != null && FlxG.state != null)
+      #else
+      var currentStateCls:Null<Class<Dynamic>> = Type.getClass(FlxG.state);
+      if (currentStateCls != null)
+      #end
       {
+        #if switch
         var currentStateCls:Null<Class<Dynamic>> = Type.getClass(FlxG.state);
         if (currentStateCls != null)
         {
           currentState = Type.getClassName(currentStateCls) ?? 'No state loaded';
         }
+        #else
+        currentState = Type.getClassName(currentStateCls) ?? 'No state loaded';
+        #end
       }
+    #if switch
     }
     catch (e:Dynamic)
     {
       currentState = 'Error querying state: ' + e;
       trace('CrashHandler fallback: ' + e);
+    #end
     }
 
     fullContents += 'Flixel Current State: ${currentState}\n';
@@ -227,8 +282,13 @@ class CrashHandler
 
     fullContents += 'Loaded mods: \n';
 
+    #if switch
     try
+    #else
+    if (funkin.modding.PolymodHandler.loadedModIds.length == 0)
+    #end
     {
+      #if switch
       if (funkin.modding.PolymodHandler.loadedModIds == null || funkin.modding.PolymodHandler.loadedModIds.length == 0)
       {
         fullContents += 'No mods loaded.\n';
@@ -240,11 +300,25 @@ class CrashHandler
           fullContents += '- ${mod}\n';
         }
       }
+      #else
+      fullContents += 'No mods loaded.\n';
+      #end
     }
+    #if switch
     catch (e:Dynamic)
+    #else
+    else
+    #end
     {
+      #if switch
       fullContents += 'Error querying loaded mods: $e\n';
       trace('CrashHandler fallback: ' + e);
+      #else
+      for (mod in funkin.modding.PolymodHandler.loadedModIds)
+      {
+        fullContents += '- ${mod}\n';
+      }
+      #end
     }
 
     fullContents += '\n';
@@ -264,6 +338,7 @@ class CrashHandler
   {
     var fullContents = 'Generated by: ${Constants.GENERATED_BY}\n';
     fullContents += ' Git hash: ${Constants.GIT_HASH} (${Constants.GIT_HAS_LOCAL_CHANGES ? 'MODIFIED' : 'CLEAN'})\n';
+    #if switch
     try
     {
       fullContents += 'System timestamp: ${DateUtil.generateTimestamp()}\n';
@@ -286,8 +361,13 @@ class CrashHandler
       driverInfo = 'Error querying driver: ' + e;
       trace('CrashHandler fallback: ' + e);
     }
+    #else
+    fullContents += 'System timestamp: ${DateUtil.generateTimestamp()}\n';
+    var driverInfo = FlxG?.stage?.context3D?.driverInfo ?? 'N/A';
+    #end
     fullContents += 'Driver info: ${driverInfo}\n';
     #if sys
+    #if switch
     try
     {
       fullContents += 'Platform: ${Sys.systemName()}\n';
@@ -297,6 +377,9 @@ class CrashHandler
       fullContents += 'Platform: N/A\n';
       trace('CrashHandler fallback: ' + e);
     }
+    #else
+    fullContents += 'Platform: ${Sys.systemName()}\n';
+    #end
     #end
     fullContents += 'Render method: ${renderMethod()}\n';
 
@@ -306,6 +389,7 @@ class CrashHandler
 
     fullContents += '\n';
 
+    #if switch
     try
     {
       fullContents += MemoryUtil.buildGCInfo();
@@ -315,6 +399,9 @@ class CrashHandler
       fullContents += 'Error querying memory info: $e\n';
       trace('CrashHandler fallback: ' + e);
     }
+    #else
+    fullContents += MemoryUtil.buildGCInfo();
+    #end
 
     return fullContents;
   }
@@ -322,10 +409,15 @@ class CrashHandler
   static function generateErrorMessage(error:UncaughtErrorEvent):String
   {
     var errorMessage:String = "";
+    #if switch
     try
     {
       var callStack:Array<haxe.CallStack.StackItem> = haxe.CallStack.exceptionStack(true);
+    #else
+    var callStack:Array<haxe.CallStack.StackItem> = haxe.CallStack.exceptionStack(true);
+    #end
 
+      #if switch
       if (error != null)
       {
         errorMessage += '${error.error}\n';
@@ -334,7 +426,11 @@ class CrashHandler
       {
         errorMessage += 'Unknown error (null event)\n';
       }
+      #else
+    errorMessage += '${error.error}\n';
+      #end
 
+      #if switch
       for (stackItem in callStack)
       {
         switch (stackItem)
@@ -355,9 +451,30 @@ class CrashHandler
       }
     }
     catch (e:Dynamic)
+      #else
+    for (stackItem in callStack)
+      #end
     {
+      #if switch
       errorMessage += 'Error generating error message: $e\n';
       trace('CrashHandler fallback: ' + e);
+      #else
+      switch (stackItem)
+      {
+        case FilePos(innerStackItem, file, line, column):
+          errorMessage += ' in ${file}#${line}';
+          if (column != null) errorMessage += ':${column}';
+        case CFunction:
+          errorMessage += '[Function] ';
+        case Module(m):
+          errorMessage += '[Module(${m})] ';
+        case Method(classname, method):
+          errorMessage += '[Function(${classname}.${method})] ';
+        case LocalFunction(v):
+          errorMessage += '[LocalFunction(${v})] ';
+      }
+      errorMessage += '\n';
+      #end
     }
 
     return errorMessage;
@@ -408,10 +525,19 @@ class CrashHandler
   static function renderMethod():String
   {
     var outputStr:String = 'UNKNOWN';
+    #if switch
     try
+    #else
+    outputStr = try
+    #end
     {
+      #if switch
       if (FlxG.game != null)
+      #else
+      switch (FlxG.renderMethod)
+      #end
       {
+        #if switch
         switch (FlxG.renderMethod)
         {
           case FlxRenderMethod.DRAW_TILES:
@@ -425,12 +551,28 @@ class CrashHandler
       else
       {
         outputStr = 'NO_GAME_INSTANCE';
+        #else
+        case FlxRenderMethod.DRAW_TILES:
+          'DRAW_TILES';
+        case FlxRenderMethod.BLITTING:
+          'BLITTING';
+        default:
+          'UNKNOWN';
+        #end
       }
     }
+    #if switch
     catch (e:Dynamic)
+    #else
+    catch (e)
+    #end
     {
+      #if switch
       outputStr = 'ERROR ON QUERY RENDER METHOD: ${e}';
       trace('CrashHandler fallback: ' + e);
+      #else
+      'ERROR ON QUERY RENDER METHOD: ${e}';
+      #end
     }
 
     return outputStr;

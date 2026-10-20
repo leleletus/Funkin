@@ -130,6 +130,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   override public function update(elapsedSec:Float)
   {
+    #if switch
     if (!playing && !_shouldPlay)
     {
       if (!looped && !persist && !_paused && this != FlxG.sound.music)
@@ -154,6 +155,9 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       stopped();
       return;
     }
+    #else
+    if (!playing && !_shouldPlay) return;
+    #end
 
     if (_time < 0)
     {
@@ -266,6 +270,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       super.resume();
     }
     return this;
+  #if switch
   }
 
   override function set_time(time:Float):Float
@@ -291,6 +296,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       startSound(time);
     }
     return _time = time;
+  #end
   }
 
   /**
@@ -423,10 +429,16 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     }
     else
     {
+      #if switch
       var music = FunkinSound.load(pathToUse, params?.startingVolume ?? 1.0, params.loop ?? true, false, true, params.persist ?? false, params.onComplete, null, true);
+      #else
+      var music = FunkinSound.load(pathToUse, params?.startingVolume ?? 1.0, params.loop ?? true, false, true, params.persist ?? false, params.onComplete);
+      #end
       if (music != null)
       {
+        #if switch
         music.important = true;
+        #end
         setMusic(music);
 
         if (FlxG.sound.music != null && params.onLoad != null) params.onLoad();
@@ -570,6 +582,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     return promise;
   }
 
+  #if switch
   override function stopped(?_):Void
   {
     #if switch
@@ -605,6 +618,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       _channel = null;
     }
   }
+  #end
 
   @:nullSafety(Off)
   override public function destroy():Void
@@ -693,6 +707,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       sound.destroy();
     }
 
+    #if switch
     if (FlxG.sound != null && FlxG.sound.list != null)
     {
       for (sound in FlxG.sound.list)
@@ -717,6 +732,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
       openfl.media.SoundMixer.stopAll();
     }
     catch (e:Dynamic) {}
+    #end
     #end
   }
 

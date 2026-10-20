@@ -276,9 +276,6 @@ class InitState extends FlxState
       funkin.util.plugins.NewgroundsMedalPlugin.initialize();
       #end
       funkin.util.plugins.EvacuateDebugPlugin.initialize();
-      #if !switch
-      funkin.util.plugins.GamepadDebugTogglePlugin.initialize();
-      #end
       funkin.util.plugins.ForceCrashPlugin.initialize();
       funkin.util.plugins.ReloadAssetsDebugPlugin.initialize();
       #if !mobile

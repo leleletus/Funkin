@@ -392,8 +392,10 @@ class PlayState extends MusicBeatSubState
    */
   public var isBotPlayMode:Bool = false;
 
+  #if switch
   var lastR3PressTime:Float = -1.0;
   var botplayNotificationText:Null<FlxText> = null;
+  #end
 
   /**
    * Whether the results screen should show up before returning to the chart editor.
@@ -416,8 +418,10 @@ class PlayState extends MusicBeatSubState
    */
   public var isInCutscene:Bool = false;
 
+  #if switch
   var _lastMusicTime:Float = -1;
   var _stuckMusicFrames:Int = 0;
+  #end
 
   /**
    * Whether the inputs should be disabled for whatever reason...
@@ -650,6 +654,7 @@ class PlayState extends MusicBeatSubState
 
   public var isSongEnd:Bool = false;
 
+  #if switch
   /**
    * Timestamp in milliseconds of the last note in the chart.
    */
@@ -659,6 +664,7 @@ class PlayState extends MusicBeatSubState
    * Watchdog timer for completing the song if audio stops or fails to trigger onComplete.
    */
   var postSongWatchdogTimer:Float = 0.0;
+  #end
 
   #if mobile
   /**
@@ -740,7 +746,11 @@ class PlayState extends MusicBeatSubState
    * The threshold for resyncing the song.
    * If the vocals deviate from the instrumental by more than this amount, then `resyncVocals()` will be called.
    */
+  #if switch
   static final RESYNC_THRESHOLD:Float = 85;
+  #else
+  static final RESYNC_THRESHOLD:Float = 40;
+  #end
 
   /**
    * The threshold for how much the conductor lerp can drift from the music.
@@ -783,7 +793,11 @@ class PlayState extends MusicBeatSubState
     if (params.targetVariation != null) currentVariation = params.targetVariation;
     if (params.targetInstrumental != null) currentInstrumental = params.targetInstrumental;
     isPracticeMode = params.practiceMode ?? false;
+    #if switch
     isBotPlayMode = (params.botPlayMode ?? false) || Preferences.botplay;
+    #else
+    isBotPlayMode = params.botPlayMode ?? false;
+    #end
     isPlaytestResults = params.playtestResults ?? false;
     isMinimalMode = params.minimalMode ?? false;
     startTimestamp = params.startTimestamp ?? 0.0;
@@ -882,8 +896,11 @@ class PlayState extends MusicBeatSubState
     @:privateAccess
     justUnpaused = isChartingMode && !FlxG.game._lostFocus;
 
-    // Stop any pre-existing music and clean orphan audio channels.
+    // Stop any pre-existing music.
+    #if switch
+    // Switch: also clean orphan audio channels.
     FunkinSound.stopAllAudio(true, true);
+    #end
 
     if (!overrideMusic)
     {
@@ -1352,6 +1369,7 @@ class PlayState extends MusicBeatSubState
     // Attempt to pause the game.
     if ((controls.PAUSE_P || androidPause || pauseButtonCheck)) pause();
 
+    #if switch
     // Dynamic shortcut to toggle Botplay in-game: Exclusively R3 (Right Stick click). Test builds only (nx.NXDevTools).
     if (!isGamePaused && !isInCutscene && !isSongEnd #if switch && nx.NXDevTools.botplayToggleAllowed() #end)
     {
@@ -1379,6 +1397,7 @@ class PlayState extends MusicBeatSubState
         #end
       }
     }
+    #end
 
     #if mobile
     if (justUnpaused)
@@ -2129,7 +2148,7 @@ class PlayState extends MusicBeatSubState
           pause(Standard, true);
         }
         #else
-        pause(Standard, true);
+        pause(true);
         #end
       }
     }
@@ -2216,15 +2235,25 @@ class PlayState extends MusicBeatSubState
         @:nullSafety(Off)
         @:privateAccess // todo: maybe make the groups public :thinking:
         {
+          #if switch
           var instTime:Float = FlxG.sound.music.time;
           vocals.playerVoices?.forEachAlive(function(voice:FunkinSound) {
             if (!voice.playing || instTime >= (voice.length - 150)) return;
+          #else
+          vocals.playerVoices?.forEachAlive(function(voice:FunkinSound)
+          {
+          #end
             var currentRawVoiceTime:Float = voice.time + vocals.playerVoicesOffset;
             if (Math.abs(currentRawVoiceTime - correctSync) > Math.abs(playerVoicesError)) playerVoicesError = currentRawVoiceTime - correctSync;
           });
 
+          #if switch
           vocals.opponentVoices?.forEachAlive(function(voice:FunkinSound) {
             if (!voice.playing || instTime >= (voice.length - 150)) return;
+          #else
+          vocals.opponentVoices?.forEachAlive(function(voice:FunkinSound)
+          {
+          #end
             var currentRawVoiceTime:Float = voice.time + vocals.opponentVoicesOffset;
             if (Math.abs(currentRawVoiceTime - correctSync) > Math.abs(opponentVoicesError)) opponentVoicesError = currentRawVoiceTime - correctSync;
           });
@@ -2256,7 +2285,9 @@ class PlayState extends MusicBeatSubState
 
   override public function destroy():Void
   {
+    #if switch
     var stageIdToPurge:String = currentStageId;
+    #end
     performCleanup();
 
     #if mobile
@@ -2415,6 +2446,7 @@ class PlayState extends MusicBeatSubState
     if (currentStage != null)
     {
       currentStage.revive(); // Stages are killed and props destroyed when the PlayState is destroyed to save memory.
+      #if switch
       currentStage.visible = true;
 
       if (camGame != null)
@@ -2429,6 +2461,7 @@ class PlayState extends MusicBeatSubState
         FlxG.camera.alpha = 1.0;
         FlxG.camera.stopFX();
       }
+      #end
 
       // Actually create and position the sprites.
       var event:ScriptEvent = new ScriptEvent(CREATE, false);
@@ -2885,13 +2918,17 @@ class PlayState extends MusicBeatSubState
     var playerNoteData:Array<SongNoteData> = [];
     var opponentNoteData:Array<SongNoteData> = [];
 
+    #if switch
     lastChartNoteTime = 0.0;
     postSongWatchdogTimer = 0.0;
+    #end
 
     for (songNote in builtNoteData)
     {
+      #if switch
       var noteEndTime:Float = songNote.time + (songNote.length > 0 ? songNote.length : 0.0);
       if (noteEndTime > lastChartNoteTime) lastChartNoteTime = noteEndTime;
+      #end
 
       var strumTime:Float = songNote.time;
       if (strumTime < startTime) continue; // Skip notes that are before the start time.
@@ -2941,6 +2978,7 @@ class PlayState extends MusicBeatSubState
     var result:Bool = Countdown.performCountdown();
     if (!result) return;
 
+    #if switch
     // Stop any leftover cutscene sounds before starting countdown/song to release OpenAL channels
     if (FlxG.sound.list != null)
     {
@@ -2956,9 +2994,11 @@ class PlayState extends MusicBeatSubState
         }
       }
     }
+    #end
 
     isInCutscene = false;
 
+    #if switch
     // Pre-carga y pre-buffering de music y vocals durante el conteo para evitar freeze en startSong
     if (!overrideMusic && !isGamePaused)
     {
@@ -2992,6 +3032,7 @@ class PlayState extends MusicBeatSubState
       vocals.pause();
       vocals.time = Math.max(0, startTimestamp);
     }
+    #end
 
     // TODO: Maybe tween in the camera after any cutscenes.
     camHUD.visible = true;
@@ -3050,13 +3091,21 @@ class PlayState extends MusicBeatSubState
     if (hitbox != null) hitbox.visible = true;
     #end
 
+    #if switch
     if (!overrideMusic && !isGamePaused)
+    #else
+    if (!overrideMusic && !isGamePaused && currentChart != null)
+    #end
     {
+      #if switch
       var chart = currentChart;
       if (chart != null && FlxG.sound.music == null)
       {
         chart.playInst(1.0, currentInstrumental, false);
       }
+      #else
+      currentChart?.playInst(1.0, currentInstrumental, false);
+      #end
     }
 
     if (FlxG.sound.music == null)
@@ -3065,8 +3114,13 @@ class PlayState extends MusicBeatSubState
       return;
     }
 
+    #if switch
     if (FlxG.sound.music.onComplete == null)
+    #else
+    FlxG.sound.music.onComplete = function()
+    #end
     {
+      #if switch
       FlxG.sound.music.onComplete = function() {
         #if switch
         if (nx.NXAudioDiagnostics.interceptPrematureSongCompletion()) return;
@@ -3074,8 +3128,17 @@ class PlayState extends MusicBeatSubState
         if (mayPauseGame) endSong(skipEndingTransition);
       };
     }
+      #else
+      if (mayPauseGame) endSong(skipEndingTransition);
+    };
+      #end
 
+    #if switch
     FlxG.sound.music.time = Math.max(0, startTimestamp);
+    #else
+    FlxG.sound.music.pause();
+    FlxG.sound.music.time = startTimestamp;
+    #end
     FlxG.sound.music.pitch = playbackRate;
 
     if (Preferences.subtitles)
@@ -3085,6 +3148,7 @@ class PlayState extends MusicBeatSubState
       {
         subtitlesFile += '-${currentVariation}';
       }
+      #if switch
       if (subtitles != null)
       {
         subtitles.assignSubtitles(subtitlesFile, FlxG.sound.music);
@@ -3092,6 +3156,9 @@ class PlayState extends MusicBeatSubState
         if (camSubtitles != null) camSubtitles.visible = @:privateAccess (subtitles.subtitlesData != null && subtitles.subtitlesData.length > 0);
         #end
       }
+      #else
+      if (subtitles != null) subtitles.assignSubtitles(subtitlesFile, FlxG.sound.music);
+      #end
     }
 
     // Prevent the volume from being wrong.
@@ -3102,7 +3169,11 @@ class PlayState extends MusicBeatSubState
     {
       add(vocals);
 
+      #if switch
       vocals.time = FlxG.sound.music.time;
+      #else
+      vocals.time = startTimestamp - Conductor.instance.instrumentalOffset;
+      #end
       vocals.pitch = playbackRate;
       vocals.playerVolume = #if switch (playerVocalsVolume > 0) ? playerVocalsVolume : 1.0 #else playerVocalsVolume #end;
       vocals.opponentVolume = #if switch (opponentVocalsVolume > 0) ? opponentVocalsVolume : 1.0 #else opponentVocalsVolume #end;
@@ -3136,13 +3207,19 @@ class PlayState extends MusicBeatSubState
     {
       // FlxG.sound.music.time = startTimestamp - Conductor.instance.combinedOffset;
       handleSkippedNotes();
+      #if switch
       resyncVocals();
+      #end
     }
 
     dispatchEvent(new ScriptEvent(SONG_START));
 
     #if FEATURE_NEWGROUNDS
     Events.logStartSong(currentSong.id, currentVariation);
+    #end
+    #if !switch
+
+    resyncVocals();
     #end
   }
 
@@ -3196,7 +3273,11 @@ class PlayState extends MusicBeatSubState
     // TODO: Add functionality for modules to update the score text.
     if (isBotPlayMode)
     {
+      #if switch
       scoreText.text = 'BOTPLAY ACTIVE';
+      #else
+      scoreText.text = 'Bot Play Enabled';
+      #end
     }
     else
     {
@@ -3316,6 +3397,7 @@ class PlayState extends MusicBeatSubState
     {
       if (note == null || !note.alive) continue;
 
+      #if switch
       if (isBotPlayMode || Preferences.botplay)
       {
         if (note.noteData.time <= Conductor.instance.songPosition && !note.hasBeenHit && !note.hasMissed)
@@ -3324,12 +3406,35 @@ class PlayState extends MusicBeatSubState
           continue;
         }
       }
+      #end
 
       var r = GRhythmUtil.processWindow(note, !isBotPlayMode);
       if (r.botplayHit)
       {
+        #if switch
         goodNoteHit(note);
         continue;
+        #else
+        // We call onHitNote to play the proper animations,
+        // but not goodNoteHit! This means zero score and zero notes hit for the results screen!
+
+        // Call an event to allow canceling the note hit.
+        // NOTE: This is what handles the character animations!
+        var event:NoteScriptEvent = new HitNoteScriptEvent(note, 0.0, 0, 'perfect', false, 0);
+        dispatchEvent(event);
+
+        // Calling event.cancelEvent() skips all the other logic! Neat!
+        if (event.eventCanceled) continue;
+
+        // Command the bot to hit the note on time.
+        // NOTE: This is what handles the strumline and cleaning up the note itself!
+        playerStrumline.hitNote(note);
+
+        if (note.holdNoteSprite != null)
+        {
+          playerStrumline.playNoteHoldCover(note.holdNoteSprite);
+        }
+        #end
       }
       if (!r.cont) continue;
 
@@ -3364,6 +3469,7 @@ class PlayState extends MusicBeatSubState
     {
       if (holdNote == null || !holdNote.alive) continue;
 
+      #if switch
       if (isBotPlayMode)
       {
         var holdEndTime:Float = holdNote.strumTime + holdNote.fullSustainLength;
@@ -3405,6 +3511,7 @@ class PlayState extends MusicBeatSubState
           }
         }
       }
+      #end
 
       // While the hold note is being hit, and there is length on the hold note...
       if (holdNote.hitNote && !holdNote.missedNote && holdNote.sustainLength > 0)
@@ -3423,7 +3530,11 @@ class PlayState extends MusicBeatSubState
         }
       }
 
+      #if switch
       if (!isBotPlayMode && holdNote.missedNote && !holdNote.handledMiss)
+      #else
+      if (holdNote.missedNote && !holdNote.handledMiss)
+      #end
       {
         // The player dropped a hold note.
         holdNote.handledMiss = true;
@@ -3594,19 +3705,37 @@ class PlayState extends MusicBeatSubState
     playerStrumline.noteVibrations.tryNoteVibration();
   }
 
+  #if switch
   function goodNoteHit(note:NoteSprite, ?input:PreciseInputEvent = null):Void
+  #else
+  function goodNoteHit(note:NoteSprite, input:PreciseInputEvent):Void
+  #end
   {
+    #if switch
     var noteDiff:Int = 0;
     if (input != null)
     {
       // Calculate the input latency (do this as late as possible).
       var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
       var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
+    #else
+    // Calculate the input latency (do this as late as possible).
+    // trace('Compare: ${PreciseInputManager.getCurrentTimestamp()} - ${input.timestamp}');
+    var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
+    var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
+    // trace('Input: ${daNote.noteData.getDirectionName()} pressed ${inputLatencyMs}ms ago!');
+    #end
 
+      #if switch
       // Get the offset and compensate for input latency.
       // Round inward (trim remainder) for consistency.
       noteDiff = Std.int(Conductor.instance.songPosition - note.noteData.time - inputLatencyMs);
     }
+      #else
+    // Get the offset and compensate for input latency.
+    // Round inward (trim remainder) for consistency.
+    var noteDiff:Int = Std.int(Conductor.instance.songPosition - note.noteData.time - inputLatencyMs);
+      #end
 
     var score = Scoring.scoreNote(noteDiff, PBOT1);
     var daRating = Scoring.judgeNote(noteDiff, PBOT1);
@@ -3655,6 +3784,7 @@ class PlayState extends MusicBeatSubState
     }
   }
 
+  #if switch
   function toggleBotplay():Void
   {
     Preferences.botplay = !Preferences.botplay;
@@ -3700,6 +3830,7 @@ class PlayState extends MusicBeatSubState
       }
     });
   }
+  #end
 
   /**
      * Called when a note leaves the screen and is considered missed by the player.
@@ -4284,7 +4415,9 @@ class PlayState extends MusicBeatSubState
      */
   function performCleanup():Void
   {
+    #if switch
     FunkinSound.stopAllAudio(true, true);
+    #end
 
     // If the camera is being tweened, stop it.
     cancelAllCameraTweens();
@@ -4334,6 +4467,7 @@ class PlayState extends MusicBeatSubState
     FlxTween.globalManager.clear();
     FlxTimer.globalManager.clear();
 
+    #if switch
     // Clear camera filters and shader pipelines to prevent GPU leaks / crashes on state change
     if (camGame != null)
     {
@@ -4353,6 +4487,7 @@ class PlayState extends MusicBeatSubState
       FlxG.camera.filtersEnabled = false;
       FlxG.camera.stopFX();
     }
+    #end
 
     // Remove reference to stage and remove sprites from it to save memory.
     if (currentStage != null)

@@ -300,9 +300,7 @@ class TitleState extends MusicBeatState
 
     if (gamepad != null)
     {
-      if (gamepad.justPressed.START || gamepad.justPressed.ACCEPT) {
-        pressedEnter = true;
-      }
+      if (gamepad.justPressed.START || gamepad.justPressed.ACCEPT) pressedEnter = true;
     }
     #end
 

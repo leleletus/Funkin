@@ -14,8 +14,10 @@ import openfl.display.OpenGLRenderer;
 import openfl.Lib;
 import openfl.display.BitmapData;
 import openfl.display.BlendMode;
+#if switch
 import openfl.filters.BitmapFilter;
 import openfl.filters.ShaderFilter;
+#end
 import flixel.graphics.tile.FlxDrawQuadsItem;
 import flixel.graphics.tile.FlxDrawTrianglesItem;
 
@@ -129,10 +131,10 @@ class FunkinCamera extends FlxCamera
     crossCameraBlending = false;
   }
 
+  #if switch
   @:nullSafety(Off)
   override function update(elapsed:Float):Void
   {
-    #if switch
     if (!funkin.Preferences.switchEnableShaders)
     {
       this.filtersEnabled = false;
@@ -152,7 +154,6 @@ class FunkinCamera extends FlxCamera
         }
       }
     }
-    #end
 
     super.update(elapsed);
   }
@@ -160,7 +161,6 @@ class FunkinCamera extends FlxCamera
   @:nullSafety(Off)
   public function setFilters(filters:Array<BitmapFilter>):Void
   {
-    #if switch
     if (!funkin.Preferences.switchEnableShaders)
     {
       this.filters = null;
@@ -171,7 +171,6 @@ class FunkinCamera extends FlxCamera
       }
       return;
     }
-    #end
 
     var validFilters:Array<BitmapFilter> = [];
     var hasCorruptShader:Bool = false;
@@ -229,6 +228,7 @@ class FunkinCamera extends FlxCamera
       this.flashSprite.filters = this.filtersEnabled ? validFilters : [];
     }
   }
+  #end
 
   override function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
       ?shader:FlxShader):Void

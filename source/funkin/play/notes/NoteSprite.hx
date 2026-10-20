@@ -279,6 +279,7 @@ class NoteSprite extends FunkinSprite
     super.destroy();
   }
 
+  #if switch
   /**
    * Updates clipping on the associated hold note sprite, if one exists.
    */
@@ -289,4 +290,5 @@ class NoteSprite extends FunkinSprite
       this.holdNoteSprite.updateClipping(songTime);
     }
   }
+  #end
 }

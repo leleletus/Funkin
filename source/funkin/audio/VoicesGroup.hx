@@ -63,6 +63,8 @@ class VoicesGroup extends SoundGroup
 
   override function set_time(time:Float):Float
   {
+    #if switch
+    // Switch: each voice is set to its final time once, instead of to `time` and then shifted by its offset.
     if (playerVoicesOffset != 0 || opponentVoicesOffset != 0)
     {
       playerVoices?.forEachAlive(function(voice:FunkinSound) {
@@ -78,6 +80,22 @@ class VoicesGroup extends SoundGroup
         snd.time = time;
       });
     }
+    #else
+    forEachAlive(function(snd)
+    {
+      // account for different offsets per sound?
+      snd.time = time;
+    });
+
+    playerVoices?.forEachAlive(function(voice:FunkinSound)
+    {
+      voice.time -= playerVoicesOffset;
+    });
+    opponentVoices?.forEachAlive(function(voice:FunkinSound)
+    {
+      voice.time -= opponentVoicesOffset;
+    });
+    #end
 
     return time;
   }

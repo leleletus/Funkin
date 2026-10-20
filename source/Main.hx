@@ -129,7 +129,9 @@ class Main extends Sprite
       desc += 'Make sure your device supports $requiredVersion.';
       #end
 
+      #if switch
       trace(' ERROR '.bold().bg_red() + ' ' + desc);
+      #end
       WindowUtil.showError('Failed to initialize $tech', desc);
       System.exit(1);
     }
@@ -183,14 +185,12 @@ class Main extends Sprite
     // This allows the blend mode shader to work everywhere.
     untyped FlxG.cameras = new funkin.graphics.FunkinCameraFrontEnd();
 
+    #if switch
     if (zoom == -1)
     {
-      #if switch
       zoom = 1; // fixes a cam related issue lol, reminds me from when I got the issue a lot when I was doing mobile ports
-      #end
     }
 
-    #if switch
     Sys.setCwd("romfs:/");
     NXMain.init();
     // Test builds: read nx_devtools.cfg before the first image is decoded (FlxGame.create decodes the sound tray).
