@@ -545,7 +545,8 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     path = Paths.stripLibrary(path);
     #end
 
-    var soundRequest = FlxPartialSound.partialLoadFromFile(path, start, end);
+    // Switch: read and decode the preview on another core (FlxPartialSound decodes it on the main thread).
+    var soundRequest = #if switch nx.NXPreviewAudio.load(path, start, end) #else FlxPartialSound.partialLoadFromFile(path, start, end) #end;
 
     if (soundRequest == null)
     {

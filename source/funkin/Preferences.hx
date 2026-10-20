@@ -681,14 +681,14 @@ class Preferences
   }
 
   /**
-   * Whether antialiasing is enabled on Switch.
-   * @default `false`
+   * Whether antialiasing is enabled on Switch (Options > Nintendo Switch > Antialiasing).
+   * @default `true`
    */
   public static var switchAntialiasing(get, set):Bool;
 
   static function get_switchAntialiasing():Bool
   {
-    return Save?.instance?.options?.switchAntialiasing ?? #if switch false #else true #end;
+    return Save?.instance?.options?.switchAntialiasing ?? true;
   }
 
   static function set_switchAntialiasing(value:Bool):Bool
