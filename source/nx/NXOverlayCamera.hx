@@ -14,13 +14,14 @@ import openfl.display.Graphics;
  * scripts draw on that camera (Spaghetti's "Skip [A]" prompt and its fades, Eggnog Erect, Philly Erect,
  * Stress...), so their content was invisible on Switch. This camera stays visible like upstream and only
  * skips the transparent fill; fades and flashes (alpha > 0) are drawn as usual. Since 0.8.3 PlayState's cameras are
- * FunkinCameras (blend modes through shaders), so this one is too.
+ * FunkinCameras (blend modes through shaders), so this one is too. Since 0.8.7 PlayState also has camTransition,
+ * another overlay that only draws its fades, so it uses this camera as well.
  */
 class NXOverlayCamera extends FunkinCamera
 {
-  public function new()
+  public function new(id:String = 'playStateCamCutscene')
   {
-    super('playStateCamCutscene');
+    super(id);
   }
 
   override public function fill(Color:FlxColor, BlendAlpha:Bool = true, FxAlpha:Float = 1.0, ?graphics:Graphics):Void

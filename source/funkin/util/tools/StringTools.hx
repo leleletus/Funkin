@@ -7,6 +7,17 @@ package funkin.util.tools;
 class StringTools
 {
   /**
+   * Checks if a string is `null` or blank (contains only whitespaces).
+   *
+   * @param value The string to check.
+   * @return True... or False...
+   */
+  public static function isBlank(value:String):Bool
+  {
+    return value == null || value.trim().length == 0;
+  }
+
+  /**
    * Converts a string to title case. For example, "hello world" becomes "Hello World".
      *
    * @param value The string to convert.

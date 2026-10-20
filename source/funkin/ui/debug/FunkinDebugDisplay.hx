@@ -7,13 +7,11 @@ import openfl.display.Shape;
 import openfl.display.Sprite;
 import openfl.text.TextField;
 import openfl.text.TextFormat;
+import openfl.Lib;
 
 /**
  * A debug overlay showing useful info.
  */
-#if cpp
-@:access(lime._internal.backend.native.NativeCFFI)
-#end
 class FunkinDebugDisplay extends Sprite
 {
   static final UPDATE_DELAY:Int = 100;
@@ -31,25 +29,19 @@ class FunkinDebugDisplay extends Sprite
    */
   public var backgroundOpacity(default, set):Float = 0.5;
 
-  var currentFPS:Int;
   var deltaTimeout:Float;
   var times:Array<Float>;
   var color:Int;
-
-  #if !html5
+  var fps:Int;
+  var fpsPeak:Int;
   var gcMem:Float;
   var gcMemPeak:Float;
-
   var taskMem:Float;
   var taskMemPeak:Float;
-  #end
-
   var background:Shape;
-
   var fpsGraph:FunkinStatsGraph;
   var gcMemGraph:FunkinStatsGraph;
   var taskMemGraph:FunkinStatsGraph;
-
   var infoDisplay:TextField;
 
   public function new(x:Float = 10, y:Float = 10, color:Int = 0x000000):Void
@@ -58,16 +50,18 @@ class FunkinDebugDisplay extends Sprite
 
     this.x = x;
     this.y = y;
-    this.currentFPS = 0;
+
     this.deltaTimeout = 0.0;
-    #if !html5
+    this.times = [];
+    this.color = color;
+
+    this.fps = 0;
+    this.fpsPeak = 0;
     this.gcMem = 0.0;
     this.gcMemPeak = 0.0;
     this.taskMem = 0.0;
     this.taskMemPeak = 0.0;
-    #end
-    this.times = [];
-    this.color = color;
+
     this.backgroundOpacity = 0;
     this.isAdvanced = false;
   }
@@ -76,22 +70,36 @@ class FunkinDebugDisplay extends Sprite
   {
     removeChildren(0, numChildren);
 
-    final BG_WIDTH_MULTIPLIER:Float = #if html5 advanced ? 1 : 0.3 #elseif switch advanced ? 1.45 : 1.45 #else 1 #end;
+    var bgWidthMultiplier:Float = advanced ? 1 : 0.3;
 
-    #if html5
-    final BG_HEIGHT_MULTIPLIER:Float = advanced ? 0.45 : 0.15;
-    #else
-    final BG_HEIGHT_MULTIPLIER:Float = advanced ? 1 : (MemoryUtil.supportsTaskMem()) ? 0.3 : 0.2;
+    if (MemoryUtil.supportsGCMem() || MemoryUtil.supportsTaskMem())
+    {
+      bgWidthMultiplier = 1;
+    }
+
+    #if switch
+    // The Switch memory lines (GC and system RAM) are wider than the stock ones.
+    bgWidthMultiplier = 1.45;
     #end
 
+    var bgHeightMultiplier:Float = advanced ? 0.45 : 0.15;
+
+    if (MemoryUtil.supportsGCMem() && MemoryUtil.supportsTaskMem())
+    {
+      bgHeightMultiplier = advanced ? 1 : 0.3;
+    }
+    else if (MemoryUtil.supportsGCMem() || MemoryUtil.supportsTaskMem())
+    {
+      bgHeightMultiplier = advanced ? 0.7 : 0.2;
+    }
+
     background = new Shape();
-    background.graphics.beginFill(0x3d3f41, 1);
-    background.graphics.drawRect(0, 0, (OUTER_RECT_DIMENSIONS[0] * BG_WIDTH_MULTIPLIER) + (INNER_RECT_DIFF * 2),
-      (OUTER_RECT_DIMENSIONS[1] * BG_HEIGHT_MULTIPLIER) + (INNER_RECT_DIFF * 2));
+    background.graphics.beginFill(0x3D3F41, 1);
+    background.graphics.drawRect(0, 0, (OUTER_RECT_DIMENSIONS[0] * bgWidthMultiplier) + (INNER_RECT_DIFF * 2),
+      (OUTER_RECT_DIMENSIONS[1] * bgHeightMultiplier) + (INNER_RECT_DIFF * 2));
     background.graphics.endFill();
-    background.graphics.beginFill(0x2c2f30, 1);
-    background.graphics.drawRect(INNER_RECT_DIFF, INNER_RECT_DIFF, OUTER_RECT_DIMENSIONS[0] * BG_WIDTH_MULTIPLIER,
-      OUTER_RECT_DIMENSIONS[1] * BG_HEIGHT_MULTIPLIER);
+    background.graphics.beginFill(0x2C2F30, 1);
+    background.graphics.drawRect(INNER_RECT_DIFF, INNER_RECT_DIFF, OUTER_RECT_DIMENSIONS[0] * bgWidthMultiplier, OUTER_RECT_DIMENSIONS[1] * bgHeightMultiplier);
     background.graphics.endFill();
     background.alpha = backgroundOpacity;
     addChild(background);
@@ -110,18 +118,24 @@ class FunkinDebugDisplay extends Sprite
 
   function createAdvancedElements():Void
   {
-    final graphsWidth:Int = #if switch Std.int((OUTER_RECT_DIMENSIONS[0] * 1.45) + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3)) #else OUTER_RECT_DIMENSIONS[0] + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3) #end;
-    final graphsHeight:Int = 25;
+    #if switch
+    var graphsWidth:Int = Std.int((OUTER_RECT_DIMENSIONS[0] * 1.45) + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3));
+    #else
+    var graphsWidth:Int = OUTER_RECT_DIMENSIONS[0] + (INNER_RECT_DIFF * 2) - (OTHERS_OFFSET * 3);
+    #end
+    var graphsHeight:Int = 25;
 
     fpsGraph = new FunkinStatsGraph(OTHERS_OFFSET, OTHERS_OFFSET + 49, graphsWidth, graphsHeight, color);
     fpsGraph.textDisplay.y = -49;
     fpsGraph.minValue = 0;
     addChild(fpsGraph);
 
-    #if !html5
-    gcMemGraph = new FunkinStatsGraph(OTHERS_OFFSET, Math.floor(OTHERS_OFFSET + (fpsGraph.y + fpsGraph.axisHeight) + 22), graphsWidth, graphsHeight, color);
-    gcMemGraph.minValue = 0;
-    addChild(gcMemGraph);
+    if (MemoryUtil.supportsGCMem())
+    {
+      gcMemGraph = new FunkinStatsGraph(OTHERS_OFFSET, Math.floor(OTHERS_OFFSET + (fpsGraph.y + fpsGraph.axisHeight) + 22), graphsWidth, graphsHeight, color);
+      gcMemGraph.minValue = 0;
+      addChild(gcMemGraph);
+    }
 
     if (MemoryUtil.supportsTaskMem())
     {
@@ -130,7 +144,6 @@ class FunkinDebugDisplay extends Sprite
       taskMemGraph.minValue = 0;
       addChild(taskMemGraph);
     }
-    #end
   }
 
   function createSimpleElements():Void
@@ -147,19 +160,13 @@ class FunkinDebugDisplay extends Sprite
     addChild(infoDisplay);
   }
 
-  override function __enterFrame(deltaTime:Int):Void
+  override function __enterFrame(deltaTime:Float):Void
   {
-    #if cpp
-    final currentTime:Float = lime._internal.backend.native.NativeCFFI.lime_sdl_get_ticks();
-    #elseif html5
-    final currentTime:Float = js.Browser.window.performance.now();
-    #else
-    final currentTime:Float = haxe.Timer.stamp() * 1000;
-    #end
+    var currentTime:Float = Lib.getTimer();
 
     times.push(currentTime);
 
-    while (times[0] < currentTime - 1000)
+    while (times[0] < currentTime - Constants.MS_PER_SEC)
     {
       times.shift();
     }
@@ -170,12 +177,16 @@ class FunkinDebugDisplay extends Sprite
       return;
     }
 
-    currentFPS = times.length;
+    fps = times.length;
 
-    #if !html5
-    gcMem = MemoryUtil.getGCMemory();
+    if (fps > fpsPeak) fpsPeak = fps;
 
-    if (gcMem > gcMemPeak) gcMemPeak = gcMem;
+    if (MemoryUtil.supportsGCMem())
+    {
+      gcMem = MemoryUtil.getGCMemory();
+
+      if (gcMem > gcMemPeak) gcMemPeak = gcMem;
+    }
 
     if (MemoryUtil.supportsTaskMem())
     {
@@ -183,7 +194,6 @@ class FunkinDebugDisplay extends Sprite
 
       if (taskMem > taskMemPeak) taskMemPeak = taskMem;
     }
-    #end
 
     if (isAdvanced)
     {
@@ -199,31 +209,33 @@ class FunkinDebugDisplay extends Sprite
 
   function updateAdvancedDisplay():Void
   {
+    #if switch
     if (fpsGraph == null || gcMemGraph == null) return;
+    #end
 
     updateFPSGraph();
-    #if !html5
     updateGcMemGraph();
     updateTaskMemGraph();
-    #end
 
-    final info:Array<String> = [];
-    info.push('FPS: $currentFPS');
+    var info:Array<String> = [];
+    info.push('FPS: $fps');
     info.push('AVG FPS: ${Math.floor(fpsGraph.average())}');
     info.push('1% LOW FPS: ${Math.floor(fpsGraph.lowest())}');
-    if (fpsGraph.textDisplay != null) fpsGraph.textDisplay.text = info.join('\n');
+    fpsGraph.textDisplay.text = info.join('\n');
 
-    #if !html5
-    #if switch
-    var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
-    var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
-    var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
-    if (gcMemGraph.textDisplay != null) gcMemGraph.textDisplay.text = 'GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB';
-    #else
-    if (gcMemGraph.textDisplay != null) gcMemGraph.textDisplay.text = 'GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}';
-    #end
+    if (gcMemGraph != null)
+    {
+      #if switch
+      var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
+      var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
+      var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
+      gcMemGraph.textDisplay.text = 'GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB';
+      #else
+      gcMemGraph.textDisplay.text = 'GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}';
+      #end
+    }
 
-    if (taskMemGraph != null && taskMemGraph.textDisplay != null)
+    if (taskMemGraph != null)
     {
       #if switch
       var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
@@ -233,51 +245,56 @@ class FunkinDebugDisplay extends Sprite
       taskMemGraph.textDisplay.text = 'TASK MEM: ${FlxStringUtil.formatBytes(taskMem).toLowerCase()} / ${FlxStringUtil.formatBytes(taskMemPeak).toLowerCase()}';
       #end
     }
-    #end
   }
 
   function updateSimpleDisplay():Void
   {
     if (infoDisplay != null)
     {
-      final info:Array<String> = [];
+      var info:Array<String> = [];
 
-      info.push('FPS: $currentFPS');
+      info.push('FPS: $fps');
 
-      #if !html5
       #if switch
       var haxeMB:Float = Math.round((gcMem / (1024.0 * 1024.0)) * 10.0) / 10.0;
       var sysUsedMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryUsed() * 10.0) / 10.0;
       var sysTotalMB:Float = Math.round(nx.NXPerformance.getPhysicalMemoryTotal());
       info.push('GC: ${haxeMB} MB | SYS: ${sysUsedMB} / ${sysTotalMB} MB');
       #else
-      info.push('GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}');
+      if (MemoryUtil.supportsGCMem())
+      {
+        info.push('GC MEM: ${FlxStringUtil.formatBytes(gcMem).toLowerCase()} / ${FlxStringUtil.formatBytes(gcMemPeak).toLowerCase()}');
+      }
 
       if (MemoryUtil.supportsTaskMem())
+      {
         info.push('TASK MEM: ${FlxStringUtil.formatBytes(taskMem).toLowerCase()} / ${FlxStringUtil.formatBytes(taskMemPeak).toLowerCase()}');
-      #end
+      }
       #end
 
       infoDisplay.text = info.join('\n');
     }
   }
 
-  function updateFPSGraph(?currentFPS:Int = 0):Void
+  function updateFPSGraph():Void
   {
+    #if switch
     if (fpsGraph == null) return;
-    fpsGraph.maxValue = FlxG.drawFramerate;
-    fpsGraph.update(times.length);
+    #end
+    fpsGraph.maxValue = fpsPeak;
+    fpsGraph.update(fps);
   }
 
-  #if !html5
-  function updateGcMemGraph(?currentFPS:Int = 0):Void
+  function updateGcMemGraph():Void
   {
-    if (gcMemGraph == null) return;
-    gcMemGraph.maxValue = gcMemPeak;
-    gcMemGraph.update(gcMem);
+    if (gcMemGraph != null)
+    {
+      gcMemGraph.maxValue = gcMemPeak;
+      gcMemGraph.update(gcMem);
+    }
   }
 
-  function updateTaskMemGraph(?currentFPS:Int = 0):Void
+  function updateTaskMemGraph():Void
   {
     if (taskMemGraph != null)
     {
@@ -285,7 +302,6 @@ class FunkinDebugDisplay extends Sprite
       taskMemGraph.update(taskMem);
     }
   }
-  #end
 
   function set_isAdvanced(value:Bool):Bool
   {
@@ -305,22 +321,23 @@ class FunkinDebugDisplay extends Sprite
 // Note: the string values here are deduced
 // so we dont need to do `Off = 'Off'` or nothin
 // https://haxe.org/manual/types-abstract-enum.html
+
 enum abstract DebugDisplayMode(String) from String to String
 {
   /**
    * Debug display is disabled.
    */
-  var Off;
+  public var Off;
 
   /**
    * Simple debug display.
    * FPS and Memory counters only.
    */
-  var Simple;
+  public var Simple;
 
   /**
    * Advanced debug display.
    * Full FPS and Memory info.
    */
-  var Advanced;
+  public var Advanced;
 }

@@ -6,6 +6,13 @@ import funkin.audio.waveform.WaveformData;
 @:nullSafety
 class VoicesGroup extends SoundGroup
 {
+  /**
+   * Whenever or not the game is using the legacy vocals system (shared Voices.ogg)
+   */
+  public var legacyVoiceSystem:Bool = false;
+
+  public var legacyVoiceUsesPlayer:Bool = false;
+
   var playerVoices:Null<FlxTypedGroup<FunkinSound>>;
   var opponentVoices:Null<FlxTypedGroup<FunkinSound>>;
 
@@ -157,14 +164,14 @@ class VoicesGroup extends SoundGroup
     return opponentVoices?.members[0]?.length ?? 0.0;
   }
 
-  public override function clear():Void
+  override public function clear():Void
   {
     playerVoices?.clear();
     opponentVoices?.clear();
     super.clear();
   }
 
-  public override function destroy():Void
+  override public function destroy():Void
   {
     if (playerVoices != null)
     {

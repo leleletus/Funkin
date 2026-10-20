@@ -1,18 +1,17 @@
 package funkin.graphics;
 
-import flixel.FlxSprite;
 import flixel.util.FlxColor;
 import flixel.graphics.FlxGraphic;
 import flixel.tweens.FlxTween;
 import openfl.display3D.textures.TextureBase;
 import funkin.graphics.framebuffer.FixedBitmapData;
+import funkin.graphics.framebuffer.FunkinFilterRenderer;
 import openfl.display.BitmapData;
 import flixel.math.FlxRect;
 import flixel.math.FlxPoint;
 import flixel.math.FlxMatrix;
 import flixel.graphics.frames.FlxFrame;
 import flixel.FlxCamera;
-import openfl.system.System;
 import flixel.system.FlxAssets.FlxGraphicAsset;
 import funkin.FunkinMemory;
 import animate.internal.SymbolItem;
@@ -20,7 +19,10 @@ import animate.internal.elements.Element;
 import animate.internal.elements.AtlasInstance;
 import animate.internal.elements.SymbolInstance;
 import animate.FlxAnimate;
-import animate.FlxAnimateFrames;
+import animate.FlxAnimateFrames.FilterQuality;
+import animate.FlxAnimateFrames.SpritemapInput;
+import animate.internal.RenderTexture;
+import openfl.filters.BitmapFilter;
 import haxe.io.Path;
 
 using StringTools;
@@ -110,10 +112,14 @@ typedef AtlasSpriteSettings =
  * - A more efficient method for creating solid color sprites.
  * - TODO: Better cache handling for textures.
  */
-@:nullSafety
-@:access(animate.FlxAnimateController)
+@:nullSafety @:access(animate.FlxAnimateController)
 class FunkinSprite extends FlxAnimate
 {
+  /**
+   * The filters array to be applied to the sprite.
+   */
+  public var filters(default, set):Null<Array<BitmapFilter>> = null;
+
   /**
    * @param x Starting X position
    * @param y Starting Y position
@@ -123,6 +129,8 @@ class FunkinSprite extends FlxAnimate
   public function new(?x:Float = 0, ?y:Float = 0, ?path:String, ?atlasSettings:AtlasSpriteSettings)
   {
     super(x, y);
+
+    filterRenderer = new FunkinFilterRenderer(this);
 
     if (path != null)
     {
@@ -730,11 +738,11 @@ class FunkinSprite extends FlxAnimate
   }
 
   /**
-   * Ensure scale is applied when cloning a sprite.R
+   * Ensure scale is applied when cloning a sprite.
    * The default `clone()` method acts kinda weird TBH.
    * @return A clone of this sprite.
    */
-  public override function clone():FunkinSprite
+  override public function clone():FunkinSprite
   {
     var result = new FunkinSprite(this.x, this.y);
     result.frames = this.frames;
@@ -785,10 +793,144 @@ class FunkinSprite extends FlxAnimate
     return super.set_antialiasing(value);
   }
 
-  public override function destroy():Void
+  var filterRenderer:FunkinFilterRenderer;
+  var filtered:Bool = false;
+  var filterOffsets:Array<Float> = [0, 0];
+
+  override function checkRenderTexture():Bool
+  {
+    // Forcefully enable render texture when we have filters.
+    if (filters != null && filters.length > 0) return true;
+
+    return super.checkRenderTexture();
+  }
+
+  function set_filters(value:Null<Array<BitmapFilter>>):Null<Array<BitmapFilter>>
+  {
+    if (filters != value) _renderTextureDirty = true;
+    filters = value;
+    return value;
+  }
+
+  override public function draw():Void
+  {
+    for (filter in filters ?? [])
+    {
+      @:privateAccess
+      if (filter.__renderDirty) _renderTextureDirty = true;
+    }
+
+    super.draw();
+  }
+
+  override function drawFrameComplex(frame:FlxFrame, camera:FlxCamera):Void
+  {
+    final willUseRenderTexture = checkRenderTexture();
+    final matrix = this._matrix;
+
+    frame.prepareMatrix(matrix, FlxFrameAngle.ANGLE_0, checkFlipX(), checkFlipY());
+    prepareDrawMatrix(matrix, camera);
+
+    if (willUseRenderTexture)
+    {
+      var bounds:Array<Int> = [Math.ceil(frame.frame.width), Math.ceil(frame.frame.height)];
+      if (_renderTexture == null) _renderTexture = new RenderTexture(bounds[0], bounds[1]);
+
+      if (_renderTextureDirty)
+      {
+        _renderTexture.init(bounds[0], bounds[1]);
+        _renderTexture.drawToCamera((camera, mat) ->
+        {
+          camera.drawPixels(frame, framePixels, mat, null, null, antialiasing, null);
+        });
+
+        _renderTexture.render();
+
+        filterRenderer.applyFilters();
+        _renderTextureDirty = false;
+      }
+
+      if (filtered)
+      {
+        matrix.translate(filterOffsets[0], filterOffsets[1]);
+        camera.drawPixels(filterRenderer.graphic?.imageFrame.frame, null, matrix, colorTransform, blend, antialiasing, shader);
+      }
+      else
+      {
+        camera.drawPixels(_renderTexture.graphic.imageFrame.frame, framePixels, matrix, colorTransform, blend, antialiasing, shader);
+      }
+    }
+    else
+    {
+      camera.drawPixels(frame, framePixels, matrix, colorTransform, blend, antialiasing, shader);
+    }
+  }
+
+  override function drawAnimate(camera:FlxCamera):Void
+  {
+    final willUseRenderTexture = checkRenderTexture();
+    final matrix = _matrix;
+    matrix.identity();
+
+    @:privateAccess
+    var bounds = timeline._bounds;
+    if (!willUseRenderTexture) matrix.translate(-bounds.x, -bounds.y);
+
+    prepareAnimateMatrix(matrix, camera, bounds);
+
+    if (renderStage) drawStage(camera);
+
+    timeline.currentFrame = animation.frameIndex;
+
+    #if !flash
+    if (willUseRenderTexture)
+    {
+      if (_renderTexture == null)
+      {
+        _renderTexture = new RenderTexture(Math.ceil(bounds.width), Math.ceil(bounds.height));
+
+        // Replace the render texture's camera with a FunkinCamera
+        // This allows the blend shader to work inside the render texture!
+        @:privateAccess
+        _renderTexture._camera = new FunkinCamera('', 0, 0, Math.ceil(bounds.width), Math.ceil(bounds.height));
+      }
+
+      if (_renderTextureDirty)
+      {
+        _renderTexture.init(Math.ceil(bounds.width), Math.ceil(bounds.height));
+        _renderTexture.drawToCamera((camera, matrix) ->
+        {
+          matrix.translate(-bounds.x, -bounds.y);
+          timeline.draw(camera, matrix, null, null, antialiasing, null);
+        });
+        _renderTexture.render();
+
+        filterRenderer.applyFilters();
+        _renderTextureDirty = false;
+      }
+
+      if (filtered)
+      {
+        matrix.translate(filterOffsets[0], filterOffsets[1]);
+        camera.drawPixels(filterRenderer.graphic?.imageFrame.frame, null, matrix, colorTransform, blend, antialiasing, shader);
+      }
+      else
+      {
+        camera.drawPixels(_renderTexture.graphic.imageFrame.frame, framePixels, matrix, colorTransform, blend, antialiasing, shader);
+      }
+    }
+    else
+    #end
+    {
+      timeline.draw(camera, matrix, colorTransform, blend, antialiasing, shader);
+    }
+  }
+
+  override public function destroy():Void
   {
     @:nullSafety(Off) // TODO: Remove when flixel.FlxSprite is null safed.
     frames = null;
+    filterRenderer.destroy();
     // Cancel all tweens so they don't continue to run on a destroyed sprite.
     // This prevents crashes.
     FlxTween.cancelTweensOf(this);

@@ -9,8 +9,7 @@ import funkin.data.song.SongDataUtils;
  * Command that copies a given set of notes and song events to the clipboard,
  * and then deletes them from the chart editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class CutItemsCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -39,6 +38,9 @@ class CutItemsCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
+    state.clipboardDirty = true;
+    state.clipboardValid = true;
     state.sortChartData();
   }
 
@@ -53,6 +55,7 @@ class CutItemsCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
     state.sortChartData();
   }
 

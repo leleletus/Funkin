@@ -8,6 +8,9 @@ import funkin.save.Save;
 import funkin.util.WindowUtil;
 import funkin.util.HapticUtil.HapticsMode;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
+#if FEATURE_DISCORD_RPC
+import funkin.api.discord.DiscordClient;
+#end
 
 /**
  * A core class which provides a store of user-configurable, globally relevant values.
@@ -41,12 +44,23 @@ class Preferences
   {
     #if web
     return 60;
+    #elseif mobile
+    var refreshRate:Int = FlxG.stage.window.displayMode.refreshRate;
+
+    if (refreshRate < 60) refreshRate = 60;
+
+    return refreshRate;
     #else
     var save:Save = Save.instance;
     save.options.framerate = value;
     Save.system.flush();
-    FlxG.updateFramerate = value;
-    FlxG.drawFramerate = value;
+
+    if (!unlockedFramerate)
+    {
+      FlxG.updateFramerate = value;
+      FlxG.drawFramerate = value;
+    }
+
     return value;
     #end
   }
@@ -69,13 +83,13 @@ class Preferences
   static function set_naughtyness(value:Bool):Bool
   {
     #if NO_FEATURE_NAUGHTYNESS
-    value = false;
-    #end
-
+    return false;
+    #else
     var save:Save = Save.instance;
     save.options.naughtyness = value;
     Save.system.flush();
     return value;
+    #end
   }
 
   /**
@@ -146,22 +160,31 @@ class Preferences
   {
     #if NO_FEATURE_DEBUG_DISPLAY
     return DebugDisplayMode.Off;
-    #end
-
+    #else
     return Save?.instance?.options?.debugDisplay ?? #if (switch && NX_DEV_TOOLS) DebugDisplayMode.Advanced #else 'Off' #end;
+    #end
   }
 
   static function set_debugDisplay(value:DebugDisplayMode):DebugDisplayMode
   {
-    if (Save.instance != null && Save.instance.options != null)
-    {
-      if (value != Save.instance.options.debugDisplay) setDebugDisplayMode(value);
+    #if NO_FEATURE_DEBUG_DISPLAY
+    return DebugDisplayMode.Off;
+    #else
+    #if switch
+    // The Switch HUD combo can change the mode before the save is loaded.
+    if (Save.instance == null || Save.instance.options == null) return value;
+    #end
+    if (value != Save.instance.options.debugDisplay) setDebugDisplayMode(value);
 
-      var save = Save.instance;
-      save.options.debugDisplay = value;
-      if (Save.system != null) Save.system.flush();
-    }
+    var save = Save.instance;
+    save.options.debugDisplay = value;
+    #if switch
+    if (Save.system != null) Save.system.flush();
+    #else
+    Save.system.flush();
+    #end
     return value;
+    #end
   }
 
   /**
@@ -193,13 +216,13 @@ class Preferences
 
   static function get_hapticsMode():HapticsMode
   {
-    var value = Save?.instance?.options?.hapticsMode ?? "All";
+    var value = Save?.instance?.options?.hapticsMode ?? 'All';
 
     return switch (value)
     {
-      case "None":
+      case 'None':
         HapticsMode.NONE;
-      case "Notes Only":
+      case 'Notes Only':
         HapticsMode.NOTES_ONLY;
       default:
         HapticsMode.ALL;
@@ -213,11 +236,11 @@ class Preferences
     switch (value)
     {
       case HapticsMode.NONE:
-        string = "None";
+        string = 'None';
       case HapticsMode.NOTES_ONLY:
-        string = "Notes Only";
+        string = 'Notes Only';
       default:
-        string = "All";
+        string = 'All';
     };
 
     var save:Save = Save.instance;
@@ -256,18 +279,23 @@ class Preferences
   {
     #if (mobile || switch)
     return false;
-    #end
+    #else
     return Save?.instance?.options?.autoPause ?? true;
+    #end
   }
 
   static function set_autoPause(value:Bool):Bool
   {
+    #if mobile
+    return false;
+    #else
     if (value != Save.instance.options.autoPause) FlxG.autoPause = value;
 
     var save:Save = Save.instance;
     save.options.autoPause = value;
     Save.system.flush();
     return value;
+    #end
   }
 
   /**
@@ -317,35 +345,42 @@ class Preferences
 
   static function get_vsyncMode():lime.ui.WindowVSyncMode
   {
-    var value = Save?.instance?.options?.vsyncMode ?? "Off";
+    #if (mobile || web || switch)
+    return lime.ui.WindowVSyncMode.OFF;
+    #else
+    var value = Save?.instance?.options?.vsyncMode ?? 'Off';
 
     return switch (value)
     {
-      case "Off":
+      case 'Off':
         lime.ui.WindowVSyncMode.OFF;
-      case "On":
+      case 'On':
         lime.ui.WindowVSyncMode.ON;
-      case "Adaptive":
+      case 'Adaptive':
         lime.ui.WindowVSyncMode.ADAPTIVE;
       default:
         lime.ui.WindowVSyncMode.OFF;
     };
+    #end
   }
 
   static function set_vsyncMode(value:lime.ui.WindowVSyncMode):lime.ui.WindowVSyncMode
   {
+    #if (mobile || web || switch)
+    return lime.ui.WindowVSyncMode.OFF;
+    #else
     var string;
 
     switch (value)
     {
       case lime.ui.WindowVSyncMode.OFF:
-        string = "Off";
+        string = 'Off';
       case lime.ui.WindowVSyncMode.ON:
-        string = "On";
+        string = 'On';
       case lime.ui.WindowVSyncMode.ADAPTIVE:
-        string = "Adaptive";
+        string = 'Adaptive';
       default:
-        string = "Off";
+        string = 'Off';
     };
 
     WindowUtil.setVSyncMode(value);
@@ -354,49 +389,75 @@ class Preferences
     save.options.vsyncMode = string;
     Save.system.flush();
     return value;
+    #end
   }
 
   public static var unlockedFramerate(get, set):Bool;
 
   static function get_unlockedFramerate():Bool
   {
+    #if (mobile || web || switch)
+    return false;
+    #else
     return Save?.instance?.options?.unlockedFramerate ?? false;
+    #end
   }
 
   static function set_unlockedFramerate(value:Bool):Bool
   {
+    #if (mobile || web || switch)
+    return false;
+    #else
     if (value != Save.instance.options.unlockedFramerate)
     {
-      #if web
       toggleFramerateCap(value);
-      #end
     }
 
     var save:Save = Save.instance;
     save.options.unlockedFramerate = value;
     Save.system.flush();
     return value;
+    #end
   }
 
-  #if web
-  // We create a haxe version of this just for readability.
-  // We use these to override `window.requestAnimationFrame` in Javascript to uncap the framerate / "animation" request rate
-  // Javascript is crazy since u can just do stuff like that lol
+  public static var enabledDiscordRPC(get, set):Bool;
 
-  public static function unlockedFramerateFunction(callback, element)
+  static function get_enabledDiscordRPC():Bool
   {
-    var currTime = Date.now().getTime();
-    var timeToCall = 0;
-    var id = js.Browser.window.setTimeout(function()
-    {
-      callback(currTime + timeToCall);
-    }, timeToCall);
-    return id;
+    return Save?.instance?.options?.enabledDiscordRPC ?? true;
   }
 
-  // Lime already implements their own little framerate cap, so we can just use that
-  // This also gets set in the init function in Main.hx, since we need to definitely override it
-  public static var lockedFramerateFunction = untyped js.Syntax.code("window.requestAnimationFrame");
+  static function set_enabledDiscordRPC(value:Bool):Bool
+  {
+    #if FEATURE_DISCORD_RPC
+    toggleDiscordRPC(value);
+    #end
+
+    var save:Save = Save.instance;
+    save.options.enabledDiscordRPC = value;
+    Save.system.flush();
+    return value;
+  }
+
+  #if FEATURE_DISCORD_RPC
+  public static function toggleDiscordRPC(enable:Bool)
+  {
+    if (DiscordClient.instance == null) return;
+
+    if (enable)
+    {
+      DiscordClient.instance.init();
+
+      if (DiscordClient.presenceParamsCache != null)
+      {
+        DiscordClient.instance.setPresence(DiscordClient.presenceParamsCache);
+      }
+    }
+    else
+    {
+      DiscordClient.instance.shutdown();
+    }
+  }
   #end
 
   /**
@@ -501,9 +562,7 @@ class Preferences
     setDebugDisplayMode(Preferences.debugDisplay);
     setDebugDisplayBGOpacity(Preferences.debugDisplayBGOpacity / 100);
 
-    #if web
     toggleFramerateCap(Preferences.unlockedFramerate);
-    #end
 
     #if mobile
     // Apply the allowScreenTimeout setting.
@@ -513,30 +572,26 @@ class Preferences
 
   static function toggleFramerateCap(unlocked:Bool):Void
   {
-    #if web
-    var framerateFunction = unlocked ? unlockedFramerateFunction : lockedFramerateFunction;
-    untyped js.Syntax.code("window.requestAnimationFrame = framerateFunction;");
+    #if !(mobile || web)
+    FlxG.drawFramerate = unlocked ? 0 : framerate;
+    FlxG.updateFramerate = unlocked ? 0 : framerate;
     #end
   }
 
   public static function setDebugDisplayMode(mode:DebugDisplayMode):Void
   {
-    try
-    {
-      if (FlxG.game == null || FlxG.game.parent == null || Main.debugDisplay == null) return;
+    #if switch
+    // The Switch HUD can be toggled before the game or the display exist.
+    if (FlxG.game == null || Main.debugDisplay == null) return;
+    #end
 
-      if (FlxG.game.parent.contains(Main.debugDisplay)) FlxG.game.parent.removeChild(Main.debugDisplay);
+    if (FlxG.game.contains(Main.debugDisplay)) FlxG.game.removeChild(Main.debugDisplay);
 
-      if (mode == DebugDisplayMode.Off) return;
+    if (mode == DebugDisplayMode.Off) return;
 
-      Main.debugDisplay.isAdvanced = (mode == DebugDisplayMode.Advanced);
+    Main.debugDisplay.isAdvanced = (mode == DebugDisplayMode.Advanced);
 
-      FlxG.game.parent.addChild(Main.debugDisplay);
-    }
-    catch (e:Dynamic)
-    {
-      trace('Warning: Failed to set debug display mode: ' + e);
-    }
+    FlxG.game.addChild(Main.debugDisplay);
   }
 
   static function setDebugDisplayBGOpacity(value:Float):Void

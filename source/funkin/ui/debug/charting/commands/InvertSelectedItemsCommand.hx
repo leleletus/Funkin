@@ -9,8 +9,7 @@ import funkin.data.song.SongDataUtils;
  * Command to deselect all items that are currently selected in the chart editor,
  * then select all the items that were previously unselected.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class InvertSelectedItemsCommand implements ChartEditorCommand
 {
   var previousNoteSelection:Array<SongNoteData> = [];
@@ -29,6 +28,7 @@ class InvertSelectedItemsCommand implements ChartEditorCommand
     state.currentEventSelection = SongDataUtils.subtractEvents(state.currentSongChartEventData, previousEventSelection);
 
     state.noteDisplayDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -37,6 +37,7 @@ class InvertSelectedItemsCommand implements ChartEditorCommand
     state.currentEventSelection = previousEventSelection;
 
     state.noteDisplayDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

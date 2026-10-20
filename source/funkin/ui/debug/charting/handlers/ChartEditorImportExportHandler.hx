@@ -19,8 +19,7 @@ import thx.semver.Version as SemverVersion;
 /**
  * Contains functions for importing, loading, saving, and exporting charts.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorImportExportHandler
 {
   public static final BACKUPS_PATH:String = './backups/charts/';
@@ -28,7 +27,7 @@ class ChartEditorImportExportHandler
   /**
    * Fetch's a song's existing chart and audio and loads it, replacing the current song.
    */
-  public static function loadSongAsTemplate(state:ChartEditorState, songId:String, targetSongDifficulty:String = null, targetSongVariation:String = null):Void
+  public static function loadSongAsTemplate(state:ChartEditorState, songId:String, targetSongDifficulty:String = null, ?targetSongVariation:String):Void
   {
     trace('===============START');
 
@@ -90,6 +89,18 @@ class ChartEditorImportExportHandler
         for (voice in opponentVoiceList)
         {
           state.loadVocalsFromAsset(voice, diff.characters.opponent, instId);
+        }
+
+        if (playerVoiceList.length == 0 && opponentVoiceList.length == 0) // Legacy support...
+        {
+          var suffix:String = (instId != null && instId != '' && instId != 'default') ? '-$instId' : '';
+          var voiceFile = Paths.voices(diff.song.id, suffix);
+          if (Assets.exists(voiceFile))
+          {
+            state.loadVocalsFromAsset(voiceFile, diff.characters.player, instId);
+            state.audioVocalTrackGroup.legacyVoiceSystem = true;
+            state.audioVocalTrackGroup.legacyVoiceUsesPlayer = true;
+          }
         }
 
         // Set the difficulty of the song if one was passed in the params, and it isn't the default
@@ -165,7 +176,13 @@ class ChartEditorImportExportHandler
       if (stackedNotesCount > 0)
       {
         // Difficulty names might be out of order due to how maps work
-        affectedDiffs.sort(SortUtil.defaultsThenAlphabetically.bind(['Easy', 'Normal', 'Hard', 'Erect', 'Nightmare']));
+        affectedDiffs.sort(SortUtil.defaultsThenAlphabetically.bind([
+          'Easy',
+          'Normal',
+          'Hard',
+          'Erect',
+          'Nightmare'
+        ]));
 
         // Delay it so it doesn't overlap other notifications
         flixel.util.FlxTimer.wait(delay, () ->
@@ -484,7 +501,10 @@ class ChartEditorImportExportHandler
         // Force writing to a generic path (autosave or crash recovery)
         targetMode = Skip;
         if (state.currentSongId == '') state.currentSongName = 'New Chart'; // Hopefully no one notices this silliness
-        targetPath = Path.join([BACKUPS_PATH, 'chart-editor-${state.currentSongId}-${DateUtil.generateTimestamp()}.${Constants.EXT_CHART}']);
+        targetPath = Path.join([
+          BACKUPS_PATH,
+          'chart-editor-${state.currentSongId}-${DateUtil.generateTimestamp()}.${Constants.EXT_CHART}'
+        ]);
         // We have to force write because the program will die before the save dialog is closed.
         trace('Force exporting to $targetPath...');
         try

@@ -49,10 +49,10 @@ class AnimateAtlasFreeplayDJ extends BaseFreeplayDJ
     FlxAnimationUtil.addTextureAtlasAnimations(this, playableCharData.getAnimationsList());
 
     var animationNames:Array<String> = this.animation.getNameList();
-    log('[ATLASDJ] Successfully loaded ${animationNames.length} animations for ${characterId}');
+    log('Successfully loaded ${animationNames.length} animations for ${characterId}');
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     switch (currentState)
     {
@@ -108,7 +108,7 @@ class AnimateAtlasFreeplayDJ extends BaseFreeplayDJ
         }
         else
         {
-          FlxG.log.warn("Unrecognized animation in FistPumpIntro: " + getCurrentAnimation());
+          FlxG.log.warn('Unrecognized animation in FistPumpIntro: ' + getCurrentAnimation());
         }
 
       case FistPump:
@@ -133,7 +133,7 @@ class AnimateAtlasFreeplayDJ extends BaseFreeplayDJ
         }
         else
         {
-          FlxG.log.warn("Unrecognized animation in FistPump: " + getCurrentAnimation());
+          FlxG.log.warn('Unrecognized animation in FistPump: ' + getCurrentAnimation());
         }
 
       case IdleEasterEgg:

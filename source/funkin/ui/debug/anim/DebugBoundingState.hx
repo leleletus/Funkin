@@ -19,6 +19,8 @@ import funkin.ui.mainmenu.MainMenuState;
 import funkin.util.MouseUtil;
 import funkin.util.SerializerUtil;
 import funkin.util.SortUtil;
+import funkin.util.WindowUtil;
+import funkin.audio.FunkinSound;
 import haxe.ui.components.DropDown;
 import haxe.ui.containers.dialogs.CollapsibleDialog;
 import haxe.ui.core.Screen;
@@ -34,31 +36,18 @@ using flixel.util.FlxSpriteUtil;
 
 class DebugBoundingState extends FlxState
 {
-  /*
-    TODAY'S TO-DO
-    - Cleaner UI
-   */
   var bg:FlxBackdrop;
-  var fileInfo:FlxText;
-
   var txtGrp:FlxTypedGroup<FlxText>;
-
   var hudCam:FlxCamera;
-
   var curView:ANIMDEBUGVIEW = SPRITESHEET;
-
   var spriteSheetView:FlxGroup;
   var offsetView:FlxGroup;
   var dropDownSetup:Bool = false;
-
   var onionSkinChar:BaseCharacter;
   var txtOffsetShit:FlxText;
-
   var offsetEditorDialog:CollapsibleDialog;
   var offsetAnimationDropdown:DropDown;
-
   var haxeUIFocused(get, default):Bool = false;
-
   var currentAnimationName(get, never):String;
 
   function get_currentAnimationName():String
@@ -76,6 +65,16 @@ class DebugBoundingState extends FlxState
   override function create():Void
   {
     Paths.setCurrentLevel('week1');
+    
+    FlxG.sound.music?.stop();
+
+    Cursor.show();
+    FunkinSound.playMusic('chartEditorLoop', {
+      startingVolume: 0.0
+    });
+    FlxG.sound.music.fadeIn(10, 0, 1);
+
+    WindowUtil.setWindowTitle("Friday Night Funkin\' Animation Editor");
 
     hudCam = new FlxCamera();
     hudCam.bgColor.alpha = 0;
@@ -93,10 +92,7 @@ class DebugBoundingState extends FlxState
     var viewDropdown:DropDown = offsetEditorDialog.findComponent("swapper", DropDown);
     viewDropdown.onChange = function(e:UIEvent)
     {
-      trace(e.type);
       curView = cast e?.data?.curView;
-      trace(e.data);
-      // trace(e.data);
     };
 
     offsetAnimationDropdown = offsetEditorDialog.findComponent("animationDropdown", DropDown);
@@ -242,7 +238,10 @@ class DebugBoundingState extends FlxState
 
       if (FlxG.mouse.pressed)
       {
-        swagChar.animOffsets = [(FlxG.mouse.x - mouseOffset.x) * -1, (FlxG.mouse.y - mouseOffset.y) * -1];
+        swagChar.animOffsets = [
+          (FlxG.mouse.x - mouseOffset.x) * -1,
+          (FlxG.mouse.y - mouseOffset.y) * -1
+        ];
 
         swagChar.animationOffsets.set(swagChar.getCurrentAnimation(), swagChar.animOffsets);
 
@@ -280,23 +279,6 @@ class DebugBoundingState extends FlxState
   function clearInfo()
   {
     txtGrp.clear();
-  }
-
-  function checkLibrary(library:String)
-  {
-    trace(Assets.hasLibrary(library));
-    if (Assets.getLibrary(library) == null)
-    {
-      @:privateAccess
-      if (!LimeAssets.libraryPaths.exists(library)) throw "Missing library: " + library;
-
-      // var callback = callbacks.add("library:" + library);
-      Assets.loadLibrary(library).onComplete(function(_)
-      {
-        trace('LOADED... awesomeness...');
-        // callback();
-      });
-    }
   }
 
   override function update(elapsed:Float)
@@ -338,7 +320,14 @@ class DebugBoundingState extends FlxState
 
     if (FlxG.keys.justPressed.H) hudCam.visible = !hudCam.visible;
 
-    if (FlxG.keys.justPressed.F4) FlxG.switchState(() -> new MainMenuState());
+    if (FlxG.keys.justPressed.F4)
+    {
+      resetWindowTitle();
+      FlxG.switchState(() -> new MainMenuState());
+    }
+
+    if (FlxG.mouse.justPressed || FlxG.mouse.justPressedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickDown"));
+    if (FlxG.mouse.justReleased || FlxG.mouse.justReleasedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickUp"));
 
     MouseUtil.mouseCamDrag();
     if (!haxeUIFocused) MouseUtil.mouseWheelZoom();
@@ -349,6 +338,11 @@ class DebugBoundingState extends FlxState
     bg.setGraphicSize(Std.int(bg.width / FlxG.camera.zoom));
 
     super.update(elapsed);
+  }
+
+  function resetWindowTitle():Void
+  {
+    WindowUtil.setWindowTitle('Friday Night Funkin\'');
   }
 
   override function destroy()
@@ -407,7 +401,7 @@ class DebugBoundingState extends FlxState
 
     // Keyboards controls for general WASD "movement"
     // modifies the animDrooffsetAnimationDropdownpDownMenu so that it's properly updated and shit
-    // and then it's just played and updated from the offsetAnimationDropdown callback, which is set in the loadAnimShit() function probabbly
+    // and then it's just played and updated from the offsetAnimationDropdown callback, which is set in the loadAnimShit() function probably
     if (FlxG.keys.justPressed.W || FlxG.keys.justPressed.S || FlxG.keys.justPressed.D || FlxG.keys.justPressed.A)
     {
       var suffix:String = '';
@@ -451,7 +445,9 @@ class DebugBoundingState extends FlxState
     // Plays the idle animation
     if (FlxG.keys.justPressed.SPACE)
     {
-      offsetAnimationDropdown.value = {id: 'idle', text: 'idle'};
+      if (swagChar?.hasAnimation('danceLeft')) offsetAnimationDropdown.value = {id: 'danceLeft', text: 'danceLeft'};
+      else
+        offsetAnimationDropdown.value = {id: 'idle', text: 'idle'};
 
       playCharacterAnimation(currentAnimationName, true);
     }
@@ -517,8 +513,8 @@ class DebugBoundingState extends FlxState
 
   var swagChar:BaseCharacter;
 
-  /*
-    Called when animation dropdown is changed!
+  /**
+   * Called when animation dropdown is changed!
    */
   function loadAnimShit(char:String)
   {
@@ -568,21 +564,18 @@ class DebugBoundingState extends FlxState
     for (i in swagChar.animationOffsets.keys())
     {
       characterAnimNames.push(i);
-      trace(i);
-      trace(swagChar.animationOffsets[i]);
     }
 
     offsetAnimationDropdown.dataSource.clear();
 
     for (charAnim in characterAnimNames)
     {
-      trace('Adding ${charAnim} to HaxeUI dropdown');
       offsetAnimationDropdown.dataSource.add({id: charAnim, text: charAnim});
     }
 
     offsetAnimationDropdown.selectedIndex = 0;
 
-    trace('Added ${offsetAnimationDropdown.dataSource.size} to HaxeUI dropdown');
+    trace('Added ${offsetAnimationDropdown.dataSource.size} animations to HaxeUI dropdown');
 
     offsetAnimationDropdown.onChange = function(event:UIEvent)
     {
@@ -607,7 +600,6 @@ class DebugBoundingState extends FlxState
     // var animName = characterAnimNames[Std.parseInt(str)];
     var animName = str;
     swagChar.playAnimation(animName, true); // trace();
-    trace(swagChar.animationOffsets.get(animName));
 
     txtOffsetShit.text = 'Offset: ' + swagChar.animOffsets;
     txtOffsetShit.y = FlxG.height - 20 - txtOffsetShit.height;

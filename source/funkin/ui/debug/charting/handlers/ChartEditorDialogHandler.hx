@@ -23,7 +23,6 @@ import funkin.ui.debug.charting.dialogs.ChartEditorWelcomeDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorUploadVocalsDialog;
 import funkin.ui.debug.charting.util.ChartEditorDropdowns;
 import funkin.util.Constants;
-import funkin.util.DateUtil;
 import funkin.util.FileUtil;
 import funkin.util.VersionUtil;
 import haxe.io.Path;
@@ -50,8 +49,7 @@ using Lambda;
 /**
  * Handles dialogs for the new Chart Editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorDialogHandler
 {
   // Paths to HaxeUI layout files for each dialog.
@@ -126,8 +124,6 @@ class ChartEditorDialogHandler
   public static function openUploadVocalsDialog(state:ChartEditorState, closable:Bool = true):Dialog
   {
     var charData:SongCharacterData = state.currentSongMetadata.playData.characters;
-
-    var hasClearedVocals:Bool = false;
 
     var charIdsForVocals:Array<String> = [charData.player, charData.opponent];
 
@@ -532,7 +528,7 @@ class ChartEditorDialogHandler
 
     instrumentalBox.onClick = function(_)
     {
-      Dialogs.openBinaryFile('Open Instrumental', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForFile('Open Instrumental', [FileUtil.FILE_FILTER_OGG], function(selectedFile:SelectedFileData)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -695,6 +691,26 @@ class ChartEditorDialogHandler
     var startingValueNoteStyle = ChartEditorDropdowns.populateDropdownWithNoteStyles(inputNoteStyle, newSongMetadata.playData.noteStyle);
     inputNoteStyle.value = startingValueNoteStyle;
 
+    var inputAlbum:Null<DropDown> = dialog.findComponent('inputAlbum', DropDown);
+    if (inputAlbum == null) throw 'Could not locate inputAlbum DropDown in Song Metadata dialog';
+    inputAlbum.onChange = (event:UIEvent) ->
+    {
+      if (event.data?.id == null) return;
+      newSongMetadata.playData.album = event.data.id;
+    };
+    var startingValueAlbum = ChartEditorDropdowns.populateDropdownWithAlbums(inputAlbum, newSongMetadata.playData.album);
+    inputAlbum.value = startingValueAlbum;
+
+    var inputStickerPack:Null<DropDown> = dialog.findComponent('inputStickerPack', DropDown);
+    if (inputStickerPack == null) throw 'Could not locate inputStickerPack DropDown in Song Metadata dialog';
+    inputStickerPack.onChange = (event:UIEvent) ->
+    {
+      if (event.data?.id == null) return;
+      newSongMetadata.playData.stickerPack = event.data.id;
+    };
+    var startingValueStickerPack = ChartEditorDropdowns.populateDropdownWithStickerPacks(inputStickerPack, newSongMetadata.playData.stickerPack);
+    inputStickerPack.value = startingValueStickerPack;
+
     var inputCharacterPlayer:Null<DropDown> = dialog.findComponent('inputCharacterPlayer', DropDown);
     if (inputCharacterPlayer == null) throw 'ChartEditorToolboxHandler.buildToolboxMetadataLayout() - Could not find inputCharacterPlayer component.';
     inputCharacterPlayer.onChange = function(event:UIEvent)
@@ -737,7 +753,9 @@ class ChartEditorDialogHandler
       var timeChanges:Array<SongTimeChange> = newSongMetadata.timeChanges;
       if (timeChanges == null || timeChanges.length == 0)
       {
-        timeChanges = [new SongTimeChange(0, event.value)];
+        timeChanges = [
+          new SongTimeChange(0, event.value)
+        ];
       }
       else
       {
@@ -944,7 +962,7 @@ class ChartEditorDialogHandler
 
     onClickMetadataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      Dialogs.openBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForFile('Open Chart ($variation) Metadata', [FileUtil.FILE_FILTER_JSON], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1030,7 +1048,7 @@ class ChartEditorDialogHandler
 
     onClickChartDataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      Dialogs.openBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForFile('Open Chart ($variation) Metadata', [FileUtil.FILE_FILTER_JSON], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1111,30 +1129,36 @@ class ChartEditorDialogHandler
 
     var prettyFormat:String = switch (format)
     {
-      case 'legacy': 'FNF Legacy';
-      case 'stepmania': 'StepMania';
-      case 'osumania': 'Osu!Mania';
-      default: 'Unknown';
+      case 'legacy':
+        'FNF Legacy';
+      case 'stepmania':
+        'StepMania';
+      case 'osumania':
+        'osu!Mania';
+      default:
+        'Unknown';
     }
 
     var fileFilter = switch (format)
     {
       case 'legacy':
-        [{label: 'JSON Data File (.json)', extension: 'json'}];
+        [FileUtil.FILE_FILTER_JSON];
       case 'stepmania':
-        [{label: 'StepMania File (.sm)', extension: 'sm'}];
+        [FileUtil.FILE_FILTER_SM];
       case 'osumania':
-        [{label: 'OSU! Beatmap File (.osu)', extension: 'osu'}];
-      default: null;
+        [FileUtil.FILE_FILTER_OSU];
+      default:
+        null;
     }
 
-    var fileExt = switch (format)
+    var fileExt:String = switch (format)
     {
       case 'osumania':
         "osu";
       case 'stepmania':
         "sm";
-      default: "json";
+      default:
+        "json";
     }
 
     dialog.title = 'Import Chart - ${prettyFormat}';
@@ -1215,8 +1239,6 @@ class ChartEditorDialogHandler
             return;
           }
 
-          trace('Parsed StepMania data for ' + stepmaniaData.Metadata.Title);
-
           songMetadata = StepManiaImporter.migrateChartMetadata(stepmaniaData);
           songChartData = StepManiaImporter.migrateChartData(stepmaniaData);
 
@@ -1227,7 +1249,14 @@ class ChartEditorDialogHandler
 
           if (osuManiaData == null)
           {
-            state.error('Failure', 'Failed to parse Osu!Mania beatmap file (${path.file}.${path.ext})');
+            state.error('Failure', 'Failed to parse osu!Mania beatmap file (${path.file}.${path.ext})');
+            return;
+          }
+          else if (osuManiaData.General.Mode != 3)
+          {
+            var modes = ["osu!", "osu!taiko", "osu!catch"];
+            state.error('Failure',
+              'Not a osu!mania beatmap!\nGiven beatmap seems to be a ${modes[osuManiaData.General.Mode]} beatmap (${path.file}.${path.ext})');
             return;
           }
 
@@ -1242,7 +1271,11 @@ class ChartEditorDialogHandler
         state.error('Failure', 'Failed to load song (${path.file}.${path.ext})');
         return;
       }
-      state.loadSong([Constants.DEFAULT_VARIATION => songMetadata], [Constants.DEFAULT_VARIATION => songChartData]);
+      state.loadSong([
+        Constants.DEFAULT_VARIATION => songMetadata
+      ], [
+        Constants.DEFAULT_VARIATION => songChartData
+      ]);
 
       dialog.hideDialog(DialogButton.APPLY);
       state.success('Success', '$loadedText (${path.file}.${path.ext})');
@@ -1251,7 +1284,7 @@ class ChartEditorDialogHandler
     importBox.onClick = function(_)
     {
       // TODO / BUG: File filtering not working on mac finder dialog, so we don't use it for now
-      Dialogs.openBinaryFile('Import Chart - ${prettyFormat}', #if !mac fileFilter ?? [] #else [] #end, function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile:SelectedFileData)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1334,6 +1367,16 @@ class ChartEditorDialogHandler
     var startingValueNoteStyle = ChartEditorDropdowns.populateDropdownWithNoteStyles(dialogNoteStyle, state.currentSongMetadata.playData.noteStyle);
     dialogNoteStyle.value = startingValueNoteStyle;
 
+    var dialogAlbum:Null<DropDown> = dialog.findComponent('dialogAlbum', DropDown);
+    if (dialogAlbum == null) throw 'Could not locate dialogAlbum DropDown in Add Variation dialog';
+    var startingValueAlbum = ChartEditorDropdowns.populateDropdownWithAlbums(dialogAlbum, state.currentSongMetadata.playData.album);
+    dialogAlbum.value = startingValueAlbum;
+
+    var dialogStickerPack:Null<DropDown> = dialog.findComponent('dialogStickerPack', DropDown);
+    if (dialogStickerPack == null) throw 'Could not locate dialogStickerPack DropDown in Add Variation dialog';
+    var startingValueStickerPack = ChartEditorDropdowns.populateDropdownWithStickerPacks(dialogStickerPack, state.currentSongMetadata.playData.stickerPack);
+    dialogAlbum.value = startingValueStickerPack;
+
     var dialogCharacterPlayer:Null<DropDown> = dialog.findComponent('dialogCharacterPlayer', DropDown);
     if (dialogCharacterPlayer == null) throw 'Could not locate dialogCharacterPlayer DropDown in Add Variation dialog';
     dialogCharacterPlayer.value = ChartEditorDropdowns.populateDropdownWithCharacters(dialogCharacterPlayer, CharacterType.BF,
@@ -1370,6 +1413,8 @@ class ChartEditorDialogHandler
 
       pendingVariation.playData.stage = dialogStage.value.id;
       pendingVariation.playData.noteStyle = dialogNoteStyle.value.id;
+      pendingVariation.playData.album = dialogAlbum.value.id;
+      pendingVariation.playData.stickerPack = dialogStickerPack.value.id;
       pendingVariation.timeChanges[0].bpm = dialogBPM.value;
 
       state.songMetadata.set(pendingVariation.variation, pendingVariation);
@@ -1634,7 +1679,7 @@ class ChartEditorDialogHandler
 
   static final EPSILON:Float = 0.01;
 
-  static function onDropFile(path:String):Void
+  static function onDropFile(path:String, state:String, x:Float, y:Float):Void
   {
     // a VERY short timer to wait for the mouse position to update
     new FlxTimer().start(EPSILON, function(_)

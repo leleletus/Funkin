@@ -4,21 +4,20 @@
       "name": "FlxPartialSound",
       "type": "git",
       "dir": null,
-      "ref": "26ed20b9c181a576f4cbe18ccdea38912c01476e",
+      "ref": "13a0949395250216b9b500ca0731b46841e46085",
       "url": "https://github.com/FunkinCrew/FlxPartialSound.git"
     },
     {
       "name": "astc-compressor",
       "type": "git",
       "dir": null,
-      "ref": "b7a91b3072dc16e785a9bde847f17ba0ef15dd47",
+      "ref": "6c0fa6f46d3547ca58859b6ede87e659018a7ff5",
       "url": "https://github.com/KarimAkra/astc-compressor"
     },
     {
       "name": "extension-admob",
       "type": "git",
-      "dir": null,
-      "ref": "4c69bb43f1fb89fd6003dc98d2f3a9d75c5364b6",
+      "ref": "68fc73c4090c5765709597b68fbe87389f3548c0",
       "url": "https://github.com/FunkinCrew/extension-admob"
     },
     {
@@ -29,30 +28,43 @@
       "url": "https://github.com/Slushi-Github/hx_libnx"
     },
     {
+      "name": "extension-agesignals",
+      "type": "git",
+      "ref": "dd3f56ccbb313a43d40cba8826fca2b1ec7c7e5d",
+      "url": "https://github.com/FunkinCrew/extension-agesignals"
+    },
+    {
       "name": "extension-androidtools",
       "type": "haxelib",
       "version": "2.2.2"
     },
     {
-      "name": "extension-haptics",
+      "name": "dox",
       "type": "haxelib",
-      "version": "1.0.4"
+      "version": "1.6.0"
+    },
+    {
+      "name": "extension-haptics",
+      "type": "git",
+      "ref": "8978b34b437f943a0d164bd6b3d8b69bd0025081",
+      "url": "https://github.com/LimeExtensions/extension-haptics"
     },
     {
       "name": "extension-iapcore",
-      "type": "haxelib",
-      "version": "1.0.4"
+      "type": "git",
+      "ref": "5fbb4a8e56ff0f4d8ffc71b561d57a367419ead8",
+      "url": "https://github.com/LimeExtensions/extension-iapcore"
     },
     {
       "name": "extension-iarcore",
-      "type": "haxelib",
-      "version": "1.0.3"
+      "type": "git",
+      "ref": "a78e49fe69feecef9abcdbcfd08ccc510ed00c6c",
+      "url": "https://github.com/LimeExtensions/extension-iarcore"
     },
     {
       "name": "extension-webviewcore",
       "type": "git",
-      "dir": null,
-      "ref": "d13109450d65c40678244ca23b1aa88ac18d77e6",
+      "ref": "98c059722491b182ee932ff47c5d7b564c967165",
       "url": "https://github.com/LimeExtensions/extension-webviewcore"
     },
     {
@@ -66,7 +78,7 @@
       "name": "flixel-addons",
       "type": "git",
       "dir": null,
-      "ref": "6fa30b3f5209146c852c25f3d1003e08898083e2",
+      "ref": "7628435364c4a45440d1e5db656741b66a8cd2ec",
       "url": "https://github.com/FunkinCrew/flixel-addons"
     },
     {
@@ -79,7 +91,12 @@
     {
       "name": "format",
       "type": "haxelib",
-      "version": "3.5.0"
+      "version": "3.8.0"
+    },
+    {
+      "name": "svg",
+      "type": "haxelib",
+      "version": "1.1.3"
     },
     {
       "name": "funkin.vis",
@@ -96,6 +113,11 @@
       "url": "https://github.com/FunkinCrew/grig.audio"
     },
     {
+      "name": "tink_core",
+      "type": "haxelib",
+      "version": "1.26.0"
+    },
+    {
       "name": "hamcrest",
       "type": "haxelib",
       "version": "3.0.0"
@@ -104,7 +126,7 @@
       "name": "haxeui-core",
       "type": "git",
       "dir": null,
-      "ref": "088b153b35985f8e4419ef710057ebd5b3749513",
+      "ref": "998534fb830450ca1e60c47a9524af5730431145",
       "url": "https://github.com/FunkinCrew/haxeui-core"
     },
     {
@@ -153,13 +175,13 @@
     {
       "name": "hxvlc",
       "type": "haxelib",
-      "version": "2.2.5"
+      "version": "2.3.0"
     },
     {
       "name": "json2object",
       "type": "git",
       "dir": null,
-      "ref": "59e0467c953d1f26e3cbf2a070f140e2d2e8457d",
+      "ref": "dc945d58c1239a6ab6e37e0a6c128387193c9af5",
       "url": "https://github.com/FunkinCrew/json2object"
     },
     {
@@ -183,7 +205,7 @@
       "name": "newgrounds",
       "type": "git",
       "dir": null,
-      "ref": "b2b53cd0a5f030af74efd325732951cddbea8826",
+      "ref": "60162762e6ca65da011ffee7a6617f547ea5dff9",
       "url": "https://github.com/FunkinCrew/Newgrounds"
     },
     {
@@ -197,7 +219,7 @@
       "name": "polymod",
       "type": "git",
       "dir": null,
-      "ref": "d8f036378c4ff472f1922ad623b8800b6a061c1a",
+      "ref": "acfdc2e26722f20339a2bc0cc8cd7dd5fe0c6b5e",
       "url": "https://github.com/FunkinCrew/polymod"
     },
     {

@@ -1,6 +1,5 @@
 package funkin.util;
 
-import flixel.system.FlxBasePreloader;
 import flixel.util.FlxColor;
 import funkin.data.song.SongData.SongTimeFormat;
 import lime.app.Application;
@@ -102,6 +101,9 @@ class Constants
    */
   public static final GIT_HASH:String = funkin.util.macro.GitCommit.getGitCommitHash();
 
+  /**
+   * Whether the local Git repository contains local changes that haven't been committed.
+   */
   public static final GIT_HAS_LOCAL_CHANGES:Bool = funkin.util.macro.GitCommit.getGitHasLocalChanges();
 
   /**
@@ -127,7 +129,8 @@ class Constants
   /**
    * The base colors used by notes.
    */
-  public static var COLOR_NOTES:Array<FlxColor> = [0xFFFF22AA, // left (0)
+  public static var COLOR_NOTES:Array<FlxColor> = [
+    0xFFFF22AA, // left (0)
     0xFF00EEFF, // down (1)
     0xFF00CC00, // up (2)
     0xFFCC1111 // right (3)
@@ -188,7 +191,13 @@ class Constants
    * List of all difficulties used by the base game.
    * Includes Erect and Nightmare.
    */
-  public static final DEFAULT_DIFFICULTY_LIST_FULL:Array<String> = ['easy', 'normal', 'hard', 'erect', 'nightmare'];
+  public static final DEFAULT_DIFFICULTY_LIST_FULL:Array<String> = [
+    'easy',
+    'normal',
+    'hard',
+    'erect',
+    'nightmare'
+  ];
 
   /**
    * Default player character for charts.
@@ -242,6 +251,11 @@ class Constants
   public static final DEFAULT_ZOOM_OFFSET:Int = 0;
 
   /**
+   * The default rate for characters or props (in beats per dance).
+   */
+  public static final DEFAULT_PROP_RATE:Int = 1;
+
+  /**
    * The default BPM for charts, so things don't break if none is specified.
    */
   public static final DEFAULT_BPM:Float = 100.0;
@@ -280,6 +294,21 @@ class Constants
    * The default album for songs in Freeplay.
    */
   public static final DEFAULT_ALBUM_ID:String = 'volume1';
+
+  /**
+   * The default name for the OST in Freeplay.
+   */
+  public static final DEFAULT_OST_NAME:String = 'OFFICIAL OST';
+
+  /**
+   * The default preview start time for the songs in Freeplay.
+   */
+  public static final DEFAULT_PREVIEW_START_TIME:Float = 0;
+
+  /**
+   * The default preview end time for the songs in Freeplay.
+   */
+  public static final DEFAULT_PREVIEW_END_TIME:Float = 0.2;
 
   /**
    * The default timing format for songs.
@@ -369,6 +398,16 @@ class Constants
   public static final NS_PER_SEC:Int = NS_PER_US * US_PER_MS * MS_PER_SEC;
 
   /**
+   * Constant for the number of minutes in an hour.
+   */
+  public static final MIN_PER_HOUR:Int = 60;
+
+  /**
+   * The number of seconds in an hour.
+   */
+  public static final SECS_PER_HOUR:Int = SECS_PER_MIN * MIN_PER_HOUR;
+
+  /**
    * Duration, in milliseconds, until toast notifications are automatically hidden.
    */
   public static final NOTIFICATION_DISMISS_TIME:Int = 5 * MS_PER_SEC;
@@ -418,7 +457,7 @@ class Constants
   /**
    * The player's starting health.
    */
-  public static final HEALTH_STARTING = HEALTH_MAX / 2.0;
+  public static final HEALTH_STARTING:Float = HEALTH_MAX / 2.0;
 
   /**
    * The player's minimum health.
@@ -450,7 +489,7 @@ class Constants
    * The amount of health the player gains when hitting a note with the SHIT rating.
    * If negative, the player will actually lose health.
    */
-  public static final HEALTH_SHIT_BONUS:Float = -1.0 / 100.0 * HEALTH_MAX; // -1.0%
+  public static final HEALTH_SHIT_BONUS:Float = -1.0 / 100.0 * HEALTH_MAX;
 
   /**
    * The amount of health the player gains, while holding a hold note, per second.
@@ -460,12 +499,12 @@ class Constants
   /**
    * The amount of health the player loses upon missing a note.
    */
-  public static final HEALTH_MISS_PENALTY:Float = -4.0 / 100.0 * HEALTH_MAX; // 4.0%
+  public static final HEALTH_MISS_PENALTY:Float = -4.0 / 100.0 * HEALTH_MAX;
 
   /**
    * The amount of health the player loses upon pressing a key when no note is there.
    */
-  public static final HEALTH_GHOST_MISS_PENALTY:Float = -4.0 / 100.0 * HEALTH_MAX; // 2.0%
+  public static final HEALTH_GHOST_MISS_PENALTY:Float = -4.0 / 100.0 * HEALTH_MAX;
 
   /**
    * The amount of health the player loses upon letting go of a hold note, per second remaining.
@@ -475,17 +514,22 @@ class Constants
   /**
    * The maximum amount of health the player can lose upon letting go of a hold note.
    */
-  public static final HEALTH_HOLD_DROP_PENALTY_MAX:Float = 0 / 100.0 * HEALTH_MAX; // -10.0%
+  public static final HEALTH_HOLD_DROP_PENALTY_MAX:Float = 0 / 100.0 * HEALTH_MAX;
 
   /**
    * The amount of health the player loses upon hitting a mine.
    */
-  public static final HEALTH_MINE_PENALTY:Float = -15.0 / 100.0 * HEALTH_MAX; // 15.0%
+  public static final HEALTH_MINE_PENALTY:Float = -15.0 / 100.0 * HEALTH_MAX;
 
   /**
    * SCORE VALUES
    */
   // ==============================
+
+  /**
+   * The amount of score the player loses for pressing a key when no note is there.
+   */
+  public static final SCORE_GHOST_MISS_PENALTY:Float = -10.0;
 
   /**
    * The amount of score the player gains for every second they hold a hold note.
@@ -503,19 +547,53 @@ class Constants
    */
   public static final HOLD_DROP_PENALTY_THRESHOLD_MS:Float = 160.0;
 
+  /**
+   * Whether a `KILLER` judgement results in a combo break.
+   */
   public static final JUDGEMENT_KILLER_COMBO_BREAK:Bool = false;
+
+  /**
+   * Whether a `SICK` judgement results in a combo break.
+   */
   public static final JUDGEMENT_SICK_COMBO_BREAK:Bool = false;
+
+  /**
+   * Whether a `GOOD` judgement results in a combo break.
+   */
   public static final JUDGEMENT_GOOD_COMBO_BREAK:Bool = false;
+
+  /**
+   * Whether a `BAD` judgement results in a combo break.
+   */
   public static final JUDGEMENT_BAD_COMBO_BREAK:Bool = true;
+
+  /**
+   * Whether a `SHIT` judgement results in a combo break.
+   */
   public static final JUDGEMENT_SHIT_COMBO_BREAK:Bool = true;
 
   // % Hit
+
+  /**
+   * The % ranking required for a `PERFECT` ranking.
+   */
   public static final RANK_PERFECT_THRESHOLD:Float = 1.00;
+
+  /**
+   * The % ranking required for an `EXCELLENT` ranking.
+   */
   public static final RANK_EXCELLENT_THRESHOLD:Float = 0.90;
+
+  /**
+   * The % ranking required for a `GREAT` ranking.
+   */
   public static final RANK_GREAT_THRESHOLD:Float = 0.80;
+
+  /**
+   * The % ranking required for a `GOOD` ranking.
+   */
   public static final RANK_GOOD_THRESHOLD:Float = 0.60;
 
-  // public static final RANK_SHIT_THRESHOLD:Float = 0.00;
   /**
    * FILE EXTENSIONS
    */
@@ -527,32 +605,32 @@ class Constants
    * - "I made a new file format"
    * - "Actually new or just a renamed ZIP?"
    */
-  public static final EXT_CHART = "fnfc";
+  public static final EXT_CHART:String = 'fnfc';
 
   /**
    * The file extension used when exporting stage files.
    */
-  public static final EXT_STAGE = "fnfs";
+  public static final EXT_STAGE:String = 'fnfs';
 
   /**
    * The file extension used when loading audio files.
    */
-  public static final EXT_SOUND = #if web "mp3" #else "ogg" #end;
+  public static final EXT_SOUND:String = #if web 'mp3' #else 'ogg' #end;
 
   /**
    * The file extension used when loading video files.
    */
-  public static final EXT_VIDEO = "mp4";
+  public static final EXT_VIDEO:String = 'mp4';
 
   /**
    * The file extension used when loading image files.
    */
-  public static final EXT_IMAGE = "png";
+  public static final EXT_IMAGE:String = 'png';
 
   /**
    * The file extension used when loading data files.
    */
-  public static final EXT_DATA = "json";
+  public static final EXT_DATA:String = 'json';
 
   /**
    * OTHER
@@ -571,9 +649,9 @@ class Constants
 
   #if FEATURE_LOST_FOCUS_VOLUME
   /**
-   * How much volume should be reduced on Application Focus Lost.
+   * The level the volume should be reduced to when the game loses focus.
    */
-  public static final LOST_FOCUS_VOLUME_MULTIPLIER:Float = 0.5;
+  public static final LOST_FOCUS_VOLUME_MULTIPLIER:Float = 0.25;
   #end
 
   /**
@@ -620,56 +698,61 @@ class Constants
   /**
    * Default period value for vibration.
    */
-  public inline static final DEFAULT_VIBRATION_PERIOD:Float = 0.1;
+  public static inline final DEFAULT_VIBRATION_PERIOD:Float = 0.1;
 
   /**
    * Default duration value for vibration.
    */
-  public inline static final DEFAULT_VIBRATION_DURATION:Float = 0.1;
+  public static inline final DEFAULT_VIBRATION_DURATION:Float = 0.1;
 
   /**
    * Min vibration amplitude.
    */
-  public inline static final MIN_VIBRATION_AMPLITUDE:Float = 0.25;
+  public static inline final MIN_VIBRATION_AMPLITUDE:Float = 0.25;
 
   /**
    * Default vibration amplitude.
    */
-  public inline static final DEFAULT_VIBRATION_AMPLITUDE:Float = 0.5;
+  public static inline final DEFAULT_VIBRATION_AMPLITUDE:Float = 0.5;
 
   /**
    * Max vibration amplitude.
    */
-  public inline static final MAX_VIBRATION_AMPLITUDE:Float = 1;
+  public static inline final MAX_VIBRATION_AMPLITUDE:Float = 1;
 
   /**
    * Default vibration sharpness.
    */
-  public inline static final DEFAULT_VIBRATION_SHARPNESS:Float = 1;
+  public static inline final DEFAULT_VIBRATION_SHARPNESS:Float = 1;
+
+  /**
+   * The smoothness of the health icon angle rotation on bop.
+   */
+  public static final HEALTH_ICON_ANGLE_HALF_LIFE:Float = 0.512;
 
   /**
    * The path where our save data will be stored.
    */
-  public inline static final SAVE_PATH:String = 'FunkinCrew';
+  public static inline final SAVE_PATH:String = 'FunkinCrew';
 
   /**
    * The name of our save slot.
    */
-  public inline static final SAVE_NAME:String = 'Funkin';
+  public static inline final SAVE_NAME:String = 'Funkin';
 
   /**
    * The legacy path where our save data was saved. Used for backwards compatibility.
    */
-  public inline static final SAVE_PATH_LEGACY:String = 'ninjamuffin99';
+  public static inline final SAVE_PATH_LEGACY:String = 'ninjamuffin99';
 
   /**
    * The legacy save slot name, used for backwards compatibility.
    */
-  public inline static final SAVE_NAME_LEGACY:String = 'funkin';
+  public static inline final SAVE_NAME_LEGACY:String = 'funkin';
 
   /**
    * We always use this save slot.
    * Alter this if you want to use a different save slot.
    */
-  public inline static final BASE_SAVE_SLOT:Int = 1;
+  public static inline final BASE_SAVE_SLOT:Int = 1;
 }

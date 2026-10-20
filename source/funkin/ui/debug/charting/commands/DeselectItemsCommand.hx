@@ -8,8 +8,7 @@ import funkin.data.song.SongDataUtils;
 /**
  * Command to deselect a specific set of notes and events in the chart editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class DeselectItemsCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -28,6 +27,7 @@ class DeselectItemsCommand implements ChartEditorCommand
 
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -44,6 +44,7 @@ class DeselectItemsCommand implements ChartEditorCommand
 
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

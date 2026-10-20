@@ -28,13 +28,11 @@ class LoadingState extends MusicBeatSubState
   inline static var MIN_TIME = 1.0;
 
   var asSubState:Bool = false;
-
   var target:NextState;
   var playParams:Null<PlayStateParams>;
   var stopMusic:Bool = false;
   var callbacks:Null<MultiCallback>;
   var danceLeft:Bool = false;
-
   var loadBar:FlxSprite;
   var funkay:FlxSprite;
 
@@ -261,11 +259,6 @@ class LoadingState extends MusicBeatSubState
     }
   }
 
-  static function getSongPath():String
-  {
-    return Paths.inst(PlayState.instance?.currentSong.id ?? throw 'Cannot retrieve song path');
-  }
-
   static var stageDirectory:String = "shared";
 
   /**
@@ -301,12 +294,28 @@ class LoadingState extends MusicBeatSubState
       };
     }
 
-    #if (NO_PRELOAD_ALL || switch)
-    var useLoadingScreen:Bool = #if switch funkin.Preferences.switchShowLoadingScreen #else true #end;
-
-    if (useLoadingScreen)
+    #if NO_PRELOAD_ALL
+    // Switch to loading state while we load assets (default on HTML5 target).
+    var loadStateCtor = function()
     {
-      // Switch to loading state while we load assets (default on HTML5 target, or if explicitly enabled on Switch).
+      var result = new LoadingState(playStateCtor, shouldStopMusic, params);
+      @:privateAccess
+      result.asSubState = asSubState;
+      return result;
+    }
+    if (asSubState)
+    {
+      FlxG.state.openSubState(cast loadStateCtor());
+    }
+    else
+    {
+      FlxG.switchState(loadStateCtor);
+    }
+    #else
+    #if switch
+    // Switch: the loading screen is optional (Preferences.switchShowLoadingScreen); by default songs load directly.
+    if (funkin.Preferences.switchShowLoadingScreen)
+    {
       var loadStateCtor = function() {
         var result = new LoadingState(playStateCtor, shouldStopMusic, params);
         @:privateAccess
@@ -325,7 +334,7 @@ class LoadingState extends MusicBeatSubState
     }
     #end
 
-    // All assets preloaded, switch directly to play state (default on PC/other targets, or when switchShowLoadingScreen is false).
+    // All assets preloaded, switch directly to play state (default on other targets).
     @:nullSafety(Off)
     if (shouldStopMusic && FlxG.sound.music != null)
     {
@@ -358,9 +367,30 @@ class LoadingState extends MusicBeatSubState
       // TODO: This sucks lol.
       if (params.targetSong.songName == "2hot")
       {
-        var spritesToCache = ["wked1_cutscene_1_can", "spraypaintExplosionEZ", "SpraypaintExplosion", "CanImpactParticle", "spraycanAtlas/spritemap1"];
+        var spritesToCache = [
+          "wked1_cutscene_1_can",
+          "spraypaintExplosionEZ",
+          "SpraypaintExplosion",
+          "CanImpactParticle",
+          "spraycanAtlas/spritemap1"
+        ];
 
-        var soundsToCache = ["Darnell_Lighter", "fuse_burning", "Gun_Prep", "Kick_Can_FORWARD", "Kick_Can_UP", "Lightning1", "Lightning2", "Lightning3", "Pico_Bonk", "Shoot_1", "shot1", "shot2", "shot3", "shot4"];
+        var soundsToCache = [
+          "Darnell_Lighter",
+          "fuse_burning",
+          "Gun_Prep",
+          "Kick_Can_FORWARD",
+          "Kick_Can_UP",
+          "Lightning1",
+          "Lightning2",
+          "Lightning3",
+          "Pico_Bonk",
+          "Shoot_1",
+          "shot1",
+          "shot2",
+          "shot3",
+          "shot4"
+        ];
 
         // Switch: these textures were decoded here while Lit Up or Freeplay were still alive, then destroyed by
         // purgeCache(true) in preStateSwitch before PlayState exists, and 2hot.hxc caches the ones it needs again in
@@ -412,9 +442,10 @@ class LoadingState extends MusicBeatSubState
       });
       FlxG.switchState(playStateCtor);
     }
+    #end
   }
 
-  #if (NO_PRELOAD_ALL && !switch)
+  #if NO_PRELOAD_ALL
   static function isSoundLoaded(path:String):Bool
   {
     return OpenFLAssets.cache.hasSound(path);
@@ -631,6 +662,8 @@ class MultiCallback
         FlxG.switchState(state);
       }
     });
-    FlxG.camera.filters = [new ShaderFilter(screenWipeShit)];
+    FlxG.camera.filters = [
+      new ShaderFilter(screenWipeShit)
+    ];
   }
 }

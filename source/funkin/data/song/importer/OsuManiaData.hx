@@ -2,13 +2,14 @@ package funkin.data.song.importer;
 
 /**
  * Structure of a parsed Osu!Mania .osu file
- * Stuctured like a INI file format by CSV for HitObjects and more
+ * Structured like a INI file format by CSV for HitObjects and more
  */
 typedef OsuManiaData =
 {
   var General:
     {
       var PreviewTime:Int;
+      var Mode:Int; // Should only be 3 if you are sure this is a mania beatmap
     };
   var Editor:
     {

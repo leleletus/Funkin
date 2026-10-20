@@ -81,13 +81,13 @@
     { "name": "android", "enabled": true, "label": "Android" },
     { "name": "ios", "enabled": true, "label": "iOS" },
     { "name": "switch", "enabled": true, "label": "Switch"},
+
     // Disabled targets
-    { "name": "hl", "enabled": false, "label": "HashLink" },
     { "name": "air", "enabled": false },
     { "name": "electron", "enabled": false },
     { "name": "flash", "enabled": false },
     { "name": "neko", "enabled": false },
-    { "name": "tvos", "enabled": false }
+    { "name": "hl", "enabled": false }
   ],
   "lime.defaultTargetConfiguration": "Windows / Debug",
   "lime.targetConfigurations": [
@@ -168,6 +168,11 @@
       "label": "Windows / Debug (Latency Test)",
       "target": "windows",
       "args": ["-debug", "-DLATENCY", "-DFEATURE_DEBUG_FUNCTIONS"]
+    },
+    {
+      "label": "Windows / Debug (No Asset Redirect)",
+      "target": "windows",
+      "args": ["-debug", "-DNO_REDIRECT_ASSETS_FOLDER"]
     },
     {
       "label": "Windows / Debug (Waveform Test)",

@@ -7,7 +7,7 @@ import flixel.system.FlxAssets.FlxGraphicAsset;
 import flixel.math.FlxPoint;
 
 /**
- * An offshoot of FlxTrail, but accomodates the way Funkin
+ * An offshoot of FlxTrail, but accommodates the way Funkin
  * does offsets for characters. example, fixes Spirits trail
  */
 @:nullSafety
@@ -23,7 +23,7 @@ class FunkTrail extends FlxTrail
    * @param	alpha		The alpha value for the very first trailsprite.
    * @param	diff		How much lower the alpha of the next trailsprite is.
    */
-  public function new(target:FlxSprite, ?graphic:FlxGraphicAsset, length:Int = 10, delay:Int = 3, alpha:Float = 0.4, diff:Float = 0.05)
+  public function new(target:FlxSprite, ?graphic:FlxGraphicAsset, length:Int = 10, delay:Float = 0.1, alpha:Float = 0.4, diff:Float = 0.05)
   {
     super(target, graphic, length, delay, alpha, diff);
   }

@@ -8,8 +8,7 @@ import funkin.data.song.SongDataUtils;
  * Deletes the given events from the current chart in the chart editor.
  * Use only when ONLY events are being deleted.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class RemoveEventsCommand implements ChartEditorCommand
 {
   var events:Array<SongEventData>;
@@ -31,6 +30,7 @@ class RemoveEventsCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
 
     state.sortChartData();
   }
@@ -49,6 +49,7 @@ class RemoveEventsCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
 
     state.sortChartData();
   }

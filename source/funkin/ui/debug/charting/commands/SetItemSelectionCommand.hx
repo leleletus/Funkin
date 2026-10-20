@@ -8,8 +8,7 @@ import funkin.data.song.SongData.SongEventData;
  * Command to set the current selection in the chart editor (rather than appending it).
  * Deselects any notes that are not in the new selection.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class SetItemSelectionCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -81,6 +80,7 @@ class SetItemSelectionCommand implements ChartEditorCommand
     }
 
     state.noteDisplayDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -89,6 +89,7 @@ class SetItemSelectionCommand implements ChartEditorCommand
     state.currentEventSelection = previousEventSelection;
 
     state.noteDisplayDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

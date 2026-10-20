@@ -4,6 +4,7 @@ import flixel.FlxCamera;
 import flixel.FlxSprite;
 import flixel.group.FlxGroup.FlxTypedGroup;
 import funkin.graphics.shaders.GaussianBlurShader;
+import openfl.filters.GlowFilter;
 
 /**
  * A FlxTypedGroup for capsules that does drawing in batches. This prevents memory leaks due to too many assets being rendered.
@@ -13,6 +14,7 @@ class SongItemGroup extends FlxTypedGroup<SongMenuItem>
 {
   var rankBlurredShader:GaussianBlurShader = new GaussianBlurShader(1);
   var favIconBlurredShader:GaussianBlurShader = new GaussianBlurShader(1.2);
+  var weekTextFilter:GlowFilter = new GlowFilter(0xFF1A1C24, 1, 5, 5, 3.13, 1, true, true);
 
   override function recycle(?cls:Class<SongMenuItem>, ?factory:Void->SongMenuItem, force:Bool = false, revive:Bool = true):SongMenuItem
   {
@@ -22,7 +24,7 @@ class SongItemGroup extends FlxTypedGroup<SongMenuItem>
     capsule.fakeBlurredRanking.shader = rankBlurredShader;
     capsule.blurredRanking.shader = rankBlurredShader;
     capsule.favIconBlurred.shader = favIconBlurredShader;
-
+    capsule.weekText.filters = [weekTextFilter];
     return capsule;
   }
 
@@ -38,14 +40,21 @@ class SongItemGroup extends FlxTypedGroup<SongMenuItem>
 
     final capsulesToRender:Array<SongMenuItem> = [];
 
+    var hasTrail = false;
     for (capsule in this.members)
     {
-      if (capsule != null && capsule.exists && capsule.visible) capsulesToRender.push(capsule);
+      if (capsule != null && capsule.exists && capsule.visible)
+      {
+        if (capsule.hasTrail) hasTrail = true;
+        capsulesToRender.push(capsule);
+      }
     }
 
     if (capsulesToRender.length == 0) return;
 
-    final memberCount:Int = capsulesToRender[0].length; // Capsules always have a constant number of members to render.
+    var firstCapsule = capsulesToRender[0];
+    var memberCount:Int = firstCapsule.length;
+    if (hasTrail && !firstCapsule.hasTrail) memberCount += 2;
     for (i in 0...memberCount)
     {
       for (capsule in capsulesToRender)

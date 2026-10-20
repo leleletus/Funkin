@@ -85,6 +85,7 @@ class Song implements IPlayStateScriptedClass implements IRegistryEntry<SongMeta
   }
 
   // this returns false so that any new song can override this and return true when needed
+
   public function isSongNew(currentDifficulty:String, currentVariation:String):Bool
   {
     return false;
@@ -146,7 +147,9 @@ class Song implements IPlayStateScriptedClass implements IRegistryEntry<SongMeta
 
     _data = _fetchData(id);
 
-    _metadata = _data == null ? [] : [Constants.DEFAULT_VARIATION => _data];
+    _metadata = _data == null ? [] : [
+      Constants.DEFAULT_VARIATION => _data
+    ];
 
     if (_data != null && _data.playData != null)
     {
@@ -329,6 +332,7 @@ class Song implements IPlayStateScriptedClass implements IRegistryEntry<SongMeta
         difficulty.difficultyRating = metadata.playData.ratings.get(diffId) ?? 0;
         difficulty.album = metadata.playData.album;
         difficulty.stickerPack = metadata.playData.stickerPack;
+        difficulty.discordRPCImage = metadata.playData.discordRPCImage;
 
         difficulty.stage = metadata.playData.stage;
         difficulty.noteStyle = metadata.playData.noteStyle;
@@ -623,6 +627,11 @@ class Song implements IPlayStateScriptedClass implements IRegistryEntry<SongMeta
     }
   }
 
+  public function isDiscordRPCAnonymous():Bool
+  {
+    return false;
+  }
+
   public function onPause(event:PauseScriptEvent):Void
   {
   };
@@ -781,18 +790,15 @@ class SongDifficulty
   public var looped:Bool = false;
   public var offsets:SongOffsets = new SongOffsets();
   public var generatedBy:String = SongRegistry.DEFAULT_GENERATEDBY;
-
   public var timeChanges:Array<SongTimeChange> = [];
-
   public var stage:String = Constants.DEFAULT_STAGE;
   public var noteStyle:String = Constants.DEFAULT_NOTE_STYLE;
   public var characters:SongCharacterData = null;
-
   public var scrollSpeed:Float = Constants.DEFAULT_SCROLLSPEED;
-
   public var difficultyRating:Int = 0;
   public var album:Null<String> = null;
   public var stickerPack:Null<String> = null;
+  public var discordRPCImage:Null<String> = null;
 
   public function new(song:Song, diffId:String, variation:String)
   {
@@ -1035,11 +1041,25 @@ class SongDifficulty
       result.addOpponentVoice(FunkinSound.load(opponentVoice, 1.0, false, false, false, false, null, null, true));
     }
 
-    // Sometimes the sounds don't set their important value to true, so we have to do this manually.
-    result.forEach(function(snd:FunkinSound)
+    if (result.members.length == 0)
     {
-      snd.important = true;
-    });
+      var suffix:String = (variation != null && variation != '' && variation != 'default') ? '-$variation' : '';
+      // Try to use `Voices.ogg` if no other voices are found.
+      var legacyPath = Paths.voices(this.song.id, '$suffix');
+      if (Assets.exists(legacyPath))
+      {
+        result.addPlayerVoice(FunkinSound.load(legacyPath, 1.0, false, false, false, false, null, null, true));
+      }
+    }
+
+    if (result.members.length == 1) // It's legacy'ing somewhere and i can prove it
+    {
+      result.legacyVoiceSystem = true;
+      result.legacyVoiceUsesPlayer = result.getPlayerVoice(0) != null;
+    }
+
+    // Sometimes the sounds don't set their important value to true, so we have to do this manually.
+    result.forEach((snd:FunkinSound) -> snd.important = true);
 
     result.playerVoicesOffset = offsets.getVocalOffset(characters.player, instId);
     result.opponentVoicesOffset = offsets.getVocalOffset(characters.opponent, instId);

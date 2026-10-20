@@ -11,8 +11,7 @@ import flixel.tweens.FlxTween;
  * Command that copies a given set of notes and song events to the clipboard,
  * without deleting them from the chart editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class CopyItemsCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -42,6 +41,8 @@ class CopyItemsCommand implements ChartEditorCommand
     });
 
     performVisuals(state);
+    state.clipboardDirty = true;
+    state.clipboardValid = true;
   }
 
   function performVisuals(state:ChartEditorState):Void

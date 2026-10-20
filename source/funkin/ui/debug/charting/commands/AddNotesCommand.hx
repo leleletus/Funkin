@@ -7,8 +7,7 @@ import funkin.data.song.SongDataUtils;
 /**
  * Adds the given notes to the current chart in the chart editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class AddNotesCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -42,6 +41,7 @@ class AddNotesCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
 
     state.sortChartData();
   }
@@ -56,6 +56,7 @@ class AddNotesCommand implements ChartEditorCommand
     state.saveDataDirty = true;
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
 
     state.sortChartData();
   }

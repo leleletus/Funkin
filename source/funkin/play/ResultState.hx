@@ -58,24 +58,18 @@ import funkin.util.DeviceUtil;
 class ResultState extends MusicBeatSubState
 {
   final params:ResultsStateParams;
-
   final rank:ScoringRank;
   final songName:FlxBitmapText;
   final difficulty:FlxSprite;
   final clearPercentSmall:ClearPercentCounter;
-
   final maskShaderSongName:LeftMaskShader = new LeftMaskShader();
   final maskShaderDifficulty:LeftMaskShader = new LeftMaskShader();
-
   final resultsAnim:FunkinSprite;
   final ratingsPopin:FunkinSprite;
   final scorePopin:FunkinSprite;
-
   final bgFlash:FlxSprite;
-
   final highscoreNew:FlxSprite;
   final score:ResultScore;
-
   var characterAtlasAnimations:Array<
     {
       sprite:FunkinSprite,
@@ -89,10 +83,8 @@ class ResultState extends MusicBeatSubState
       sprite:FunkinSprite,
       delay:Float
     }> = [];
-
   var playerCharacterId:Null<String> = null;
   var playerCharacter:Null<PlayableCharacter> = null;
-
   var introMusicAudio:Null<FunkinSound> = null;
 
   /**
@@ -104,9 +96,7 @@ class ResultState extends MusicBeatSubState
   final cameraBG:FunkinCamera;
   final cameraScroll:FunkinCamera;
   final cameraEverything:FunkinCamera;
-
   var blackTopBar:FlxSprite = new FlxSprite();
-
   var busy:Bool = false;
 
   public var isChartingMode(get, never):Bool;
@@ -561,12 +551,21 @@ class ResultState extends MusicBeatSubState
     super.create();
   }
 
+  override public function destroy():Void
+  {
+    // Kill all music types to prevent audio overlap into new states.
+    if (resultsMusic != null) resultsMusic.stop();
+    if (introMusicAudio != null) introMusicAudio.stop();
+    if (FlxG.sound.music != null) FlxG.sound.music.stop();
+
+    super.destroy();
+  }
+
   function getMusicPath(playerCharacter:Null<PlayableCharacter>, rank:ScoringRank):String
   {
     return playerCharacter?.getResultsMusicPath(rank) ?? 'resultsNORMAL';
   }
 
-  var rankTallyTimer:Null<FlxTimer> = null;
   var clearPercentTarget:Int = 100;
   var clearPercentLerp:Int = 0;
 
@@ -951,7 +950,7 @@ class ResultState extends MusicBeatSubState
         var isScoreValid = !(params?.isPracticeMode ?? false) && !(params?.isBotPlayMode ?? false);
         var isPersonalBest = rank > Scoring.calculateRank(params?.prevScoreData);
 
-        if (isScoreValid && isPersonalBest)
+        if ((isScoreValid && isPersonalBest) || params.forceRankSlam)
         {
           trace('THE RANK IS Higher.....');
 
@@ -1169,7 +1168,12 @@ typedef ResultsStateParams =
   var scoreData:SaveScoreData;
 
   /**
-   * The previous score data, used for rank comparision.
+   * The previous score data, used for rank comparison.
    */
   var ?prevScoreData:SaveScoreData;
+
+  /**
+   * Forces to do the rank slamming animation in freeplay for debug purposes
+   */
+  var ?forceRankSlam:Bool;
 };

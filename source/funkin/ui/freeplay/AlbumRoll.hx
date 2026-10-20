@@ -33,14 +33,11 @@ class AlbumRoll extends FlxSpriteGroup
   }
 
   final ALBUM_ART_SYMBOL:String = "album art placeholder";
-
   var newAlbumArt:FunkinSprite;
   var albumTitle:Null<FunkinSprite> = null;
-
   var difficultyStars:DifficultyStars;
   var _exitMovers:Null<FreeplayState.ExitMoverData>;
   var _exitMoversCharSel:Null<FreeplayState.ExitMoverData>;
-
   var albumData:Null<Album> = null;
 
   public function new()
@@ -80,6 +77,7 @@ class AlbumRoll extends FlxSpriteGroup
     if (albumId == null)
     {
       this.visible = false;
+      albumData = null;
       return;
     }
     else
@@ -147,8 +145,6 @@ class AlbumRoll extends FlxSpriteGroup
       wait: 0.1
     });
   }
-
-  var titleTimer:Null<FlxTimer> = null;
 
   /**
    * Play the intro animation on the album art.
@@ -241,6 +237,26 @@ class AlbumRoll extends FlxSpriteGroup
   {
     difficultyStars.visible = true;
     difficultyStars.flameCheck();
+  }
+
+  /**
+   * Returns the name for the OST associated with the album.
+   * If not specified, returns the default name if this is a base game album.
+   * @return Null<String>
+   */
+  public function getOSTNameOverride():Null<String>
+  {
+    var ostOverride:Null<String> = albumData?.getAlbumOSTName();
+    if (ostOverride != null)
+    {
+      return ostOverride;
+    }
+    else if (albumId == null || AlbumRegistry.instance.listBaseGameEntryIds().contains(albumId))
+    {
+      return Constants.DEFAULT_OST_NAME;
+    }
+
+    return null;
   }
 
   override function destroy():Void

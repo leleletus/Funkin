@@ -11,7 +11,6 @@ class SaveProperty<T>
   var _autoFlush:Bool;
 
   public var onChange(default, null):FlxTypedSignal<T->Void>;
-
   public var value(get, set):T;
 
   function get_value():T
@@ -30,8 +29,6 @@ class SaveProperty<T>
         _value = newValue;
 
       if (_autoFlush) Save.system.flush();
-
-      trace('[Save Property]: Changing value of $oldValue TO $newValue');
 
       onChange.dispatch(newValue);
     }

@@ -11,6 +11,8 @@ import funkin.util.logging.CrashHandler;
 import funkin.ui.debug.FunkinDebugDisplay;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 import funkin.save.Save;
+import funkin.FunkinMemory;
+import funkin.audio.FunkinSound;
 #if hxvlc
 import hxvlc.util.Handle;
 #end
@@ -95,11 +97,28 @@ class Main extends Sprite
       removeEventListener(Event.ADDED_TO_STAGE, init);
     }
 
+    #if (!html5 && !mobile)
+    // Force-kill the game to prevent background processing.
+    openfl.Lib.application.onExit.add((_) ->
+    {
+      // Dispose of cached audio and textures.
+      funkin.audio.FunkinSound.stopAllAudio(true, true);
+      funkin.FunkinMemory.purgeCache(true);
+
+      // Dispose of any assets still in the OpenFL cache, just incase.
+      openfl.Assets.cache.clear();
+
+      trace(' EXITING '.bold().bg_red() + ' Resources are disposed, Game is closing now.');
+
+      Sys.exit(0);
+    }, 99);
+    #end
+
     // Manually crash the game when using a software renderer in order to give a nicer error message.
     var context = stage.window.context.type;
     if (context != WEBGL && context != OPENGL && context != OPENGLES)
     {
-      var tech:String = #if web "WebGL" #elseif desktop "OpenGL" #else "OpenGL ES" #end;
+      var tech:String = #if web 'WebGL' #elseif desktop 'OpenGL' #else 'OpenGL ES' #end;
       var requiredVersion:String = #if web '$tech 1.0 or newer' #elseif desktop '$tech 3.0 or newer' #else '$tech 2.0 or newer' #end;
       var desc:String = 'Failed to initialize the $tech rendering context!\n\n';
       #if web
@@ -158,13 +177,6 @@ class Main extends Sprite
     });
     #end
 
-    // Don't call anything from the preferences until the save is loaded!
-    #if web
-    // set this variable (which is a function) from the lime version at lime/_internal/backend/html5/HTML5Application.hx
-    // The framerate cap will more thoroughly initialize via Preferences in InitState.hx
-    funkin.Preferences.lockedFramerateFunction = untyped js.Syntax.code("window.requestAnimationFrame");
-    #end
-
     WindowUtil.setVSyncMode(funkin.Preferences.vsyncMode);
 
     // Force a `FunkinCamera` to be the default camera.
@@ -186,7 +198,9 @@ class Main extends Sprite
     var game:NXGame = new NXGame(gameWidth, gameHeight, initialState, zoom, Preferences.framerate, Preferences.framerate, skipSplash,
       (FlxG.stage.window.fullscreen || Preferences.autoFullscreen));
     #else
-    var game:FlxGame = new FlxGame(gameWidth, gameHeight, initialState, Preferences.framerate, Preferences.framerate, skipSplash,
+    var framerate:Int = Preferences.unlockedFramerate ? 0 : Preferences.framerate;
+
+    var game:FlxGame = new FlxGame(gameWidth, gameHeight, initialState, framerate, framerate, skipSplash,
       (FlxG.stage.window.fullscreen || Preferences.autoFullscreen));
     #end
 
@@ -199,7 +213,7 @@ class Main extends Sprite
     addChild(game);
 
     #if FEATURE_DEBUG_FUNCTIONS
-    game.debugger.interaction.addTool(new funkin.util.TrackerToolButtonUtil());
+    #if !FLX_NO_DEBUG game.debugger.interaction.addTool(new funkin.util.TrackerToolButtonUtil()); #end
     funkin.util.macro.ConsoleMacro.init();
     #end
 
@@ -248,14 +262,7 @@ class Main extends Sprite
     // On Switch, debug HUD is toggled ONLY via the 3-second combo (+ and R) in NXPerformance.
     return;
     #else
-    var triggered:Bool = false;
-
-    if (PlayerSettings.player1.controls != null && PlayerSettings.player1.controls.check(DEBUG_DISPLAY))
-    {
-      triggered = true;
-    }
-
-    if (!triggered) return;
+    if (PlayerSettings.player1.controls == null || !PlayerSettings.player1.controls.check(DEBUG_DISPLAY)) return;
 
     var nextMode:DebugDisplayMode;
 
@@ -277,14 +284,7 @@ class Main extends Sprite
   function repositionCounters(lerp:Bool):Void
   {
     // Calling this so it gets scaled based on the resolution of the game and device's resolution.
-    var scale:Float = Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height);
-
-    #if android
-    scale = Math.max(scale, 1);
-    #else
-    scale = Math.min(scale, 1);
-    #end
-    final thypos:Float = Math.max(FullScreenScaleMode.notchSize.x, 10);
+    var scale:Float = Math.max(Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height), 1);
 
     if (debugDisplay != null)
     {
@@ -292,13 +292,15 @@ class Main extends Sprite
 
       if (FlxG.game != null)
       {
+        final thypos:Float = Math.max(FullScreenScaleMode.notchSize.x, 10);
+
         if (lerp)
         {
           debugDisplay.x = flixel.math.FlxMath.lerp(debugDisplay.x, FlxG.game.x + thypos, FlxG.elapsed * 3);
         }
         else
         {
-          debugDisplay.x = FlxG.game.x + FullScreenScaleMode.notchSize.x + 10;
+          debugDisplay.x = FlxG.game.x + thypos;
         }
 
         debugDisplay.y = FlxG.game.y + (3 * scale);

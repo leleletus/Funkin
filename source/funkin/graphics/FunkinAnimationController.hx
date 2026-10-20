@@ -1,8 +1,8 @@
 package funkin.graphics;
 
-import funkin.graphics.FunkinSprite;
 import animate.FlxAnimateController;
 
+@:access(funkin.graphics.FunkinSprite)
 class FunkinAnimationController extends FlxAnimateController
 {
   /**
@@ -16,10 +16,16 @@ class FunkinAnimationController extends FlxAnimateController
     _parentSprite = sprite;
   }
 
+  override function set_frameIndex(frame:Int):Int
+  {
+    _parentSprite._renderTextureDirty = true;
+    return super.set_frameIndex(frame);
+  }
+
   /**
    * We override `FlxAnimationController`'s `play` method to account for texture atlases.
    */
-  public override function play(animName:String, force = false, reversed = false, frame = 0):Void
+  override public function play(animName:String, force = false, reversed = false, frame = 0):Void
   {
     if (animName == null || animName == '') animName = _parentSprite.getDefaultSymbol();
 

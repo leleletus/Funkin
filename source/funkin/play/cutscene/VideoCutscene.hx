@@ -22,15 +22,11 @@ class VideoCutscene
   @:noCompletion
   static final DEFAULT_LANGUAGE:String = 'English';
   #end
-
   static var blackScreen:FlxSprite;
-
   static var cutsceneType:CutsceneType;
-
   #if html5
   static var vid:FlxVideo;
   #end
-
   #if hxvlc
   static var vid:FunkinVideoSprite;
   #end
@@ -70,9 +66,10 @@ class VideoCutscene
   {
     if (PlayState.instance == null) return;
 
+    #if switch
+    // Switch cutscenes are played by NXVideoPlayer; this never falls through to the code below.
     VideoCutscene.cutsceneType = cutsceneType;
 
-    #if switch
     try
     {
       var onFinish:Void->Void = function() {
@@ -125,17 +122,18 @@ class VideoCutscene
       catch (err:Dynamic) {}
       return;
     }
-    #else
+    #end
+
+    #if FEATURE_VIDEO_PLAYBACK
     if (!openfl.Assets.exists(filePath))
     {
-      trace('Video file does not exist: ${filePath}, safely continuing.');
-      onVideoEnded.dispatch();
-      onCutsceneFinish(cutsceneType);
+      // Display a popup.
+      funkin.util.WindowUtil.showError('Error playing video', 'Video file does not exist: ${filePath}');
+      trace('Video file does not exist: ${filePath}');
+
       return;
     }
     #end
-
-    var rawFilePath = Paths.stripLibrary(filePath);
 
     // Trigger the cutscene. Don't play the song in the background.
     PlayState.instance.isInCutscene = true;
@@ -159,13 +157,17 @@ class VideoCutscene
     }
     #end
 
+    #if NO_FEATURE_VIDEO_PLAYBACK
+    trace(" WARNING ".bold().bg_yellow() + " Video playback is not enabled. Calling video end callback instead.");
+    finishVideo();
+    #else
     #if html5
-    playVideoHTML5(rawFilePath);
+    playVideoHTML5(Paths.stripLibrary(filePath));
     #elseif hxvlc
     playVideoNative(filePath);
     #else
-    trace("WARNING: No video support on this platform, skipping video cutscene.");
-    finishVideo(0.0);
+    throw "No video support for this platform!";
+    #end
     #end
   }
 

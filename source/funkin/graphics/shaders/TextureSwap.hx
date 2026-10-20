@@ -8,21 +8,15 @@ class TextureSwap extends FlxShader
   public var swappedImage(default, set):BitmapData;
   public var amount(default, set):Float;
 
-  public function loadSwapImage(path:String)
+  public function loadSwapImage(path:String):Void
   {
-    #if html5
-    BitmapData.loadFromFile(path).onComplete(function(bmp:BitmapData)
-    {
-      swappedImage = bmp;
-    });
-    #else
-    swappedImage = BitmapData.fromFile(path);
-    #end
+    swappedImage = Assets.getBitmapData(path, false);
   }
 
   function set_swappedImage(_bitmapData:BitmapData):BitmapData
   {
     image.input = _bitmapData;
+    this.swappedImage = _bitmapData;
 
     return _bitmapData;
   }
@@ -30,6 +24,7 @@ class TextureSwap extends FlxShader
   function set_amount(val:Float):Float
   {
     fadeAmount.value = [val];
+    this.amount = val;
 
     return val;
   }

@@ -9,8 +9,7 @@ import funkin.data.song.SongDataUtils;
  * Appends one or more items to the selection in the chart editor.
  * This does not deselect any items that are already selected, if any.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class SelectItemsCommand implements ChartEditorCommand
 {
   var notes:Array<SongNoteData>;
@@ -73,6 +72,7 @@ class SelectItemsCommand implements ChartEditorCommand
 
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -82,6 +82,7 @@ class SelectItemsCommand implements ChartEditorCommand
 
     state.noteDisplayDirty = true;
     state.notePreviewDirty = true;
+    state.editButtonsDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool
