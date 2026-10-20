@@ -1,0 +1,55 @@
+Horizon (Nintendo Switch) support for FFmpeg 7.1: the target-os=horizon case of configure and
+av_cpu_count() from the process core mask. Taken from devkitPro's switch-ffmpeg 7.1-5 patch
+(pacman-packages/switch/ffmpeg/ffmpeg-7.1.patch), without its GPL nvtegra (NVDEC) parts.
+
+diff --git a/configure b/configure
+index d77a55b653..566d5fbed2 100755
+--- a/configure
++++ b/configure
+@@ -5970,6 +5992,10 @@ case $target_os in
+         ;;
+     minix)
+         ;;
++    horizon)
++        enable section_data_rel_ro
++        add_extralibs -lnx
++        ;;
+     none)
+         ;;
+     *)
+@@ -7719,6 +7745,10 @@ haiku)
+         disable memalign
+     fi
+     ;;
++horizon)
++    disable sysctl
++    disable sysctlbyname
++    ;;
+ esac
+ 
+ flatten_extralibs(){
+diff --git a/libavutil/cpu.c b/libavutil/cpu.c
+index df00bd541f..9d0563b144 100644
+--- a/libavutil/cpu.c
++++ b/libavutil/cpu.c
+@@ -48,6 +48,9 @@
+ #if HAVE_UNISTD_H
+ #include <unistd.h>
+ #endif
++#ifdef __SWITCH__
++#include <switch.h>
++#endif
+ 
+ #if HAVE_GETAUXVAL || HAVE_ELF_AUX_INFO
+ #include <sys/auxv.h>
+@@ -249,6 +252,10 @@ int av_cpu_count(void)
+ #elif HAVE_WINRT
+     GetNativeSystemInfo(&sysinfo);
+     nb_cpus = sysinfo.dwNumberOfProcessors;
++#elif defined(__SWITCH__)
++    u64 core_mask = 0;
++    Result rc = svcGetInfo(&core_mask, InfoType_CoreMask, CUR_PROCESS_HANDLE, 0);
++    nb_cpus = R_SUCCEEDED(rc) ? av_popcount64(core_mask) : 3;
+ #endif
+ 
+     if (!atomic_exchange_explicit(&printed, 1, memory_order_relaxed))

@@ -5,6 +5,8 @@
 #   ./tools/nx-tools/deploy_switch.sh [path/to/Funkin.nro]      # backup + wipe + upload
 #   ./tools/nx-tools/deploy_switch.sh --logs-only                # only download logs/saves
 #   ./tools/nx-tools/deploy_switch.sh --release [path/to/Funkin.nro]  # public build: no nx_devtools.cfg
+#   ./tools/nx-tools/deploy_switch.sh --bench                    # backup + upload the video bench to
+#                                                                  /switch/Funkin-videobench.nro (no wipe)
 #
 # Transport order: FTP (192.168.18.198:5000, e.g. sys-ftpd) -> MTP (DBI MTP Responder through KDE KIO).
 # If neither is available it stops and asks to connect the console.
@@ -21,10 +23,13 @@ MTP_ROOT="${NX_MTP_ROOT:-mtp:/DBI MTP Responder/1: SD Card}"
 GAME_DIR="/switch/Friday-Night-Funkin"
 LOGS_ONLY=0
 RELEASE=0
+BENCH=0
 case "${1:-}" in
     --logs-only) LOGS_ONLY=1; shift ;;
     --release) RELEASE=1; shift ;;
+    --bench) BENCH=1; shift ;;
 esac
+BENCH_NRO="$(dirname "$0")/videobench/Funkin-videobench.nro"
 NRO="${1:-$(dirname "$0")/../../export/release/switch/bin/Funkin.nro}"
 DEVTOOLS_CFG="$(dirname "$0")/nx_devtools.cfg"
 BACKUP="$HOME/switch-backups/Friday-Night-Funkin_$(date +%Y%m%d-%H%M%S)"
@@ -70,6 +75,20 @@ for dir in logs saves saves/FunkinCrew; do
 done
 log "Backup: $BACKUP"
 [ "$LOGS_ONLY" = "1" ] && exit 0
+
+# ------------------------------------------------------------------ video bench (VIDEO_BENCH)
+# It goes straight in /switch: the homebrew menu shows a single .nro per folder. It writes logs/videobench.log.
+if [ "$BENCH" = "1" ]; then
+    if [ ! -f "$BENCH_NRO" ]; then log "Bench NRO not found: $BENCH_NRO (make -C tools/nx-tools/videobench)"; exit 1; fi
+    log "Uploading the video bench ($(stat -c %s "$BENCH_NRO") bytes) to /switch/Funkin-videobench.nro..."
+    if [ "$T" = "ftp" ]; then
+        curl -s -S -T "$BENCH_NRO" "$FTP_URL/switch/Funkin-videobench.nro" || { log "Upload failed"; exit 1; }
+    else
+        kioclient --noninteractive --overwrite copy "$BENCH_NRO" "$MTP_ROOT/switch/Funkin-videobench.nro" || { log "Upload failed"; exit 1; }
+    fi
+    log "Done. Run 'Funkin-videobench' from the homebrew menu (about 10 min), then: deploy_switch.sh --logs-only"
+    exit 0
+fi
 
 # ------------------------------------------------------------------ 2. wipe
 if [ ! -f "$NRO" ]; then log "NRO not found: $NRO"; exit 1; fi

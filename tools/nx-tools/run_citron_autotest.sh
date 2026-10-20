@@ -8,15 +8,24 @@ SCENARIO="${1:-CUTSCENE_DARNELL}"
 TIMEOUT_SEC="${2:-150}"
 # PUBLIC_SMOKE: for public builds (no -DNX_DEV_TOOLS, so no autotests and no log). No autotest.cfg is written;
 # it passes if Citron is still running after TIMEOUT_SEC with no native crash and nothing was written under logs/.
+# CITRON_STDOUT=<file> keeps Citron's own stdout/stderr (e.g. its SIGSEGV backtrace); default /dev/null.
 # Always launch Citron through this script: it sets APPIMAGELAUNCHER_DISABLE=1 and kills the whole process tree.
 SMOKE=0
 [ "$SCENARIO" = "PUBLIC_SMOKE" ] && SMOKE=1
+# VIDEO_BENCH: runs the Citron build of the standalone decoder bench (tools/nx-tools/videobench, see main.c) instead of
+# the game; it passes when logs/videobench.log says "done" with no decoding error. Citron's timings are not valid.
+BENCH=0
+[ "$SCENARIO" = "VIDEO_BENCH" ] && BENCH=1
 
 CITRON_BIN="/home/djvemo/Applications/citron_nightly-308bc267c-linux-x86_64-use-nopgo_f1ac8aeaee5c67403a7d350daea956eb.AppImage"
 NRO_PATH="/home/djvemo/Funkin/export/release/switch/bin/Funkin.nro"
 SDMC_DIR="/home/djvemo/.local/share/citron/sdmc/switch/Friday-Night-Funkin"
 CFG_FILE="$SDMC_DIR/autotest.cfg"
 LOG_FILE="$SDMC_DIR/logs/deep_engine_trace.log"
+if [ "$BENCH" = "1" ]; then
+    NRO_PATH="/home/djvemo/Funkin/tools/nx-tools/videobench/Funkin-videobench-citron.nro"
+    LOG_FILE="$SDMC_DIR/logs/videobench.log"
+fi
 
 export APPIMAGELAUNCHER_DISABLE=1
 
@@ -41,7 +50,10 @@ else
 fi
 
 # 2. Configurar archivo de prueba en SDMC
-if [ "$SMOKE" = "1" ]; then
+if [ "$BENCH" = "1" ]; then
+    rm -f "$CFG_FILE" 2>/dev/null || true
+    echo "[AUTOTEST-RUNNER] Video bench: pass = videobench.log says done with no decoding error"
+elif [ "$SMOKE" = "1" ]; then
     rm -f "$CFG_FILE" "$(dirname "$NRO_PATH")/autotest.cfg" 2>/dev/null || true
     SMOKE_STAMP=$(mktemp)
     echo "[AUTOTEST-RUNNER] Public build smoke test: no autotest.cfg; pass = still running after ${TIMEOUT_SEC}s, no native crash, nothing written under logs/"
@@ -84,9 +96,9 @@ if pgrep -f "bin/citron -g $NRO_PATH" > /dev/null 2>&1; then
 fi
 
 # 3. Lanzar Citron con Funkin.nro usando flag -g, en un grupo de procesos propio
-echo "[AUTOTEST-RUNNER] Launching Citron with Funkin.nro (Timeout: ${TIMEOUT_SEC}s)..."
+echo "[AUTOTEST-RUNNER] Launching Citron with $(basename "$NRO_PATH") (Timeout: ${TIMEOUT_SEC}s)..."
 CITRON_LOG_FILE="$HOME/.local/share/citron/log/citron_log.txt"
-setsid "$CITRON_BIN" -g "$NRO_PATH" > /dev/null 2>&1 &
+setsid "$CITRON_BIN" -g "$NRO_PATH" > "${CITRON_STDOUT:-/dev/null}" 2>&1 &
 CITRON_PID=$!
 
 echo "[AUTOTEST-RUNNER] Citron running with PID $CITRON_PID. Monitoring $LOG_FILE..."
@@ -104,7 +116,17 @@ while [ "$ELAPSED" -lt "$TIMEOUT_SEC" ]; do
         break
     fi
 
-    if [ "$SMOKE" = "0" ] && [ -f "$LOG_FILE" ]; then
+    if [ "$BENCH" = "1" ] && [ -f "$LOG_FILE" ]; then
+        NEW_LINES=$(tail -n +"$START_LINE" "$LOG_FILE" 2>/dev/null || true)
+        if echo "$NEW_LINES" | grep -q " error="; then
+            STATUS="FAILED"
+            break
+        fi
+        if echo "$NEW_LINES" | grep -q "\[VIDEOBENCH\] done"; then
+            STATUS="SUCCESS"
+            break
+        fi
+    elif [ "$SMOKE" = "0" ] && [ -f "$LOG_FILE" ]; then
         NEW_LINES=$(tail -n +"$START_LINE" "$LOG_FILE" 2>/dev/null || true)
 
         if echo "$NEW_LINES" | grep -q "COMPLETED SUCCESSFULLY"; then
@@ -148,7 +170,7 @@ echo "--------------------------------------------------"
 echo "TELEMETRY LOG SUMMARY:"
 echo "--------------------------------------------------"
 if [ -f "$LOG_FILE" ]; then
-    tail -n +"$START_LINE" "$LOG_FILE" | grep -E "AUTOTEST|NXVideoPlayer|Sheet|AUDIO|STAGE|MEMORY" || true
+    tail -n +"$START_LINE" "$LOG_FILE" | grep -E "AUTOTEST|NXVideoPlayer|Sheet|AUDIO|STAGE|MEMORY|VIDEOBENCH" || true
 fi
 echo "--------------------------------------------------"
 if [ "$STATUS" = "NATIVE_CRASH" ]; then
