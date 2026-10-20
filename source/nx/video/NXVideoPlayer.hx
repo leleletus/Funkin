@@ -11,6 +11,7 @@ import funkin.Paths;
 import openfl.utils.Assets;
 import openfl.media.Sound;
 import lime.media.AudioBuffer;
+import nx.NXDevTools;
 
 /**
  * Modular Cutscene & Video abstraction for Nintendo Switch.
@@ -68,6 +69,147 @@ class NXVideoPlayer
    * How many restarts loaded sheet 0 on the main thread because no prefetch was coming for it (CUTSCENE_SKIP).
    */
   public static var restartMainThreadLoads(default, null):Int = 0;
+
+  #if NX_NATIVE_VIDEO
+  /**
+   * True while the cutscene plays from the video file through NXVideoDecoder instead of the sheets (test builds
+   * with video_backend=ffmpeg in nx_devtools.cfg).
+   */
+  static var nativeMode:Bool = false;
+
+  static var nativeLuma:Null<openfl.display3D.textures.RectangleTexture> = null;
+  static var nativeChroma:Null<openfl.display3D.textures.RectangleTexture> = null;
+  static var nativeChromaBitmap:Null<openfl.display.BitmapData> = null;
+  static var nativeLastLog:Float = 0;
+
+  /**
+   * The official video file for `videoName` in RomFS (assets/videos/native), or null.
+   */
+  static function nativeVideoPath(videoName:String):Null<String>
+  {
+    for (ext in ['.mkv', '.mp4', '.webm'])
+    {
+      var path:String = 'romfs:/assets/videos/native/' + videoName + ext;
+      if (sys.FileSystem.exists(path)) return path;
+    }
+    return null;
+  }
+
+  /**
+   * Opens the decoder and builds the YUV textures and the sprite graphic. False (with nothing left open) if the
+   * video cannot be played, so the caller falls back to the sheets.
+   */
+  static function startNative(videoName:String, path:String):Bool
+  {
+    var error:String = NXVideoDecoder.open(path, NXDevTools.videoSimd());
+    if (error != '')
+    {
+      trace('[NXVideoPlayer] Native video unavailable for "$videoName" ($error), using the sheets');
+      return false;
+    }
+    var width:Int = NXVideoDecoder.width();
+    var height:Int = NXVideoDecoder.height();
+    try
+    {
+      var context = FlxG.stage.context3D;
+      nativeLuma = context.createRectangleTexture(Std.int(width / 4), height, openfl.display3D.Context3DTextureFormat.BGRA, false);
+      nativeChroma = context.createRectangleTexture(Std.int(width / 8), height, openfl.display3D.Context3DTextureFormat.BGRA, false);
+      // Black until the first frame: luma 16, chroma 128 (limited range).
+      var luma = new lime.utils.UInt8Array(width * height);
+      for (i in 0...luma.length)
+        luma[i] = 16;
+      nativeLuma.uploadFromTypedArray(luma);
+      var chroma = new lime.utils.UInt8Array(Std.int(width * height / 2));
+      for (i in 0...chroma.length)
+        chroma[i] = 128;
+      nativeChroma.uploadFromTypedArray(chroma);
+
+      var lumaBitmap = openfl.display.BitmapData.fromTexture(nativeLuma);
+      nativeChromaBitmap = openfl.display.BitmapData.fromTexture(nativeChroma);
+      var graphic = FlxGraphic.fromBitmapData(lumaBitmap, false, 'nx-native-video', false);
+      graphic.persist = false;
+      graphic.destroyOnNoUse = false;
+      activeBitmapData = lumaBitmap;
+      activeGraphic = graphic;
+
+      var shader = new NXYuvShader();
+      shader.uvTex.input = nativeChromaBitmap;
+      shader.uvTex.filter = openfl.display3D.Context3DTextureFilter.NEAREST;
+      shader.videoSize.value = [width, height];
+      @:privateAccess shader.swapRB.value = [openfl.display3D.textures.TextureBase.__supportsBGRA == true ? 1.0 : 0.0];
+
+      currentSprite.loadGraphic(graphic);
+      currentSprite.antialiasing = false;
+      currentSprite.shader = shader;
+      currentSprite.setGraphicSize(1280, 720);
+      currentSprite.updateHitbox();
+      currentSprite.screenCenter();
+      currentSprite.scrollFactor.set(0, 0);
+      currentSprite.visible = true;
+      currentSprite.alpha = 1.0;
+    }
+    catch (e:Dynamic)
+    {
+      trace('[NXVideoPlayer] Native video setup failed for "$videoName": $e, using the sheets');
+      releaseNative();
+      return false;
+    }
+    totalSheets = 1;
+    currentSheetFrameCount = 1;
+    animFps = NXVideoDecoder.fps();
+    nativeLastLog = haxe.Timer.stamp();
+    @:privateAccess trace('[NXVideoPlayer] Native video: $path ${width}x$height at ${Math.round(animFps * 100) / 100} fps, '
+      + 'texture format 0x${StringTools.hex(nativeLuma.__format)}');
+    return true;
+  }
+
+  /**
+   * Shows the frame for `elapsedSec` and ends the cutscene after the last one.
+   */
+  static function updateNative(elapsedSec:Float):Void
+  {
+    if (NXVideoDecoder.acquire(elapsedSec))
+    {
+      var context = FlxG.stage.context3D;
+      @:privateAccess
+      {
+        context.__bindGLTexture2D(nativeLuma.__textureID);
+        NXVideoDecoder.upload(0, nativeLuma.__format);
+        context.__bindGLTexture2D(nativeChroma.__textureID);
+        NXVideoDecoder.upload(1, nativeChroma.__format);
+        context.__bindGLTexture2D(null);
+      }
+      if (currentSprite != null) currentSprite.dirty = true;
+    }
+    if (haxe.Timer.stamp() - nativeLastLog >= 5)
+    {
+      nativeLastLog = haxe.Timer.stamp();
+      trace('[NXVideoPlayer] Native video at ${Math.round(elapsedSec * 10) / 10}s: ${NXVideoDecoder.stats()}');
+    }
+    if (NXVideoDecoder.finished()
+      && (currentAudio == null || !currentAudio.playing || elapsedSec >= NXVideoDecoder.duration()))
+    {
+      trace('[NXVideoPlayer] Native video ended: ${NXVideoDecoder.stats()}');
+      finishCutscene();
+    }
+  }
+
+  /**
+   * Closes the decoder and frees both YUV textures.
+   */
+  static function releaseNative():Void
+  {
+    NXVideoDecoder.close();
+    if (nativeChromaBitmap != null) nativeChromaBitmap.dispose();
+    nativeChromaBitmap = null;
+    if (nativeChroma != null) nativeChroma.dispose();
+    nativeChroma = null;
+    // TextureBase.dispose() is idempotent: stop() disposes the luma BitmapData afterwards as well.
+    if (nativeLuma != null) nativeLuma.dispose();
+    nativeLuma = null;
+    nativeMode = false;
+  }
+  #end
 
   /**
    * Decodes sheet `nextIndex` on a background thread. Returns false when no prefetch is coming for it (no room for
@@ -258,6 +400,14 @@ class NXVideoPlayer
   public static inline function sheetCount():Int
   {
     return totalSheets;
+  }
+
+  /**
+   * True while the cutscene plays from the video file (NXVideoDecoder) instead of the sheets.
+   */
+  public static inline function isNative():Bool
+  {
+    return #if NX_NATIVE_VIDEO nativeMode #else false #end;
   }
 
   /**
@@ -518,7 +668,12 @@ class NXVideoPlayer
       if (videoName == null || videoName.length == 0) return false;
 
       totalSheets = countAvailableSheets(videoName);
+      #if NX_NATIVE_VIDEO
+      var nativePath:Null<String> = (NXDevTools.videoBackend() == 'ffmpeg') ? nativeVideoPath(videoName) : null;
+      if (totalSheets <= 0 && nativePath == null)
+      #else
       if (totalSheets <= 0)
+      #end
       {
         trace('[NXVideoPlayer] No converted atlas (.png/.xml) found for "$videoName". Safe skip to avoid SIGSEGV.');
         stop();
@@ -597,8 +752,17 @@ class NXVideoPlayer
       prefetchMutex.release();
       #end
 
+      #if NX_NATIVE_VIDEO
+      nativeMode = (nativePath != null) && startNative(videoName, nativePath);
+      if (!nativeMode && totalSheets <= 0)
+      {
+        stop();
+        return false;
+      }
+      #end
+
       // Start sheet 0
-      if (!loadAndPlaySheet(0))
+      if (#if NX_NATIVE_VIDEO !nativeMode && #end !loadAndPlaySheet(0))
       {
         trace('[NXVideoPlayer] Failed to load initial sheet for "$videoName". Aborting.');
         stop();
@@ -835,6 +999,14 @@ class NXVideoPlayer
       elapsedSec = lastValidAudioSec + (haxe.Timer.stamp() - lastWallTimestamp);
     }
 
+    #if NX_NATIVE_VIDEO
+    if (nativeMode)
+    {
+      updateNative(elapsedSec);
+      return;
+    }
+    #end
+
     var targetGlobalFrame:Int = Std.int(Math.floor(elapsedSec * animFps));
 
     // Bucle while obligatorio para avance/salto de hojas sin desincronización
@@ -927,6 +1099,15 @@ class NXVideoPlayer
   {
     if (!isPlaying) return false;
     isPaused = false;
+    #if NX_NATIVE_VIDEO
+    if (nativeMode)
+    {
+      NXVideoDecoder.seekStart();
+      restartFromBeginning();
+      trace('[NXVideoPlayer] Restart: native video back to the start of $currentVideoName');
+      return true;
+    }
+    #end
     if (currentSheetIndex == 0)
     {
       restartFromBeginning();
@@ -1047,6 +1228,22 @@ class NXVideoPlayer
     currentSheetFrameCount = 0;
     lastValidAudioSec = 0.0;
     lastWallTimestamp = 0.0;
+
+    #if NX_NATIVE_VIDEO
+    if (nativeMode)
+    {
+      trace('[NXVideoPlayer] Native video stopped: ${NXVideoDecoder.stats()}');
+      try
+      {
+        if (currentSprite != null) currentSprite.shader = null;
+        releaseNative();
+      }
+      catch (e:Dynamic)
+      {
+        trace('[NXVideoPlayer] Error releasing the native video: ' + e);
+      }
+    }
+    #end
 
     try
     {

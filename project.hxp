@@ -1129,6 +1129,7 @@ class Project extends HXProject
       if (!hasDefine("NX_DEV_TOOLS") && !this.haxedefs.exists("NX_DEV_TOOLS")) setHaxedef("no-traces");
       this.defines.set("APP_ID", SWITCH_APP_ID);
       config.set("switch.ip", SWITCH_IP);
+      if (isSwitchNativeVideo()) configureSwitchNativeVideo();
     }
   }
 
@@ -1840,6 +1841,36 @@ class Project extends HXProject
     return this.target == Platform.SWITCH;
   }
 
+  /**
+   * Switch test builds play cutscenes from the official video files with NXVideoDecoder when nx_devtools.cfg
+   * says video_backend=ffmpeg (Step 3; the sheets stay as fallback). Public builds keep the sheets for now.
+   * -Dnx_no_native_video leaves it out of a test build.
+   */
+  public function isSwitchNativeVideo():Bool
+  {
+    return isSwitch() && (hasDefine("NX_DEV_TOOLS") || this.haxedefs.exists("NX_DEV_TOOLS")) && !hasDefine("nx_no_native_video");
+  }
+
+  /**
+   * Builds the minimal LGPL FFmpeg (tools/nx-tools/build_ffmpeg_nx.sh, cached in export/nx-generated/ffmpeg) and
+   * links it. The libraries go through lime's switch.libs, which prefixes each entry with -l; GNU ld applies -L
+   * options to every -l wherever they appear, so the library folder rides along with the first entry.
+   */
+  function configureSwitchNativeVideo():Void
+  {
+    var ffmpegDir:String = haxe.io.Path.join([Sys.getCwd(), "export/nx-generated/ffmpeg"]);
+    if (!(isDisplay() || isClean()))
+    {
+      info('Preparing the minimal FFmpeg (tools/nx-tools/build_ffmpeg_nx.sh)...');
+      var code:Int = Sys.command("bash", ["tools/nx-tools/build_ffmpeg_nx.sh"]);
+      if (code != 0) error('build_ffmpeg_nx.sh failed (exit $code); -Dnx_no_native_video builds without it.');
+    }
+    setHaxedef("NX_NATIVE_VIDEO");
+    setHaxedef("NX_FFMPEG_DIR", ffmpegDir);
+    Sys.putEnv("NX_FFMPEG_DIR", ffmpegDir);
+    config.set("switch.libs", 'avformat_nx -L$ffmpegDir/lib,avcodec_nx,swscale_nx,avutil_nx,pthread,nx');
+  }
+
   public function isIOSSimulator():Bool
   {
     return this.target == Platform.IOS && this.targetFlags.exists("simulator");
@@ -2105,6 +2136,12 @@ class Project extends HXProject
     if (sys.FileSystem.exists(generated))
     {
       addAssetPath(generated, "assets/videos/converted", "videos", ["*.png", "*.xml", "*.ogg"], exclude, embed, "assets");
+    }
+    if (isSwitchNativeVideo())
+    {
+      // The official cutscene files as they are (~45 MB); NXVideoDecoder reads them from romfs:/assets/videos/native.
+      addAssetPath("assets/videos/videos", "assets/videos/native", "videos", ["*Cutscene*.mp4", "*Cutscene*.mkv", "*Cutscene*.webm"], exclude,
+        embed, "assets");
     }
   }
 

@@ -733,13 +733,16 @@ class NXRegressionSuite
         if (songIs(songId) && NXVideoPlayer.isCutscenePlaying()) phase = 1;
         failReason = 'waiting for the $songId video cutscene (${describeState()})';
       case 1, 6:
-        if (NXVideoPlayer.isCutscenePlaying() && NXVideoPlayer.sheetCount() < 2)
+        // Native video (video_backend=ffmpeg): no sheets; "later" means 3 s into the video, and the restart is a seek.
+        var native:Bool = NXVideoPlayer.isNative();
+        if (!native && NXVideoPlayer.isCutscenePlaying() && NXVideoPlayer.sheetCount() < 2)
         {
           failReason = 'the $songId video has a single sheet; this step needs a later one';
           return false;
         }
         failReason = 'the $songId video never reached a later sheet (sheet ${NXVideoPlayer.sheetIndex()} of ${NXVideoPlayer.sheetCount()})';
-        if (NXVideoPlayer.isCutscenePlaying() && NXVideoPlayer.sheetIndex() >= 1)
+        var later:Bool = native ? ((@:privateAccess NXVideoPlayer.currentAudio?.time ?? 0) >= 3000) : NXVideoPlayer.sheetIndex() >= 1;
+        if (NXVideoPlayer.isCutscenePlaying() && later)
         {
           if (phase == 6)
           {
@@ -789,7 +792,7 @@ class NXRegressionSuite
           }
           else
           {
-            if (direct < 1)
+            if (direct < 1 && !NXVideoPlayer.isNative())
             {
               failReason = 'with every prefetch declined, sheet 0 came back without the main-thread load';
               return false;

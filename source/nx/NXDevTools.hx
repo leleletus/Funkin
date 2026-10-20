@@ -17,6 +17,8 @@ package nx;
  *   ordered_release=true     # false = Build 25 post-switch texture release (hash order, copies parked), A/B (INC-49)
  *   banded_upload=true       # false = OpenFL's single glTexImage2D (Mesa stages the whole image), A/B (INC-49)
  *   audio_thread_priority=high  # default = SDL's own audio thread priority (0x3B), A/B (INC-54)
+ *   video_backend=sheets     # ffmpeg = cutscenes from the video files with NXVideoDecoder (Step 3), sheets as fallback
+ *   video_simd=true          # false = FFmpeg without NEON (Citron: its dynarmic lacks an instruction HEVC uses)
  *   combo_lr=MEMORY_BUDGET_X3   # run started by holding L+R for 3 s (empty or off = nothing)
  *   combo_zlzr=PLAYTHROUGH      # run started by holding ZL+ZR for 3 s (empty or off = nothing)
  *
@@ -33,6 +35,8 @@ class NXDevTools
   static var cfgComboLR:String = '';
   static var cfgComboZLZR:String = '';
   static var cfgAudioThreadHigh:Bool = true;
+  static var cfgVideoBackend:String = 'sheets';
+  static var cfgVideoSimd:Bool = true;
   static var botplayOverride:Null<Bool> = null;
 
   /**
@@ -79,6 +83,10 @@ class NXDevTools
               cfgComboZLZR = comboValue(raw);
             case 'audio_thread_priority':
               cfgAudioThreadHigh = (raw != 'default');
+            case 'video_backend':
+              cfgVideoBackend = (raw == 'ffmpeg') ? 'ffmpeg' : 'sheets';
+            case 'video_simd':
+              cfgVideoSimd = value;
             default:
           }
         }
@@ -92,7 +100,7 @@ class NXDevTools
     #if switch
     NXAudioDriver.setHighThreadPriority(cfgAudioThreadHigh);
     #end
-    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} combo_lr=${cfgComboLR == "" ? "off" : cfgComboLR} combo_zlzr=${cfgComboZLZR == "" ? "off" : cfgComboZLZR} audio_thread_priority=${cfgAudioThreadHigh ? "high" : "default"} from $source');
+    NXDeepTrace.writeEntry('DEVTOOLS', 'Test build: botplay_toggle=$cfgBotplayToggle botplay_start=$cfgBotplayStart heap_cap_mb=$cfgHeapCapMb single_copy_decode=${NXImageDecode.enabled} ordered_release=${NXTextureMemory.orderedRelease} banded_upload=${NXTextureUpload.enabled} combo_lr=${cfgComboLR == "" ? "off" : cfgComboLR} combo_zlzr=${cfgComboZLZR == "" ? "off" : cfgComboZLZR} audio_thread_priority=${cfgAudioThreadHigh ? "high" : "default"} video_backend=$cfgVideoBackend video_simd=$cfgVideoSimd from $source');
     #if switch
     NXDeepTrace.writeEntry('MEMORY', '[HEAP] boot: ${NXPerformance.describeHeapBounds()} | ${NXPerformance.describeHeap()}');
     // Citron's heap is ~98 MB larger than the console's: heap_cap_mb lets long-session tests run with the console's ceiling.
@@ -115,6 +123,21 @@ class NXDevTools
   {
     init();
     return (combo == 'lr') ? cfgComboLR : cfgComboZLZR;
+  }
+
+  /**
+   * How cutscenes are played: 'ffmpeg' (video files, NXVideoDecoder) or 'sheets'.
+   */
+  public static function videoBackend():String
+  {
+    init();
+    return cfgVideoBackend;
+  }
+
+  public static function videoSimd():Bool
+  {
+    init();
+    return cfgVideoSimd;
   }
 
   public static function botplayToggleAllowed():Bool
@@ -149,6 +172,12 @@ class NXDevTools
 
   public static inline function botplayToggleAllowed():Bool
     return false;
+
+  public static inline function videoBackend():String
+    return 'sheets';
+
+  public static inline function videoSimd():Bool
+    return true;
 
   public static inline function isBotplayOn():Bool
     return false;
