@@ -25,6 +25,7 @@
       "name": "hx_libnx",
       "type": "git",
       "dir": null,
+      "ref": "5d7eb030d194b8fc947b03b3683303b7a68ed31d",
       "url": "https://github.com/Slushi-Github/hx_libnx"
     },
     {
@@ -58,6 +59,7 @@
       "name": "flixel",
       "type": "git",
       "dir": null,
+      "ref": "a09ca08f20415d8e86c37e1d045000ba8adcf6dc",
       "url": "https://github.com/FunkinNXTeam/flixel"
     },
     {
@@ -123,6 +125,7 @@
       "name": "hxcpp",
       "type": "git",
       "dir": null,
+      "ref": "3bf11bfd23422e594997cc3f3d1e4e00545c81a3",
       "url": "https://github.com/FunkinNXTeam/hxcpp"
     },
     {
@@ -180,6 +183,7 @@
       "name": "lime",
       "type": "git",
       "dir": null,
+      "ref": "ad669eeb628d4e9319ad8c6b0cfb81719b9be47e",
       "url": "https://github.com/FunkinNXTeam/lime-nx"
     },
     {
@@ -193,6 +197,7 @@
       "name": "openfl",
       "type": "git",
       "dir": null,
+      "ref": "33c6f1a2a60717b603c430d88b27ccc0251258c4",
       "url": "https://github.com/FunkinNXTeam/openfl"
     },
     {
