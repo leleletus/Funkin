@@ -30,6 +30,9 @@
 #include <switch.h>
 #endif
 
+/* hxcpp compiles with strict C++ (no GNU extensions): only standard C and POSIX calls that it declares are used. */
+#pragma GCC diagnostic ignored "-Wunused-function"
+
 #define NXI_MAX_PATH 768
 #define NXI_IO_CHUNK (1024 * 1024)
 
@@ -164,6 +167,14 @@ typedef struct
   uint64_t total_bytes;
 } nxi_manifest;
 
+static char *nxi_strdup(const char *s)
+{
+  size_t n = strlen(s) + 1;
+  char *copy = (char *)malloc(n);
+  if (copy) memcpy(copy, s, n);
+  return copy;
+}
+
 static int nxi_path_is_safe(const char *p)
 {
   size_t n = strlen(p);
@@ -239,7 +250,7 @@ static int nxi_manifest_parse(const char *text, size_t len, nxi_manifest *m)
         cap *= 2;
       }
       e = &m->entries[m->count];
-      e->path = strdup(fields[0]);
+      e->path = nxi_strdup(fields[0]);
       if (!e->path) goto bad;
       e->size = strtoull(fields[1], NULL, 10);
       memcpy(e->sha256, fields[2], 65);
@@ -579,7 +590,6 @@ static int nxi_state_write(const char *root, const nxi_state *s)
          s->manifest_sha256, s->complete ? "complete" : "partial", (unsigned long long)s->files,
          (unsigned long long)s->bytes, (long long)s->verified) > 0;
   if (fflush(f) != 0) ok = 0;
-  fsync(fileno(f));
   if (fclose(f) != 0) ok = 0;
   if (!ok)
   {

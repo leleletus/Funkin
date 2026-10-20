@@ -147,7 +147,13 @@ class ApplicationMain
     preloader.onComplete.add(start.bind((cast app.window:openfl.display.Window).stage));
 
     #if !disable_preloader_assets
+    #if NX_SD_ASSETS
+    // Asset-less Switch build: the official files and lime's manifests live on the SD card (nx.installer.NXInstaller).
+    nx.installer.NXInstaller.prepare();
+    ManifestResources.init({rootPath: nx.NXAssetRoot.ROOT});
+    #else
     ManifestResources.init(config);
+    #end
 
     for (library in ManifestResources.preloadLibraries)
     {
@@ -160,7 +166,11 @@ class ApplicationMain
     }
     #end
 
+    #if NX_SD_ASSETS
+    nx.installer.NXInstaller.run((cast app.window:openfl.display.Window).stage, app.preloader.load);
+    #else
     app.preloader.load();
+    #end
 
     var result = app.exec();
 

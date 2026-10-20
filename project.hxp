@@ -858,7 +858,7 @@ class Project extends HXProject
     EXCLUDE_ARMV7.apply(this, false);
 
     // Should be true unless explicitly requested.
-    HARDCODED_CREDITS.apply(this, true);
+    HARDCODED_CREDITS.apply(this, !isSwitchSdAssets()); // The asset-less Switch build reads credits.json from the SD card.
     UNLOCK_EVERYTHING.apply(this, true);
 
     // Should be true only on web builds.
@@ -1101,6 +1101,7 @@ class Project extends HXProject
       this.defines.set("APP_ID", SWITCH_APP_ID);
       config.set("switch.ip", SWITCH_IP);
       if (isSwitchNativeVideo()) configureSwitchNativeVideo();
+      if (isSwitchSdAssets()) configureSwitchSdAssets();
     }
   }
 
@@ -1487,14 +1488,14 @@ class Project extends HXProject
     if (!FEATURE_STAGE_EDITOR.isEnabled(this)) removeAssetPath('assets/preload/data/ui/stage-editor', "default");
 
     // Font assets
-    var shouldEmbedFonts = true;
+    var shouldEmbedFonts = !isSwitchSdAssets(); // The asset-less Switch build reads the fonts from the SD card.
     addAssetPath("assets/fonts", null, "default", ["*"], exclude, shouldEmbedFonts, "assets");
 
     // Shared asset libraries
     addAssetLibrary("songs", shouldEmbed, shouldPreload);
     addAssetPath("assets/songs", "assets/songs", "songs", ["*"], exclude, shouldEmbed, "assets");
 
-    for (song in EMBED_SONGS_AUDIO)
+    for (song in (isSwitchSdAssets() ? [] : EMBED_SONGS_AUDIO))
     {
       removeAssetPath('assets/songs/$song');
       addAssetPath('assets/songs/$song', 'assets/songs/$song', "songs", ["*"], exclude, true, "assets");
@@ -1538,7 +1539,7 @@ class Project extends HXProject
     var shouldEmbedArt = false;
     var shouldPreloadArt = false;
     addAssetLibrary("art", shouldEmbedArt, shouldPreloadArt);
-    addAsset("art/readme.txt", "do NOT readme.txt", "art", shouldEmbedArt);
+    if (!isSwitchSdAssets()) addAsset("art/readme.txt", "do NOT readme.txt", "art", shouldEmbedArt);
     addAsset("LICENSE.md", "LICENSE.md", "art", shouldEmbedArt);
     addAsset("CHANGELOG.md", "CHANGELOG.md", "art", shouldEmbedArt);
 
@@ -1802,7 +1803,34 @@ class Project extends HXProject
    */
   public function isSwitchNativeVideo():Bool
   {
+    if (isSwitchSdAssets()) return true; // the official cutscene files on the SD card are the only cutscenes it has
     return isSwitch() && (hasDefine("NX_DEV_TOOLS") || this.haxedefs.exists("NX_DEV_TOOLS")) && !hasDefine("nx_no_native_video");
+  }
+
+  /**
+   * -DNX_SD_ASSETS: the asset-less Switch build. No FunkinCrew file goes into the .nro (fonts, Spaghetti's audio and
+   * credits are not embedded either); the asset installer puts the official files on the SD card and the game reads
+   * them from there (nx.NXAssetRoot). tools/nx-tools/package_sd_build.py repacks the .nro with only the manifests.
+   */
+  /**
+   * The asset installer (nx.installer.NXInstaller) includes its C headers from source/nx/installer and links
+   * switch-curl (libcurl on top of the console's TLS service) and zlib.
+   */
+  function configureSwitchSdAssets():Void
+  {
+    var installerDir:String = haxe.io.Path.join([Sys.getCwd(), "source/nx/installer"]);
+    setHaxedef("NX_SD_ASSETS");
+    setHaxedef("NX_INSTALLER_DIR", installerDir);
+    Sys.putEnv("NX_INSTALLER_DIR", installerDir);
+    var libs:Null<String> = config.getString("switch.libs", null);
+    // curl before z, both before nx (lime appends these after its own libraries, which end with -lz -lnx).
+    if (libs == null || libs == "") config.set("switch.libs", "curl,z,nx");
+    else config.set("switch.libs", StringTools.replace(libs, "pthread,nx", "curl,z,pthread,nx"));
+  }
+
+  public function isSwitchSdAssets():Bool
+  {
+    return isSwitch() && (hasDefine("NX_SD_ASSETS") || this.haxedefs.exists("NX_SD_ASSETS"));
   }
 
   /**
@@ -1970,6 +1998,11 @@ class Project extends HXProject
     {
       asset.type = BINARY;
     }
+    if (isSwitchSdAssets() && !embed)
+    {
+      // The manifest points at the file's place in the official repository layout that the installer writes to the SD card.
+      asset.resourceName = path;
+    }
     @:nullSafety(Off)
     {
       asset.library = library ?? "default";
@@ -2068,7 +2101,7 @@ class Project extends HXProject
   function addSwitchCutscenes(embed:Bool, exclude:Array<String>):Void
   {
     var generated:String = "export/nx-generated/videos/converted";
-    if (!(isDisplay() || isCleanCommand()))
+    if (!(isDisplay() || isCleanCommand() || isSwitchSdAssets()))
     {
       info('Preparing Switch cutscenes (tools/nx-tools/prepare_switch_assets.py)...');
       var code:Int = Sys.command("python3", ["tools/nx-tools/prepare_switch_assets.py"]);
@@ -2077,8 +2110,9 @@ class Project extends HXProject
         error('prepare_switch_assets.py failed (exit $code). Cutscenes need ffmpeg, Pillow and libvorbis; see docs/SWITCH_PORT_TRACKER.md.');
       }
     }
-    if (sys.FileSystem.exists(generated))
+    if (!isSwitchSdAssets() && sys.FileSystem.exists(generated))
     {
+      // Converted sheets are derived from FunkinCrew's videos: only in builds that carry the assets.
       addAssetPath(generated, "assets/videos/converted", "videos", ["*.png", "*.xml", "*.ogg"], exclude, embed, "assets");
     }
     if (isSwitchNativeVideo())

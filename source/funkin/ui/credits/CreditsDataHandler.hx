@@ -132,7 +132,9 @@ class CreditsDataHandler
   {
     trace('[CREDITS] Failed to parse credits data: ${id}');
 
+    #if !(switch && macro) // Switch asset-less build (no hardcoded credits): DataError can't be typed in the macro context
     for (error in errors) funkin.data.DataError.printError(error);
+    #end
   }
   #end
 }

@@ -20,7 +20,7 @@ class CLIUtil
     #if android
     gameDir = Path.addTrailingSlash(extension.androidtools.content.Context.getExternalFilesDir());
     #elseif switch
-    gameDir = "romfs:/";
+    gameDir = nx.NXAssetRoot.ROOT;
     #elseif ios
     // Why? Because for some reason lime.system.System.documentsDirectory is returning a directory that's different and we're unable to read or write from, so it's disabled and no solution is found...
     trace(' WARNING '.warning() + ' : Reseting the Current Working Directory is unavailable on iOS targets');

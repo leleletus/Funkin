@@ -150,13 +150,13 @@ class NXVideoPlayer
   }
 
   /**
-   * The official video file for `videoName` in RomFS (assets/videos/native), or null.
+   * The official video file for `videoName` (see NXAssetRoot.cutsceneVideo), or null.
    */
   static function nativeVideoPath(videoName:String):Null<String>
   {
     for (ext in ['.mkv', '.mp4', '.webm'])
     {
-      var path:String = 'romfs:/assets/videos/native/' + videoName + ext;
+      var path:String = nx.NXAssetRoot.cutsceneVideo(videoName + ext);
       if (sys.FileSystem.exists(path)) return path;
     }
     return null;

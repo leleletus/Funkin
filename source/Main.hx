@@ -53,8 +53,8 @@ class Main extends Sprite
     // On iOS use Documents Dir.
     Sys.setCwd(haxe.io.Path.addTrailingSlash(lime.system.System.documentsDirectory));
     #elseif switch
-    // On Nintendo Switch use the "romfs:/" path.
-    Sys.setCwd("romfs:/");
+    // On Nintendo Switch use the folder that holds "assets/" (RomFS, or the SD card in the asset-less build).
+    Sys.setCwd(nx.NXAssetRoot.ROOT);
     #end
 
     // We need to make the crash handler LITERALLY FIRST so nothing EVER gets past it.
@@ -191,7 +191,7 @@ class Main extends Sprite
       zoom = 1; // fixes a cam related issue lol, reminds me from when I got the issue a lot when I was doing mobile ports
     }
 
-    Sys.setCwd("romfs:/");
+    Sys.setCwd(nx.NXAssetRoot.ROOT);
     NXMain.init();
     // Test builds: read nx_devtools.cfg before the first image is decoded (FlxGame.create decodes the sound tray).
     nx.NXDevTools.init();
