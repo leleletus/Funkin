@@ -26,6 +26,7 @@ Actúa como **Lead C++/Haxe Engine Architect** del port de **Friday Night Funkin
 5. **Citron**
    - Cerrar siempre el emulador al terminar cada prueba (consume ~10 GB de RAM). Comprobar con `ps -eo pid,comm | awk '$2=="citron"'`.
    - No recompilar mientras Citron está ejecutando el `.nro`.
+   - Si una compilación se queda parada sin ningún `cc1plus` corriendo, es un error de C++ que hxcpp no muestra con varios hilos (INC-62): matarla y relanzarla con `-DHXCPP_COMPILE_THREADS=1`. El código C nuevo (por ejemplo `source/nx/installer/`) se compila antes a mano en modo estricto (`-std=c++11`, sin funciones GNU como `strdup`).
 
 ## 2. Fase 1 — Puesta al día
 
