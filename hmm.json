@@ -73,7 +73,7 @@
       "name": "flixel-animate",
       "type": "git",
       "dir": null,
-      "ref": "c61476f4b3a3d225631ab3065e4e925a4b63c076",
+      "ref": "c5e3393c70b71a191f20fa902114cea92042e486",
       "url": "https://github.com/MaybeMaru/flixel-animate"
     },
     {
@@ -113,13 +113,6 @@
       "dir": null,
       "ref": "100f2c96beab619cfe72c567a058c41c71e3e998",
       "url": "https://github.com/haxeui/haxeui-flixel"
-    },
-    {
-      "name": "hscript",
-      "type": "git",
-      "dir": null,
-      "ref": "dcc6f822e0866ca4fda300ed23e99559260f7bf5",
-      "url": "https://github.com/FunkinCrew/hscript"
     },
     {
       "name": "hxcpp",
@@ -166,7 +159,7 @@
       "name": "json2object",
       "type": "git",
       "dir": null,
-      "ref": "a7e4cef3d444bea8d8244d6e59ab82f5a593f597",
+      "ref": "59e0467c953d1f26e3cbf2a070f140e2d2e8457d",
       "url": "https://github.com/FunkinCrew/json2object"
     },
     {
@@ -204,8 +197,8 @@
       "name": "polymod",
       "type": "git",
       "dir": null,
-      "ref": "9824bf4f00863c152d5afe3ac4bbcac173d80684",
-      "url": "https://github.com/larsiusprime/polymod"
+      "ref": "d8f036378c4ff472f1922ad623b8800b6a061c1a",
+      "url": "https://github.com/FunkinCrew/polymod"
     },
     {
       "name": "thx.core",

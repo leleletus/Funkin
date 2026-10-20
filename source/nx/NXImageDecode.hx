@@ -31,7 +31,7 @@ class NXImageDecode
 {
   static inline final MIN_PRESIZE_BYTES:Int = 64 * 1024;
   static inline final MAX_SIDE:Int = 16384;
-  // The largest shipped image is 8192x8192 (week2 halloween_bg, 256 MiB); anything bigger is a bad header.
+  // No shipped image is larger than 8192x8192 (week2 halloween_bg before 0.8.3; now 8192x4096 at most); anything bigger is a bad header.
   static inline final MAX_PRESIZE_BYTES:Int = 256 * 1024 * 1024;
   static inline final LARGE_BYTES:Int = 64 * 1024 * 1024;
   static inline final BREADCRUMB_BYTES:Int = 16 * 1024 * 1024;

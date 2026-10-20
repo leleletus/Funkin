@@ -864,10 +864,10 @@ class NXAutoTest
       'assets/images/freeplay/ref.png', 'assets/images/icons/icon-face.png', 'assets/week1/opensauceforever.png',
       'assets/week6/images/weeb/petals.png', 'assets/shared/images/characters/gfTankmen.png',
       'assets/weekend1/images/spraycanAtlas/spritemap1.png', 'assets/videos/converted/2hotCutscene_0.png',
-      'assets/weekend1/images/characters/picoExplosionDeath/spritemap1.png', 'assets/week2/images/halloween_bg.png'
+      'assets/shared/images/characters/pico/explosion-death/spritemap1.png', 'assets/shared/images/characters/BOYFRIEND.png'
     ];
     // Files of 128 MiB or more are only compared through the file path, to keep the bytes runs small.
-    var hugeOnlyFile:Array<String> = ['gfTankmen', 'picoExplosionDeath', 'halloween_bg'];
+    var hugeOnlyFile:Array<String> = ['gfTankmen', 'explosion-death', 'BOYFRIEND'];
     var failures:Array<String> = [];
     var checked:Int = 0;
     inline function empty() return new lime.graphics.ImageBuffer(new lime.utils.UInt8Array(haxe.io.Bytes.alloc(0)));
@@ -963,15 +963,16 @@ class NXAutoTest
     var gl = context.gl;
     // Largest first, while the heap is still in one piece.
     var files:Array<String> = [
-      'assets/week2/images/halloween_bg.png', // 8192x8192, 256 MiB: 32 whole bands
-      'assets/weekend1/images/characters/picoExplosionDeath/spritemap1.png', // 8187x5374: odd stride, last band 254 rows
+      'assets/shared/images/characters/pico/explosion-death/spritemap1.png', // 8181x4687, 146 MiB (the largest since 0.8.3): odd stride
+      'assets/shared/images/characters/BOYFRIEND.png', // 8192x4096, 128 MiB: whole bands
       'assets/shared/images/characters/gfTankmen.png', // 8192x4096 (INC-49)
-      'assets/weekend1/images/spraycanAtlas/spritemap1.png', // 8187x2907 (INC-32)
-      'assets/shared/images/characters/Pico_Death.png', // 6371x3442: 329-row bands
+      'assets/shared/images/characters/pico/death/spritemap1.png', // 4094x2897, 45 MiB
+      'assets/week2/images/halloween_bg/spritemap1.png', // 3924x2256, 34 MiB: the Week 2 background since 0.8.3
       'assets/videos/converted/ughCutscene_0.png', // 3840x3960 video sheet
       'assets/weekend1/images/bgConcept.png', // 4200x2600 RGB PNG without alpha
+      'assets/shared/images/characters/pico/playable-animations/spritemap1.png', // 4093x1335: odd width, partial last band
       'assets/weekend1/images/fightPico.png', // 2048x2048: exactly 16 MiB, the smallest banded size
-      'assets/images/titleEnter.png' // 2017x1950, 15 MiB: must keep OpenFL's single call
+      'assets/shared/images/characters/pico-holding-nene/picoAndNene-DEAD/spritemap1.png' // 2048x2008, 15.7 MiB: OpenFL's single call
     ];
     var sliceRows:Int = 64;
     var wasEnabled:Bool = NXTextureUpload.enabled;

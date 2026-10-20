@@ -1005,7 +1005,7 @@ class NXRegressionSuite
       });
     steps.push(
       {
-        name: "Story Mode Week 2: Spookeez loads (halloween_bg, 256 MiB, the largest image) and plays with no GL out-of-memory",
+        name: "Story Mode Week 2: Spookeez loads (halloween_bg, a 256 MiB image before 0.8.3, now an Animate atlas) and plays with no GL out-of-memory",
         covers: "INC-49",
         timeout: 300,
         enter: () -> {

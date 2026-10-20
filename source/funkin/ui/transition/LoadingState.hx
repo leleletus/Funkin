@@ -106,7 +106,8 @@ class LoadingState extends MusicBeatSubState
     return;
     #end
 
-    initSongsManifest().onComplete(function(lib) {
+    initSongsManifest().onComplete(function(lib)
+    {
       callbacks = new MultiCallback(onLoad);
       var introComplete = callbacks.add('introComplete');
 
@@ -160,7 +161,8 @@ class LoadingState extends MusicBeatSubState
       // @:privateAccess
       // library.pathGroups.set(symbolPath, [library.__cacheBreak(symbolPath)]);
       var callback = callbacks?.add('song:' + path);
-      Assets.loadSound(path).onComplete(function(_) {
+      Assets.loadSound(path).onComplete(function(_)
+      {
         if (callback != null) callback();
       });
     }
@@ -175,7 +177,8 @@ class LoadingState extends MusicBeatSubState
       if (!LimeAssets.libraryPaths.exists(library)) throw 'Missing library: ' + library;
 
       var callback = callbacks?.add('library:' + library);
-      Assets.loadLibrary(library).onComplete(function(_) {
+      Assets.loadLibrary(library).onComplete(function(_)
+      {
         if (callback != null) callback();
       });
     }
@@ -283,13 +286,15 @@ class LoadingState extends MusicBeatSubState
 
     if (funkin.ui.FullScreenScaleMode.instance != null) funkin.ui.FullScreenScaleMode.instance.onMeasurePostAwait();
 
-    var playStateCtor:() -> PlayState = function() {
+    var playStateCtor:() -> PlayState = function()
+    {
       return new PlayState(params);
     };
 
     if (onConstruct != null)
     {
-      playStateCtor = function() {
+      playStateCtor = function()
+      {
         var result = new PlayState(params);
         onConstruct(result);
         return result;
@@ -353,30 +358,9 @@ class LoadingState extends MusicBeatSubState
       // TODO: This sucks lol.
       if (params.targetSong.songName == "2hot")
       {
-        var spritesToCache = [
-          "wked1_cutscene_1_can",
-          "spraypaintExplosionEZ",
-          "SpraypaintExplosion",
-          "CanImpactParticle",
-          "spraycanAtlas/spritemap1"
-        ];
+        var spritesToCache = ["wked1_cutscene_1_can", "spraypaintExplosionEZ", "SpraypaintExplosion", "CanImpactParticle", "spraycanAtlas/spritemap1"];
 
-        var soundsToCache = [
-          "Darnell_Lighter",
-          "fuse_burning",
-          "Gun_Prep",
-          "Kick_Can_FORWARD",
-          "Kick_Can_UP",
-          "Lightning1",
-          "Lightning2",
-          "Lightning3",
-          "Pico_Bonk",
-          "Shoot_1",
-          "shot1",
-          "shot2",
-          "shot3",
-          "shot4"
-        ];
+        var soundsToCache = ["Darnell_Lighter", "fuse_burning", "Gun_Prep", "Kick_Can_FORWARD", "Kick_Can_UP", "Lightning1", "Lightning2", "Lightning3", "Pico_Bonk", "Shoot_1", "shot1", "shot2", "shot3", "shot4"];
 
         // Switch: these textures were decoded here while Lit Up or Freeplay were still alive, then destroyed by
         // purgeCache(true) in preStateSwitch before PlayState exists, and 2hot.hxc caches the ones it needs again in
@@ -404,7 +388,8 @@ class LoadingState extends MusicBeatSubState
         for (sound in soundsToCache)
         {
           trace('Queueing $sound to preload.');
-          new Future<String>(function() {
+          new Future<String>(function()
+          {
             var path = Paths.sound(sound, "weekend1");
             funkin.FunkinMemory.cacheSound(path);
             return '${path} successfuly loaded.';
@@ -420,7 +405,8 @@ class LoadingState extends MusicBeatSubState
     else
     {
       // funkin.FunkinMemory.clearFreeplay();
-      FlxG.signals.preStateSwitch.addOnce(function() {
+      FlxG.signals.preStateSwitch.addOnce(function()
+      {
         funkin.FunkinMemory.clearFreeplay();
         funkin.FunkinMemory.purgeCache(true);
       });
@@ -536,7 +522,8 @@ class LoadingState extends MusicBeatSubState
       path = LimeAssets.__cacheBreak(path);
     }
 
-    AssetManifest.loadFromFile(path, rootPath).onComplete(function(manifest) {
+    AssetManifest.loadFromFile(path, rootPath).onComplete(function(manifest)
+    {
       if (manifest == null)
       {
         promise.error('Cannot parse asset manifest for library \'' + id + '\'');
@@ -556,8 +543,9 @@ class LoadingState extends MusicBeatSubState
         library.onChange.add(LimeAssets.onChange.dispatch);
         promise.completeWith(Future.withValue(library));
       }
-    }).onError(function(_) {
-      promise.error('There is no asset library with an ID of \'' + id + '\'');
+    }).onError(function(_)
+    {
+        promise.error('There is no asset library with an ID of \'' + id + '\'');
     });
 
     return promise.future;
@@ -591,7 +579,8 @@ class MultiCallback
     id = '$length:$id';
     length++;
     numRemaining++;
-    var func:Void->Void = function() {
+    var func:Void->Void = function()
+    {
       if (unfired.exists(id))
       {
         unfired.remove(id);
@@ -618,11 +607,9 @@ class MultiCallback
     if (logId != null) trace('$logId: $msg');
   }
 
-  public function getFired():Array<String>
-    return fired.copy();
+  public function getFired():Array<String> return fired.copy();
 
-  public function getUnfired():Array<Void->Void>
-    return unfired.array();
+  public function getUnfired():Array<Void->Void> return unfired.array();
 
   /**
    * Perform an FlxG.switchState with a nice transition
@@ -636,14 +623,14 @@ class MultiCallback
     var screenWipeShit:ScreenWipeShader = new ScreenWipeShader();
 
     screenWipeShit.funnyShit.input = screenShit.pixels;
-    FlxTween.tween(screenWipeShit, {daAlphaShit: 1}, time,
+    FlxTween.tween(screenWipeShit, {daAlphaShit: 1}, time, {
+      ease: FlxEase.quadInOut,
+      onComplete: function(twn)
       {
-        ease: FlxEase.quadInOut,
-        onComplete: function(twn) {
-          screenShit.destroy();
-          FlxG.switchState(state);
-        }
-      });
+        screenShit.destroy();
+        FlxG.switchState(state);
+      }
+    });
     FlxG.camera.filters = [new ShaderFilter(screenWipeShit)];
   }
 }

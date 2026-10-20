@@ -219,7 +219,8 @@ class VideoCutscene
 
       vid.active = false;
 
-      vid.bitmap.onFormatSetup.add(function():Void {
+      vid.bitmap.onFormatSetup.add(function():Void
+      {
         if (vid.bitmap != null && vid.bitmap.bitmapData != null)
         {
           final scale:Float = Math.min(FlxG.width / vid.bitmap.bitmapData.width, FlxG.height / vid.bitmap.bitmapData.height);
@@ -230,7 +231,8 @@ class VideoCutscene
         }
       });
 
-      vid.bitmap.onEncounteredError.add(function(msg:String):Void {
+      vid.bitmap.onEncounteredError.add(function(msg:String):Void
+      {
         finishVideo(0.5);
       });
 
