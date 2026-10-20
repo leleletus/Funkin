@@ -36,6 +36,7 @@ Actúa como **Lead C++/Haxe Engine Architect** del port de **Friday Night Funkin
    ls -la source/nx/ source/nx/video/ tools/nx-tools/
    ```
 3. Revisar las incidencias **ABIERTAS** y la última entrada de la bitácora del tracker.
+4. Para trabajo de actualización, librerías o pendientes grandes: `docs/SWITCH_TECHNICAL_STATUS.md` (capas del port, librerías frente a las oficiales, SDL3, funciones que no están en Switch, pendientes A-H y procedimiento de actualización) y `docs/SWITCH_UPSTREAM_CHANGES.md` (cambios de cada versión oficial y su efecto en Switch).
 
 ## 3. Herramientas disponibles (no hay que crearlas)
 
