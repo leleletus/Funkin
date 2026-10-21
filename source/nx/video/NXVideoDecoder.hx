@@ -330,6 +330,138 @@ static void nxv_seekStart(void)
   nxv.seekRequest = 1;
   condvarWakeAll(&nxv.wake);
 }
+
+/* The soundtrack of a video file, decoded whole into 16-bit interleaved PCM (mono or stereo). */
+static struct
+{
+  short *pcm;
+  size_t frames;
+  int channels;
+  int rate;
+  double ms;
+} nxa;
+
+static void nxa_free(void)
+{
+  free(nxa.pcm);
+  memset(&nxa, 0, sizeof(nxa));
+}
+
+static inline short nxa_s16(float v)
+{
+  if (v > 1.0f) v = 1.0f;
+  if (v < -1.0f) v = -1.0f;
+  return (short)(v * 32767.0f);
+}
+
+/* Sample `i` of channel `c` of a decoded frame as a float, for the formats the AAC and Vorbis decoders produce. */
+static inline float nxa_sample(const AVFrame *f, int format, int inChannels, int i, int c)
+{
+  switch (format)
+  {
+    case AV_SAMPLE_FMT_FLTP: return ((const float *)f->extended_data[c])[i];
+    case AV_SAMPLE_FMT_FLT: return ((const float *)f->data[0])[i * inChannels + c];
+    case AV_SAMPLE_FMT_S16P: return ((const short *)f->extended_data[c])[i] / 32768.0f;
+    case AV_SAMPLE_FMT_S16: return ((const short *)f->data[0])[i * inChannels + c] / 32768.0f;
+    case AV_SAMPLE_FMT_S32P: return ((const int *)f->extended_data[c])[i] / 2147483648.0f;
+    case AV_SAMPLE_FMT_S32: return ((const int *)f->data[0])[i * inChannels + c] / 2147483648.0f;
+    default: return 0.0f;
+  }
+}
+
+/* Decodes the whole audio track of `path`. 0, or a negative error (-1101: no audio stream, -1102: unsupported format,
+   -1103: out of memory). Runs on the calling thread; a cutscene soundtrack takes well under a second. */
+static int nxa_decode(const char *path)
+{
+  nxa_free();
+  double start = nxv_nowMs();
+  AVFormatContext *format = NULL;
+  AVCodecContext *codec = NULL;
+  AVPacket *packet = NULL;
+  AVFrame *frame = NULL;
+  const AVCodec *decoder = NULL;
+  size_t capacity = 0;
+  int draining = 0, stream, err;
+  if ((err = avformat_open_input(&format, path, NULL, NULL)) < 0) goto done;
+  if ((err = avformat_find_stream_info(format, NULL)) < 0) goto done;
+  stream = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, &decoder, 0);
+  if (stream < 0 || decoder == NULL)
+  {
+    err = -1101;
+    goto done;
+  }
+  codec = avcodec_alloc_context3(decoder);
+  avcodec_parameters_to_context(codec, format->streams[stream]->codecpar);
+  if ((err = avcodec_open2(codec, decoder, NULL)) < 0) goto done;
+  {
+    const int inChannels = codec->ch_layout.nb_channels;
+    nxa.channels = inChannels >= 2 ? 2 : 1;
+    nxa.rate = codec->sample_rate;
+    double seconds = (format->duration > 0) ? format->duration / (double)AV_TIME_BASE : 60.0;
+    capacity = (size_t)((seconds + 1.0) * nxa.rate);
+    nxa.pcm = (short *)malloc(capacity * nxa.channels * sizeof(short));
+    if (nxa.pcm == NULL)
+    {
+      err = -1103;
+      goto done;
+    }
+    packet = av_packet_alloc();
+    frame = av_frame_alloc();
+    for (;;)
+    {
+      err = avcodec_receive_frame(codec, frame);
+      if (err == AVERROR(EAGAIN))
+      {
+        if (draining) break;
+        if (av_read_frame(format, packet) < 0)
+        {
+          draining = 1;
+          avcodec_send_packet(codec, NULL);
+          continue;
+        }
+        if (packet->stream_index == stream) avcodec_send_packet(codec, packet);
+        av_packet_unref(packet);
+        continue;
+      }
+      if (err == AVERROR_EOF) break;
+      if (err < 0) goto done;
+      const int n = frame->nb_samples, fmt = frame->format;
+      if (fmt != AV_SAMPLE_FMT_FLTP && fmt != AV_SAMPLE_FMT_FLT && fmt != AV_SAMPLE_FMT_S16P && fmt != AV_SAMPLE_FMT_S16
+        && fmt != AV_SAMPLE_FMT_S32P && fmt != AV_SAMPLE_FMT_S32)
+      {
+        err = -1102;
+        goto done;
+      }
+      if (nxa.frames + n > capacity)
+      {
+        size_t grown = capacity + (size_t)nxa.rate * 10 + n;
+        short *bigger = (short *)realloc(nxa.pcm, grown * nxa.channels * sizeof(short));
+        if (bigger == NULL)
+        {
+          err = -1103;
+          goto done;
+        }
+        nxa.pcm = bigger;
+        capacity = grown;
+      }
+      short *out = nxa.pcm + nxa.frames * nxa.channels;
+      for (int i = 0; i < n; i++)
+        for (int c = 0; c < nxa.channels; c++)
+          *out++ = nxa_s16(nxa_sample(frame, fmt, inChannels, i, c));
+      nxa.frames += n;
+      av_frame_unref(frame);
+    }
+    err = 0;
+  }
+done:
+  av_frame_free(&frame);
+  av_packet_free(&packet);
+  avcodec_free_context(&codec);
+  avformat_close_input(&format);
+  if (err < 0) nxa_free();
+  else nxa.ms = nxv_nowMs() - start;
+  return err;
+}
 ')
 #end
 class NXVideoDecoder
@@ -458,6 +590,44 @@ class NXVideoDecoder
   {
     #if (switch && cpp && NX_NATIVE_VIDEO)
     untyped __cpp__('nxv_seekStart()');
+    #end
+  }
+
+  /**
+   * Decodes the soundtrack of the video file `path` (AAC or Vorbis) into a 16-bit PCM buffer that the cutscene
+   * plays as its clock. Null if the file has no audio or it can't be decoded (the reason goes to `trace`).
+   */
+  public static function decodeAudio(path:String):Null<lime.media.AudioBuffer>
+  {
+    #if (switch && cpp && NX_NATIVE_VIDEO)
+    var err:Int = untyped __cpp__('nxa_decode(({0}).utf8_str())', 'file:' + path);
+    if (err != 0)
+    {
+      nx.NXDeepTrace.writeEntry('VIDEO', '[NXVideoDecoder] No soundtrack from $path: ' + (switch (err)
+        {
+          case -1101: 'no audio stream';
+          case -1102: 'unsupported sample format';
+          case -1103: 'out of memory';
+          default: 'FFmpeg error $err';
+        }));
+      return null;
+    }
+    var channels:Int = untyped __cpp__('nxa.channels');
+    var rate:Int = untyped __cpp__('nxa.rate');
+    var frames:Int = untyped __cpp__('(int)nxa.frames');
+    var ms:Float = untyped __cpp__('nxa.ms');
+    var bytes:haxe.io.Bytes = haxe.io.Bytes.alloc(frames * channels * 2);
+    untyped __cpp__('memcpy((void *){0}->b->GetBase(), nxa.pcm, (size_t){1})', bytes, bytes.length);
+    untyped __cpp__('nxa_free()');
+    var buffer:lime.media.AudioBuffer = new lime.media.AudioBuffer();
+    buffer.bitsPerSample = 16;
+    buffer.channels = channels;
+    buffer.sampleRate = rate;
+    buffer.data = lime.utils.UInt8Array.fromBytes(bytes);
+    nx.NXDeepTrace.writeEntry('VIDEO', '[NXVideoDecoder] Soundtrack from $path: ${Math.round(frames / rate * 10) / 10} s, $channels ch, $rate Hz, decoded in ${Math.round(ms)} ms');
+    return buffer;
+    #else
+    return null;
     #end
   }
 

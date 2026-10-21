@@ -35,7 +35,8 @@ class NXDevTools
   static var cfgComboLR:String = '';
   static var cfgComboZLZR:String = '';
   static var cfgAudioThreadHigh:Bool = true;
-  static var cfgVideoBackend:String = 'sheets';
+  // The asset-less build has no converted sheets: the official video files are its only cutscenes.
+  static var cfgVideoBackend:String = #if NX_SD_ASSETS 'ffmpeg' #else 'sheets' #end;
   static var cfgVideoSimd:Bool = true;
   static var botplayOverride:Null<Bool> = null;
 
@@ -174,7 +175,7 @@ class NXDevTools
     return false;
 
   public static inline function videoBackend():String
-    return 'sheets';
+    return #if NX_NATIVE_VIDEO 'ffmpeg' #else 'sheets' #end;
 
   public static inline function videoSimd():Bool
     return true;

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the minimal FFmpeg used by the Switch video player: LGPL 2.1+, H.264, HEVC and VP9 decoders, MP4 and
+# Builds the minimal FFmpeg used by the Switch video player: LGPL 2.1+, H.264, HEVC and VP9 video decoders, AAC and
+# Vorbis audio decoders (the cutscenes' own soundtracks), MP4 and
 # Matroska demuxers, swscale and nothing else (~3 MB, against ~34 MB of heap for devkitPro's GPL switch-ffmpeg).
 # HEVC, VP9 and Matroska are there for the official files as they ship (2Hot is HEVC 1080p, Darnell VP9, Week 7 MKV).
 #
@@ -16,6 +17,9 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK="$ROOT/export/nx-generated/ffmpeg"
 SRC="$WORK/src/ffmpeg-$VERSION"
 PATCH="$ROOT/tools/nx-tools/ffmpeg/horizon.patch"
+# Split-radix transform tables only up to 16384 points: the AAC and Vorbis decoders need no more, and the full set
+# puts ~16 MB of tables in the .bss of every Switch build.
+TX_PATCH="$ROOT/tools/nx-tools/ffmpeg/tx-tables.patch"
 TARBALL="$WORK/src/ffmpeg-$VERSION.tar.xz"
 STAMP="$WORK/.build-stamp"
 
@@ -30,12 +34,12 @@ CONFIGURE_FLAGS=(
   --disable-avdevice --disable-avfilter --disable-swresample --disable-postproc --disable-network
   --disable-zlib --disable-bzlib --disable-iconv --disable-lzma
   --enable-pthreads --enable-swscale
-  --enable-decoder=h264,hevc,vp9 --enable-parser=h264,hevc,vp9 --enable-demuxer=mov,matroska --enable-protocol=file
+  --enable-decoder=h264,hevc,vp9,aac,vorbis --enable-parser=h264,hevc,vp9 --enable-demuxer=mov,matroska --enable-protocol=file
   --extra-cflags="-D__SWITCH__ -D_GNU_SOURCE -march=armv8-a+crc+crypto -mtune=cortex-a57 -mtp=soft -fPIC -ftls-model=local-exec -ffunction-sections -fdata-sections -I$DEVKITPRO/libnx/include"
   --extra-ldflags="-fPIE -L$DEVKITPRO/libnx/lib"
 )
 
-want="$VERSION $SHA256 $(sha256sum "$PATCH" "$0" | cut -c1-16 | tr '\n' ' ')"
+want="$VERSION $SHA256 $(sha256sum "$PATCH" "$TX_PATCH" "$0" | cut -c1-16 | tr '\n' ' ')"
 if [[ "${1:-}" != "--force" && -f "$STAMP" && "$(cat "$STAMP")" == "$want" ]]; then
   echo "[build_ffmpeg_nx] up to date: $WORK"
   exit 0
@@ -51,6 +55,7 @@ fi
 rm -rf "$SRC" "$WORK/include" "$WORK/lib"
 tar -xf "$TARBALL" -C "$WORK/src"
 patch -d "$SRC" -Np1 -s -i "$PATCH"
+patch -d "$SRC" -Np1 -s -i "$TX_PATCH"
 
 cd "$SRC"
 ./configure "${CONFIGURE_FLAGS[@]}" > "$WORK/configure.log" 2>&1 || { tail -n 30 "$WORK/configure.log"; tail -n 40 ffbuild/config.log; exit 1; }

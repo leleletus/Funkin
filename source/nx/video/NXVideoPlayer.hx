@@ -613,8 +613,23 @@ class NXVideoPlayer
     return null;
   }
 
-  static function loadSoundAsset(videoName:String):Null<openfl.media.Sound>
+  static function loadSoundAsset(videoName:String, ?nativePath:String):Null<openfl.media.Sound>
   {
+    #if NX_NATIVE_VIDEO
+    // Native playback: the soundtrack comes from the official video file itself (AAC or Vorbis), like on PC.
+    if (nativePath != null)
+    {
+      try
+      {
+        var buffer:Null<lime.media.AudioBuffer> = NXVideoDecoder.decodeAudio(nativePath);
+        if (buffer != null) return openfl.media.Sound.fromAudioBuffer(buffer);
+      }
+      catch (e:Dynamic)
+      {
+        trace('[NXVideoPlayer] Soundtrack of $nativePath failed: ' + e);
+      }
+    }
+    #end
     try
     {
       var romfsPath:String = 'romfs:/assets/videos/converted/$videoName.ogg';
@@ -760,7 +775,7 @@ class NXVideoPlayer
       }
 
       // Load sound
-      var sound = loadSoundAsset(videoName);
+      var sound = loadSoundAsset(videoName #if NX_NATIVE_VIDEO, nativePath #end);
       trace('[NXVideoPlayer] Starting streaming cutscene for: $videoName (Sheets: $totalSheets, FPS: $animFps, Audio: ${sound != null})');
 
       isPlaying = true;
