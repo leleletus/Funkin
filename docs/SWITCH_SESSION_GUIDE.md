@@ -85,5 +85,5 @@ Seguir la sección 7 del tracker:
 2. Fila `INC-XX` por cada incidencia (síntoma, causa raíz demostrada y estado).
 3. Entrada en la bitácora de sesiones (fecha, build, trabajo realizado, pendiente).
 4. Commit sin trailers de atribución, push a `personal`, tag anotado (`v<versión>-nx-preview-N` para las builds de prueba y `v<versión>-nx-release-N` para las versiones estables, con la versión de V-Slice de la build: `v0.8.1-nx-release-1`, `v0.8.3-nx-release-1`) y push del tag.
-5. Release en GitHub sin `.nro` (decidido el 2026-10-19: la licencia de los assets prohíbe redistribuirlos); el `.nro` público se archiva en `~/switch-builds` y en el disco externo. Toda build validada va a `nx-develop` del fork; las ramas de trabajo se rebasan sobre ella.
+5. Releases estables con `python3 tools/nx-tools/publish_release.py <tag>` (tracker, sección 6, "Publicación de una release estable"): llevan adjunto el `.nro` sin assets (no contiene archivos de FunkinCrew; política del 2026-10-20) y notas cortas en `tools/nx-tools/store/release-notes/<tag>.md`, que la tienda usa como changelog. Las builds de prueba se etiquetan sin `.nro`. Toda build validada va a `nx-develop` del fork; las ramas de trabajo se rebasan sobre ella.
 6. Despliegue en la consola por FTP si está activo: respaldar `saves/` y `logs/`, limpiar la carpeta y subir el `.nro`.

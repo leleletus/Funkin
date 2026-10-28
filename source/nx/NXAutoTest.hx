@@ -154,6 +154,10 @@ class NXAutoTest
       {
         startCreditsCheck();
       }
+      else if (scenario.indexOf("SCREENSHOTS") != -1)
+      {
+        startScreenshots();
+      }
       else if (scenario.indexOf("PLAYTHROUGH") != -1)
       {
         NXRegressionSuite.startPlaythrough();
@@ -299,7 +303,7 @@ class NXAutoTest
     testTimer += FlxG.elapsed;
 
     // Timeout de seguridad global por si algo se bloquea por completo
-    var globalTimeout:Float = (currentScenario.indexOf("MEMORY_BUDGET") != -1) ? 7200.0 : (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
+    var globalTimeout:Float = (currentScenario.indexOf("SCREENSHOTS") != -1) ? 900.0 : (currentScenario.indexOf("MEMORY_BUDGET") != -1) ? 7200.0 : (currentScenario.indexOf("PLAYTHROUGH") != -1 || currentScenario.indexOf("INC49_REPRO") != -1) ? 4500.0 : (currentScenario.indexOf("CUTSCENE_SKIP") != -1) ? 600.0 : (currentScenario.indexOf("SOAK") != -1) ? 2700.0 : (currentScenario.indexOf("WEEKEND1_FULL") != -1) ? 1500.0 : ((currentScenario.indexOf("PLAYLIST") != -1
       || currentScenario.indexOf("REGRESSION") != -1) ? 900.0 : 180.0);
     if (testTimer > globalTimeout)
     {
@@ -1132,6 +1136,104 @@ class NXAutoTest
     #else
     failTest('UPLOAD_PARITY needs the Switch build');
     #end
+  }
+
+  /**
+   * SCREENSHOTS: store screenshots, saved by NXScreenshot to logs/screens/ (1280x720 PNG): the title screen, Spaghetti,
+   * the Weekend 1 video cutscene and Blazin' with its rain. Songs run in botplay; the score line is hidden for the
+   * captured frame only.
+   */
+  static var screenshotRestore:Null<Void->Void> = null;
+
+  static function startScreenshots():Void
+  {
+    NXDevTools.setBotplay(true);
+    // Clean pictures: no FPS/RAM counter, no performance HUD, no test overlay. Restored at the end.
+    var debugDisplay = funkin.Preferences.debugDisplay;
+    var perfHud:Bool = funkin.Preferences.switchShowPerfHud;
+    funkin.Preferences.debugDisplay = funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode.Off;
+    funkin.Preferences.switchShowPerfHud = false;
+    NXDevOverlay.hide();
+    screenshotRestore = function() {
+      funkin.Preferences.debugDisplay = debugDisplay;
+      funkin.Preferences.switchShowPerfHud = perfHud;
+    };
+    screenshotStep(0);
+  }
+
+  static function screenshotStep(step:Int):Void
+  {
+    var next = () -> screenshotStep(step + 1);
+    switch (step)
+    {
+      case 0:
+        FlxG.switchState(() -> new funkin.ui.title.TitleState());
+        haxe.Timer.delay(() -> shoot('1-title', false, next), 22000);
+      case 1:
+        PlayStatePlaylist.isStoryMode = false;
+        LoadingState.loadPlayState({
+          targetSong: SongRegistry.instance.fetchEntry("spaghetti", {variation: Constants.DEFAULT_VARIATION}),
+          targetDifficulty: "hard",
+          targetVariation: "default"
+        }, false);
+        whenSongAt(28.0, () -> shoot('2-spaghetti', true, next));
+      case 2:
+        Paths.setCurrentLevel('weekend1');
+        PlayStatePlaylist.isStoryMode = true;
+        PlayStatePlaylist.campaignId = "weekend1";
+        PlayStatePlaylist.campaignTitle = "Weekend 1";
+        PlayStatePlaylist.campaignDifficulty = "hard";
+        PlayStatePlaylist.playlistSongIds = ["lit-up", "2hot", "blazin"];
+        LoadingState.loadPlayState({
+          targetSong: SongRegistry.instance.fetchEntry("darnell", {variation: Constants.DEFAULT_VARIATION}),
+          targetDifficulty: "hard",
+          targetVariation: "default"
+        }, true);
+        whenCutscenePlaying(() -> haxe.Timer.delay(() -> shoot('3-weekend1-cutscene', false, next), 16000));
+      case 3:
+        nx.video.NXVideoPlayer.stop();
+        PlayStatePlaylist.isStoryMode = false;
+        LoadingState.loadPlayState({
+          targetSong: SongRegistry.instance.fetchEntry("blazin", {variation: Constants.DEFAULT_VARIATION}),
+          targetDifficulty: "hard",
+          targetVariation: "default"
+        }, false);
+        whenSongAt(48.0, () -> shoot('4-blazin', true, next));
+      default:
+        if (screenshotRestore != null) screenshotRestore();
+        passTest();
+    }
+  }
+
+  /** Calls `then` once a song is running and its position has reached `seconds` (polled with haxe.Timer). */
+  static function whenSongAt(seconds:Float, then:Void->Void):Void
+  {
+    var ps = PlayState.instance;
+    @:privateAccess var ready:Bool = ps != null && ps.subState == null && !ps.startingSong && !ps.isInCutscene
+      && funkin.Conductor.instance.songPosition >= seconds * 1000;
+    if (ready) then();
+    else haxe.Timer.delay(() -> whenSongAt(seconds, then), 500);
+  }
+
+  static function whenCutscenePlaying(then:Void->Void):Void
+  {
+    if (nx.video.NXVideoPlayer.isCutscenePlaying()) then();
+    else haxe.Timer.delay(() -> whenCutscenePlaying(then), 250);
+  }
+
+  /** Captures the next frame; with `hideScore`, the score line ("BOTPLAY ACTIVE") is hidden for that frame. */
+  static function shoot(name:String, hideScore:Bool, then:Void->Void):Void
+  {
+    @:privateAccess var score = PlayState.instance != null ? PlayState.instance.scoreText : null;
+    var wasVisible:Bool = score != null && score.visible;
+    if (hideScore && score != null) score.visible = false;
+    NXDevOverlay.hide();
+    // Two frames so the hidden score is really out of the drawn picture.
+    haxe.Timer.delay(() -> NXScreenshot.capture(nx.NXAssetRoot.ROOT + 'logs/screens/$name.png', function(ok:Bool) {
+      if (hideScore && score != null) score.visible = wasVisible;
+      trace('[AUTOTEST] [SCREENSHOTS] $name: ${ok ? "saved" : "FAILED"}');
+      then();
+    }), 50);
   }
 
   /**
