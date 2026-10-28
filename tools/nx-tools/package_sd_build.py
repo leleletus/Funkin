@@ -42,6 +42,7 @@ def game_version():
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--out', default=os.path.join(BIN, 'Funkin-sd.nro'))
+    ap.add_argument('--version', help='version shown in the homebrew menu (default: the game version)')
     args = ap.parse_args()
 
     elf = os.path.join(BIN, 'Funkin.elf')
@@ -81,7 +82,7 @@ def main():
                 sys.exit(f'[package_sd_build] not allowed in the asset-less RomFS: {rel}')
 
     nacp = os.path.join(ROOT, 'export', 'release', 'switch', 'Funkin-sd.nacp')
-    subprocess.run([os.path.join(DEVKITPRO, 'tools', 'bin', 'nacptool'), '--create', TITLE, AUTHOR, game_version(), nacp], check=True,
+    subprocess.run([os.path.join(DEVKITPRO, 'tools', 'bin', 'nacptool'), '--create', TITLE, AUTHOR, args.version or game_version(), nacp], check=True,
                    stdout=subprocess.DEVNULL)
     icon = os.path.join(HERE, 'branding', 'icon.jpg')
     subprocess.run([os.path.join(DEVKITPRO, 'tools', 'bin', 'elf2nro'), elf, args.out, f'--nacp={nacp}', f'--icon={icon}', f'--romfsdir={staging}'],

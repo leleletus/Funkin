@@ -2,8 +2,13 @@
 """
 Publishes a public release of the Switch port on GitHub, from the build to the uploaded .nro.
 
-  python3 tools/nx-tools/publish_release.py v0.8.7-nx-release-2
-  python3 tools/nx-tools/publish_release.py v0.8.7-nx-release-1 --replace-asset   # same release, new .nro
+  python3 tools/nx-tools/publish_release.py v1.0.1
+  python3 tools/nx-tools/publish_release.py v1.0.0 --replace-asset   # same release, new .nro
+
+Versions are the port's own (vMAJOR.MINOR.PATCH, like other Switch ports): PATCH for fixes, MINOR for new features
+(touch, ASTC, performance work, a new V-Slice version), MAJOR for big changes (a new lime/SDL base). The V-Slice
+version goes in the release title and in the homebrew menu: "1.0.0 (0.8.7)". The old v0.8.x-nx-release-N tags stay
+as they are; --replace-asset still accepts them.
 
 The notes are tools/nx-tools/store/release-notes/<tag>.md: a short "What's new" list written for players. The
 Homebrew App Store bot copies the release text into the store's changelog, so it must stay short; install steps,
@@ -32,6 +37,8 @@ import subprocess
 import sys
 import tempfile
 
+from package_sd_build import game_version
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, '..', '..'))
 BIN = os.path.join(ROOT, 'export', 'release', 'switch', 'bin')
@@ -42,7 +49,8 @@ REMOTE = 'personal'
 REPO = 'leleletus/Funkin'
 BRANCH = 'nx-develop'
 FEATURE_BRANCHES = ['feature/switch-performance', 'feature/switch-lime83-sdl3']
-TAG_RE = re.compile(r'^v(\d+\.\d+\.\d+)-nx-release-(\d+)$')
+TAG_RE = re.compile(r'^v(\d+\.\d+\.\d+)$')
+LEGACY_TAG_RE = re.compile(r'^v(\d+\.\d+\.\d+)-nx-release-(\d+)$')
 NOTES_LIMIT = 1500  # characters; longer notes make an unreadable store changelog
 TEST_STRINGS = [b'Toggled Botplay', b'[DEVTOOLS]']
 
@@ -90,8 +98,8 @@ def notes_changelog(notes):
 
 def checks(args, tag, notes_path):
     step('Checks')
-    if not TAG_RE.match(tag):
-        fail(f'tag "{tag}" is not vX.Y.Z-nx-release-N')
+    if not (TAG_RE.match(tag) or (args.replace_asset and LEGACY_TAG_RE.match(tag))):
+        fail(f'tag "{tag}" is not vMAJOR.MINOR.PATCH')
     if not os.path.isfile(notes_path):
         fail(f'missing notes: {os.path.relpath(notes_path, ROOT)} (a short "What\'s new" list in English)')
     notes = open(notes_path, encoding='utf-8').read()
@@ -114,14 +122,15 @@ def checks(args, tag, notes_path):
     return notes, tag_exists
 
 
-def build(args):
+def build(args, version):
     if args.skip_build:
         step('Build skipped (--skip-build): using the .nro already in export/')
     else:
         step('Public build without assets')
         run(['haxelib', 'run', 'lime', 'build', 'switch', '-release', '-DHXCPP_COMPILE_THREADS=4', '-DNX_SD_ASSETS'],
             dry=args.dry_run)
-        run([sys.executable, os.path.join(HERE, 'package_sd_build.py')], dry=args.dry_run)
+        run([sys.executable, os.path.join(HERE, 'package_sd_build.py'), '--version', f'{version} ({game_version()})'],
+            dry=args.dry_run)
     nro = os.path.join(BIN, 'Funkin-sd.nro')
     elf = os.path.join(BIN, 'Funkin.elf')
     if args.dry_run:
@@ -184,8 +193,11 @@ def publish(args, tag, version, notes_path, nro, tag_exists):
         shutil.copy2(nro, asset)
         print(f'  Funkin.nro: {os.path.getsize(asset) / 1048576:.1f} MB, sha256 {sha256(asset)}')
 
-    n = TAG_RE.match(tag).group(2)
-    title = f"Friday Night Funkin' V-Slice {version.split('-')[0]} for Nintendo Switch — release {n}"
+    legacy = LEGACY_TAG_RE.match(tag)
+    if legacy:
+        title = f"Friday Night Funkin' V-Slice {legacy.group(1)} for Nintendo Switch — release {legacy.group(2)}"
+    else:
+        title = f"Friday Night Funkin' V-Slice for Nintendo Switch {version} (V-Slice {game_version()})"
     exists = subprocess.run(['gh', 'release', 'view', tag, '--repo', REPO], cwd=ROOT,
                             capture_output=True).returncode == 0
     if exists:
@@ -222,7 +234,7 @@ def sync_branches(args):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split('\n\n')[0])
-    ap.add_argument('tag', help='vX.Y.Z-nx-release-N')
+    ap.add_argument('tag', help='vMAJOR.MINOR.PATCH, for example v1.0.0')
     ap.add_argument('--notes', help='notes file (default: tools/nx-tools/store/release-notes/<tag>.md)')
     ap.add_argument('--replace-asset', action='store_true', help='upload a new .nro to an existing release')
     ap.add_argument('--skip-build', action='store_true', help='use the .nro already built')
@@ -235,7 +247,7 @@ def main():
     notes_path = os.path.abspath(args.notes or os.path.join(NOTES_DIR, f'{tag}.md'))
     notes, tag_exists = checks(args, tag, notes_path)
     version = tag[1:]
-    nro = build(args)
+    nro = build(args, version)
     smoke(args, nro)
     if not tag_exists:
         update_store_package(args, tag, version, notes)
